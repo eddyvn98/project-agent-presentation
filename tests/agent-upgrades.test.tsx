@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { planAgentAnswer } from "../src/lib/project-agent/answer-plan";
 import { validateAgentAnswer } from "../src/lib/project-agent/answer-validation";
-import { parseInteractiveModel, evaluateExpression } from "../src/lib/project-agent/interactive-model";
+import { parseInteractiveModel, evaluateExpression, type NumericExpression } from "../src/lib/project-agent/interactive-model";
 import { completedStreamingMarkdown, splitPresentationSections } from "../src/lib/project-agent/presentation-mode";
 import { ProjectAgentRichBlock } from "../src/components/ProjectAgentRichBlocks";
 import { ProjectAgentAnswer } from "../src/components/ProjectAgentAnswer";
@@ -64,8 +64,8 @@ describe("safe interactive expression models", () => {
     expect(parseInteractiveModel({ ...interactiveFixture, outputs: [{ label: "Unsafe", expression: { var: "__proto__" } }] })).toBeNull();
   });
   it("treats division by zero as an unavailable result", () => {
-    const expression = { op: "div", args: [10, { var: "x" }] } as const;
-    expect(evaluateExpression(expression as Parameters<typeof evaluateExpression>[0], { x: 0 })).toBeNull();
+    const expression: NumericExpression = { op: "div", args: [10, { var: "x" }] };
+    expect(evaluateExpression(expression, { x: 0 })).toBeNull();
   });
   it("updates numerical output and offers accessible table data", async () => {
     const user = userEvent.setup();
