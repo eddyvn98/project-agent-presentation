@@ -13,12 +13,43 @@ export function ProjectAgentMermaid({ code, title, caption }: { code: string; ti
 	const [open, setOpen] = useState(false);
 	const [zoom, setZoom] = useState(1);
 	const [previewHeight, setPreviewHeight] = useState(0);
+	const [activated, setActivated] = useState(false);
+	const [requestedOpen, setRequestedOpen] = useState(false);
+	const figure = useRef<HTMLElement>(null);
 	const preview = useRef<HTMLDivElement>(null);
 	const label = title || "Diagram";
 	const ready = diagram?.code === code;
 
+	// Offscreen diagrams keep their text explanation but do not download Mermaid yet.
+	useEffect(() => {
+		if (activated) return;
+		const node = figure.current;
+		if (!node) return;
+		if (typeof IntersectionObserver === "undefined") {
+			setActivated(true); // Older browsers and test environments remain functional.
+			return;
+		}
+		const observer = new IntersectionObserver((entries) => {
+			if (entries.some((entry) => entry.isIntersecting)) {
+				setActivated(true);
+				observer.disconnect();
+			}
+		}, { rootMargin: "400px 0px" });
+		observer.observe(node);
+		return () => observer.disconnect();
+	}, [activated]);
+
+	useEffect(() => {
+		if (!requestedOpen || !ready) return;
+		setRequestedOpen(false);
+		setPreviewHeight(preview.current?.getBoundingClientRect().height || 0);
+		setZoom(1);
+		setOpen(true);
+	}, [requestedOpen, ready]);
+
 	useEffect(() => {
 		let cancelled = false;
+		if (!activated) return;
 		setError(false);
 		setOpen(false);
 		setZoom(1);
@@ -40,7 +71,7 @@ export function ProjectAgentMermaid({ code, title, caption }: { code: string; ti
 			}
 		})();
 		return () => { cancelled = true; };
-	}, [code]);
+	}, [code, activated]);
 
 	function changeOpen(value: boolean) {
 		if (value) {
@@ -51,13 +82,17 @@ export function ProjectAgentMermaid({ code, title, caption }: { code: string; ti
 	}
 
 	return (
-		<figure className="not-prose my-5 min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+		<figure ref={figure} className="not-prose my-5 min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
 			<Dialog open={open && ready} onOpenChange={changeOpen}>
 				<div className="mb-3 flex items-center justify-between gap-3">
 					<figcaption className="text-sm font-semibold text-slate-900 dark:text-slate-100">{label}</figcaption>
-					{ready && <DialogTrigger asChild><button type="button" className={CONTROL} aria-label={`Enlarge ${label}`}><Maximize2 aria-hidden className="h-3.5 w-3.5" />Enlarge</button></DialogTrigger>}
+					{ready ? <DialogTrigger asChild><button type="button" className={CONTROL} aria-label={`Enlarge ${label}`}><Maximize2 aria-hidden className="h-3.5 w-3.5" />Enlarge</button></DialogTrigger>
+						: !error && <button type="button" className={CONTROL} aria-label={`Enlarge ${label}`}
+							onClick={() => { setRequestedOpen(true); setActivated(true); }}>
+							<Maximize2 aria-hidden className="h-3.5 w-3.5" />Enlarge
+						</button>}
 				</div>
-				{!ready && !error && <p role="status" className="animate-pulse text-xs text-slate-400">Rendering diagram…</p>}
+				{!ready && !error && <p role="status" className="text-xs text-slate-400">{activated ? "Rendering diagram…" : "Diagram loads when in view."}</p>}
 				{error && <div><p role="status" className="text-sm text-slate-500">Diagram unavailable. Continue with the accompanying explanation.</p><details className="mt-2 text-sm"><summary>Diagram source</summary><pre className="overflow-x-auto whitespace-pre-wrap">{code}</pre></details></div>}
 				{ready && <div ref={preview} className="max-h-80 overflow-auto rounded-lg bg-white outline-none focus-visible:ring-2 focus-visible:ring-orange-500" role="region" aria-label={`${label}, scroll to explore`} tabIndex={0} style={open ? { height: previewHeight } : undefined}>
 					{!open && <div className="flex w-max min-w-full justify-center">
