@@ -45,3 +45,18 @@ test("chart renderer is loaded only when the answer contains a valid chart", asy
   await page.getByRole("button", { name: "Table", exact: true }).click();
   await expect(page.getByRole("table")).toBeVisible();
 });
+
+test("plain prose does not request the deferred math renderer", async ({ page }) => {
+  const mathRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/src/components/ProjectAgentMathMarkdown.tsx")) {
+      mathRequests.push(request.url());
+    }
+  });
+  await page.goto("/?plain=1");
+  await expect(page.getByText("A short synthetic answer with no formulas, diagrams or charts.")).toBeVisible();
+  expect(mathRequests).toHaveLength(0);
+  await page.goto("/");
+  await expect(page.locator(".katex-display math")).toHaveCount(1);
+  expect(mathRequests.length).toBeGreaterThan(0);
+});
