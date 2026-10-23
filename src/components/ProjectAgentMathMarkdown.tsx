@@ -8,7 +8,7 @@ import "katex/dist/katex.min.css";
 
 const KATEX_OPTIONS = {
   throwOnError: false, trust: false, strict: "error", maxExpand: 200, maxSize: 20,
-};
+} as const;
 
 /** Dynamically imported only when visible Markdown contains TeX delimiters. */
 export default function ProjectAgentMathMarkdown({ markdown, components }: {
