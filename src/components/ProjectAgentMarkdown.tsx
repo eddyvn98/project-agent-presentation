@@ -1,89 +1,119 @@
 "use client";
 
-import { isValidElement, type ReactElement } from "react";
-import type { Components } from "react-markdown";
+import { isValidElement, useContext, type ComponentPropsWithoutRef, type ComponentType, type JSX, type ReactElement } from "react";
+import type { Components, ExtraProps } from "react-markdown";
+import type { ProjectAgentTaskSource } from "@/lib/project-agent/types";
+import { normalizePresentationMarkdown } from "@/lib/project-agent/normalize-presentation-markdown";
 import { ProjectAgentSourceLink } from "./ProjectAgentSourceLink";
 import { ProjectAgentRichBlock } from "./ProjectAgentRichBlocks";
-import { repairAgentUiFences } from "@/lib/project-agent/rich-ui";
 import { ProjectAgentCodeBlock } from "./ProjectAgentCodeBlocks";
+import { ProjectAgentTable } from "./ProjectAgentTable";
 import { ProjectAgentDocumentCard } from "./ProjectAgentDocumentCard";
-import type { ProjectAgentTaskSource } from "@/lib/project-agent/types";
-import { ProjectAgentZoomImage } from "./ProjectAgentZoomImage";
+import { ProjectAgentFigure, type ImagePresentation } from "./ProjectAgentFigure";
 import { isLocalImageSource } from "./projectAgentInlineImages";
+import { presentationSourceUrl } from "./presentation-source-utils";
+import { createMarkdownPresentationContext, ProjectAgentMarkdownContext, ProjectAgentMarkdownScopeContext,
+  presentationSourceKey, type MarkdownPresentationOptions } from "./ProjectAgentMarkdownContext";
 
-const malformedProjectFileLink = /\[([^\]\n]+)\]\(\s*<a\s+href=(["'])(\/api\/projects\/[^"'<>\s]+)\2[^>]*>[\s\S]*?<\/a>\s*\)/gi;
+export { ProjectAgentMarkdownProvider } from "./ProjectAgentMarkdownContext";
+export type { MarkdownPresentationOptions, ProjectAgentMarkdownProviderProps } from "./ProjectAgentMarkdownContext";
+export const normalizeProjectAgentMarkdown = normalizePresentationMarkdown;
 
-export function normalizeProjectAgentMarkdown(markdown: string): string {
-	return repairAgentUiFences(markdown).replace(malformedProjectFileLink, (_match, label: string, _quote: string, href: string) => `[${label}](${href})`);
+type TagProps<Tag extends keyof JSX.IntrinsicElements> = ComponentPropsWithoutRef<Tag> & ExtraProps;
+type HeadingTag = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
+
+function MarkdownHeading({ tag: Tag, node, id, tabIndex, children, ...props }: TagProps<"h1"> & { tag: HeadingTag }) {
+  const { options } = useContext(ProjectAgentMarkdownContext);
+  const scope = useContext(ProjectAgentMarkdownScopeContext) ?? options.headingIdPrefix;
+  const generated = scope && node?.position ? `${scope}-heading-${node.position.start.line}` : undefined;
+  const headingId = id === "footnote-label" && scope ? `${scope}-footnote-label` : id ?? generated;
+  return <Tag {...props} id={headingId} tabIndex={tabIndex ?? (generated ? -1 : undefined)}>{children}</Tag>;
 }
 
-function externalHost(href: string | undefined): string | null {
-	if (!href || !/^https?:\/\//i.test(href)) return null;
-	try { return new URL(href).hostname.replace(/^www\./, ""); } catch { return null; }
+function MarkdownLink({ href, children, node, ...props }: TagProps<"a">) {
+  const { options, sources } = useContext(ProjectAgentMarkdownContext);
+  const scope = useContext(ProjectAgentMarkdownScopeContext) ?? options.headingIdPrefix;
+  if (node?.children.some((child) => child.type === "element" && child.tagName === "img")) return <>{children}</>;
+  const describedBy = props["aria-describedby"]?.split(/\s+/).map((id) =>
+    id === "footnote-label" && scope ? `${scope}-footnote-label` : id).join(" ");
+  const url = href && /^https?:\/\//i.test(href) ? presentationSourceUrl(href) : null;
+  if (!url || !href) return <a {...props} href={href && /^https?:\/\//i.test(href) ? undefined : href} aria-describedby={describedBy}>{children}</a>;
+  const host = url.hostname.replace(/^www\./, "");
+  const label = typeof children === "string" ? children : Array.isArray(children) && children.every((child) => typeof child === "string") ? children.join("") : "";
+  const isBareUrl = !label || label === href || /^https?:\/\//i.test(label);
+  const metadata = sources.get(presentationSourceKey(href));
+  if (options.links === "auto" && !metadata && (!label || (!isBareUrl && !/^\d+$/.test(label)))) {
+    return <a {...props} href={href} target="_blank" rel="noopener noreferrer"
+      className={`agent-inline-link ${props.className || ""}`}>{children}</a>;
+  }
+  return <span id={props.id}><ProjectAgentSourceLink href={href} host={host}
+    label={isBareUrl || label.length > 28 ? host : label} title={metadata?.title || props.title || (isBareUrl ? host : label)}
+    excerpt={metadata?.excerpt} publishedAt={metadata?.publishedAt} /></span>;
 }
 
-export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSource[] = [], resolveImage?: (src: string) => string | null): Components {
-	const sourceTitles = new Map(sources.map((source) => [sourceKey(source.url), source.title]));
-	return {
-	a: ({ href, children }) => {
-		const host = externalHost(href);
-		if (!host || !href) return <a href={href}>{children}</a>;
-		const label = typeof children === "string" ? children : Array.isArray(children) && children.every((child) => typeof child === "string") ? children.join("") : "";
-		const isBareUrl = !label || label === href || /^https?:\/\//i.test(label);
-		const visibleLabel = isBareUrl || label.length > 28 ? host : label;
-		return <ProjectAgentSourceLink href={href} host={host} label={visibleLabel} title={sourceTitles.get(sourceKey(href)) || (isBareUrl ? host : label)} />;
-	},
-	pre: ({ children }) => {
-		const code = Array.isArray(children) ? children[0] : children;
-		if (isValidElement(code)) {
-			const props = (code as ReactElement<{ className?: string; children?: unknown }>).props;
-			const classes = typeof props.className === "string" ? props.className.split(/\s+/) : [];
-			const text = typeof props.children === "string" ? props.children : String(props.children ?? "");
-			if (classes.includes("language-agent-ui")) return <ProjectAgentRichBlock source={text} />;
-			if (classes.includes("language-agent-doc")) return <ProjectAgentDocumentCard source={text} />;
-			if (classes.includes("language-mermaid")) return <ProjectAgentRichBlock source={JSON.stringify({ type: "mermaid", code: text })} />;
-			return <ProjectAgentCodeBlock language={classes.find((name) => name.startsWith("language-"))?.slice(9) ?? ""} code={text} />;
-		}
-		return <pre>{children}</pre>;
-	},
-	code: ({ className, children }) => className ? <code className={className}>{children}</code> : <code className="not-prose rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[0.85em] text-slate-800 before:content-none after:content-none dark:bg-slate-800 dark:text-slate-100">{children}</code>,
-	blockquote: ({ children }) => <blockquote className="not-prose my-4 rounded-r-lg border-l-4 border-orange-300 bg-orange-50/50 px-4 py-2 text-slate-700 dark:border-orange-500/60 dark:bg-orange-950/20 dark:text-slate-300 [&>p]:my-1">{children}</blockquote>,
-	hr: () => <hr className="not-prose my-6 border-slate-200 dark:border-slate-700" />,
-	img: ({ src, alt }) => {
-		if (typeof src !== "string") return null;
-		const url = resolveImage?.(src) ?? (resolveImage && isLocalImageSource(src) ? null : src);
-		if (!url) return null;
-		const caption = alt?.trim();
-		return <figure className="not-prose my-4">
-			<ProjectAgentZoomImage src={url} alt={caption ?? ""} title={caption ?? ""} label={`Enlarge ${caption || "picture"}`} className="block"><img src={url} alt={caption ?? ""} loading="lazy" className="h-auto max-h-[360px] w-auto max-w-[min(100%,560px)] rounded-xl border border-slate-200 object-contain dark:border-slate-700" /></ProjectAgentZoomImage>
-			{caption ? <figcaption className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{caption}</figcaption> : null}
-		</figure>;
-	},
-	table: ({ children }) => (
-		<div
-			role="region"
-			aria-label="Scrollable response table"
-			tabIndex={0}
-			className="not-prose my-5 w-full overflow-x-auto rounded-xl border border-slate-200 outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50 dark:border-slate-700"
-		>
-			<table className="min-w-full border-collapse text-left text-sm">{children}</table>
-		</div>
-	),
-	thead: ({ children }) => <thead className="bg-slate-50 dark:bg-slate-800/80">{children}</thead>,
-	tbody: ({ children }) => <tbody className="divide-y divide-slate-200 dark:divide-slate-700">{children}</tbody>,
-	th: ({ children }) => (
-		<th scope="col" className="whitespace-nowrap border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:text-slate-300">
-			{children}
-		</th>
-	),
-	td: ({ children }) => (
-		<td className="min-w-28 px-4 py-3 align-top text-sm leading-6 text-slate-700 dark:text-slate-300">{children}</td>
-	),
-	};
+function MarkdownPre({ children, node, ...preProps }: TagProps<"pre">) {
+  const { options } = useContext(ProjectAgentMarkdownContext);
+  const code = Array.isArray(children) ? children[0] : children;
+  if (isValidElement(code)) {
+    const props = (code as ReactElement<{ className?: string; children?: unknown }>).props;
+    const classes = typeof props.className === "string" ? props.className.split(/\s+/) : [];
+    const text = typeof props.children === "string" ? props.children : String(props.children ?? "");
+    if (classes.includes("language-agent-ui")) return <ProjectAgentRichBlock source={text} />;
+    if (classes.includes("language-agent-doc")) return <ProjectAgentDocumentCard source={text} onSave={options.onDocumentSave} />;
+    if (classes.includes("language-mermaid")) return <ProjectAgentRichBlock source={JSON.stringify({ type: "mermaid", code: text })} />;
+    const streaming = Boolean(options.streaming && (options.streamingCodeStartLine === undefined ||
+      options.streamingCodeStartLine === node?.position?.start.line));
+    return <ProjectAgentCodeBlock language={classes.find((name) => name.startsWith("language-"))?.slice(9) ?? ""}
+      code={text} streaming={streaming} onSave={options.onCodeSave} renderPreview={options.renderCodePreview} />;
+  }
+  return <pre {...preProps}>{children}</pre>;
 }
 
-function sourceKey(url: string): string {
-	try { const parsed = new URL(url); parsed.hash = ""; return parsed.href; } catch { return url; }
+function MarkdownImage({ src, alt }: TagProps<"img">) {
+  const { resolveImage, images } = useContext(ProjectAgentMarkdownContext);
+  if (typeof src !== "string") return null;
+  let url: string | null;
+  try { url = resolveImage?.(src) ?? (resolveImage && isLocalImageSource(src) ? null : src); }
+  catch { url = null; }
+  return <ProjectAgentFigure key={url || src} src={url || ""} alt={alt} presentation={images[src]} />;
 }
 
-export const projectAgentMarkdownComponents: Components = createProjectAgentMarkdownComponents();
+/** Component identities are deliberately stable across chunks, metadata and callback updates. */
+export const projectAgentMarkdownComponents = {
+  h1: (props) => <MarkdownHeading {...props} tag="h1" />,
+  h2: (props) => <MarkdownHeading {...props} tag="h2" />,
+  h3: (props) => <MarkdownHeading {...props} tag="h3" />,
+  h4: (props) => <MarkdownHeading {...props} tag="h4" />,
+  h5: (props) => <MarkdownHeading {...props} tag="h5" />,
+  h6: (props) => <MarkdownHeading {...props} tag="h6" />,
+  a: MarkdownLink,
+  pre: MarkdownPre,
+  code: ({ node: _node, className, children, ...props }) => <code {...props} className={className || "agent-inline-code"}>{children}</code>,
+  blockquote: ({ node: _node, className, ...props }) => <blockquote {...props} className={`agent-blockquote ${className || ""}`} />,
+  span: ({ node: _node, className, children, ...props }) => className?.split(" ").includes("katex-display")
+    ? <span {...props} className={className} role="region" aria-label="Scrollable formula" tabIndex={0}>{children}</span>
+    : <span {...props} className={className}>{children}</span>,
+  hr: ({ node: _node, ...props }) => <hr {...props} />,
+  img: MarkdownImage,
+  p: ({ children, node, ...props }) => node?.children.some((child) => child.type === "element" &&
+    (child.tagName === "img" || (child.tagName === "a" && child.children.some((nested) => nested.type === "element" && nested.tagName === "img"))))
+    ? <div {...props} className={`agent-image-paragraph ${props.className || ""}`}>{children}</div> : <p {...props}>{children}</p>,
+  table: ({ children }) => <ProjectAgentTable>{children}</ProjectAgentTable>,
+  th: ({ node: _node, style, align, ...props }) => <th {...props} scope="col" style={{ ...style, textAlign: align && align !== "char" ? align : style?.textAlign }} />,
+  td: ({ node: _node, style, align, ...props }) => <td {...props} style={{ ...style, textAlign: align && align !== "char" ? align : style?.textAlign }} />,
+} satisfies Components;
+
+/** Legacy adapter: memoize this result; new hosts can use the provider and stable map above. */
+export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSource[] = [],
+  resolveImage?: (src: string) => string | null, images: Record<string, ImagePresentation> = {},
+  options: MarkdownPresentationOptions = {}): Components {
+  const value = createMarkdownPresentationContext({ sources, resolveImage, images, options });
+  function scope<Props extends object>(Tag: ComponentType<Props>) {
+    return function ScopedMarkdownTag(props: Props) {
+      return <ProjectAgentMarkdownContext.Provider value={value}><Tag {...props} /></ProjectAgentMarkdownContext.Provider>;
+    };
+  }
+  // All entries above are React components. The assertion only bridges Object.entries' erased tag-specific props.
+  return Object.fromEntries(Object.entries(projectAgentMarkdownComponents).map(([tag, Tag]) =>
+    [tag, scope(Tag as ComponentType<Record<string, unknown>>)])) as Components;
+}

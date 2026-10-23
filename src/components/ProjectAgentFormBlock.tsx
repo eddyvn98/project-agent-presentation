@@ -1,92 +1,125 @@
 "use client";
 
-import { useContext, useState } from "react";
-import { Check, ClipboardList } from "lucide-react";
-import type { RichUiBlock } from "@/lib/project-agent/rich-ui";
-import { ReplyContext } from "./ProjectAgentReply";
+import { useContext, useEffect, useId, useRef, useState } from "react";
+import { Check, ClipboardList, Copy, Loader2 } from "lucide-react";
+import { ReplyContext } from "./ProjectAgentReplyContext";
+import { ProjectAgentResponseContext } from "./ProjectAgentResponseContext";
+import { usePresentationCopy } from "./presentation-copy";
+import { emptyFormAnswer, emptyFormState, FORM_TEXT_LIMIT, formAnswerValues, formSchema,
+  loadFormState, saveFormState, type FormAnswer, type FormBlock } from "./project-agent-form-state";
 
-type FormBlock = Extract<RichUiBlock, { type: "form" }>;
-type Answer = { picked: string[]; text: string };
+const chip = "inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-colors has-[:disabled]:cursor-default";
+const chipIdle = "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800";
+const chipOn = "border-slate-500 bg-slate-100 text-slate-900 dark:border-slate-400 dark:bg-slate-800 dark:text-slate-100";
+const inputClass = "min-h-10 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 disabled:opacity-70 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
 
-const chip = "rounded-full border px-3 py-1 text-sm transition-colors";
-const chipIdle = "border-slate-200 bg-white text-slate-700 hover:border-orange-300 hover:bg-orange-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800";
-const chipOn = "border-orange-500 bg-orange-50 text-orange-800 dark:bg-orange-950/40 dark:text-orange-200";
-const inputClass = "w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-orange-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100";
-
-/** The message list re-mounts blocks when a new message arrives, so answers and the sent flag live outside the component. */
-type Saved = { answers: Answer[]; sent: boolean };
-const memory = new Map<string, Saved>();
-const saved = {
-	get(key: string): Saved | undefined {
-		if (memory.has(key)) return memory.get(key);
-		try { const raw = window.sessionStorage.getItem(`agent-form:${key}`); return raw ? (JSON.parse(raw) as Saved) : undefined; } catch { return undefined; }
-	},
-	set(key: string, value: Saved) {
-		memory.set(key, value);
-		try { window.sessionStorage.setItem(`agent-form:${key}`, JSON.stringify(value)); } catch { /* private mode: memory only */ }
-	},
-};
-const keyOf = (block: FormBlock) => `${block.title ?? ""}|${block.fields.map((field) => field.label).join("|")}`;
-
-const valuesOf = (answer: Answer) => [...answer.picked, ...(answer.text.trim() ? [answer.text.trim()] : [])];
-
-/** A survey card inside the chat: the user fills what they can and sends every answer in one message. */
+/** A new response or schema must never inherit another form's draft or sent state. */
 export function ProjectAgentFormBlock({ block }: { block: FormBlock }) {
-	const reply = useContext(ReplyContext);
-	const key = keyOf(block);
-	const [answers, setAnswersState] = useState<Answer[]>(() => saved.get(key)?.answers ?? block.fields.map(() => ({ picked: [], text: "" })));
-	const [sent, setSentState] = useState(() => saved.get(key)?.sent ?? false);
-	const setAnswers = (next: (current: Answer[]) => Answer[]) => setAnswersState((current) => { const value = next(current); saved.set(key, { answers: value, sent: saved.get(key)?.sent ?? false }); return value; });
-	const setSent = (value: boolean) => { setSentState(value); saved.set(key, { answers, sent: value }); };
-	const total = block.fields.length;
-	const done = answers.filter((answer) => valuesOf(answer).length > 0).length;
+  const scope = useContext(ProjectAgentResponseContext);
+  return <ScopedForm key={JSON.stringify([scope ?? null, formSchema(block)])} block={block} scope={scope} />;
+}
 
-	const update = (index: number, change: Partial<Answer>) => setAnswers((current) => current.map((answer, i) => (i === index ? { ...answer, ...change } : answer)));
-	function toggle(index: number, option: string) {
-		const field = block.fields[index];
-		const current = answers[index].picked;
-		const next = field.kind === "multi" ? (current.includes(option) ? current.filter((item) => item !== option) : [...current, option]) : current.includes(option) ? [] : [option];
-		update(index, { picked: next, ...(field.kind === "choice" && next.length ? { text: "" } : {}) });
-	}
-	function send() {
-		if (!reply || sent || done === 0) return;
-		const lines = block.fields.map((field, index) => ({ field, values: valuesOf(answers[index]) })).filter((row) => row.values.length).map((row) => `- ${row.field.label}: ${row.values.join(", ")}`);
-		const skipped = total - done;
-		setSent(true);
-		reply(`My answers:\n${lines.join("\n")}${skipped ? `\n(${skipped} not answered, use sensible assumptions or ask later only if it changes the advice.)` : ""}`);
-	}
-
-	return (
-		<div role="group" aria-label={block.title ?? "Survey"} className="not-prose my-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-			<div className="flex items-center justify-between gap-3">
-				<p className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100"><ClipboardList className="h-4 w-4 text-orange-600" />{block.title ?? "A few questions"}</p>
-				<span className="shrink-0 text-xs tabular-nums text-slate-500">{done}/{total} answered</span>
-			</div>
-			{block.intro ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{block.intro}</p> : null}
-			<ol className="mt-3 space-y-4">
-				{block.fields.map((field, index) => {
-					const answer = answers[index];
-					return (
-						<li key={`${field.label}-${index}`} className="flex gap-3">
-							<span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${valuesOf(answer).length ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"}`}>{valuesOf(answer).length ? <Check className="h-3.5 w-3.5" /> : index + 1}</span>
-							<div className="min-w-0 flex-1 space-y-1.5">
-								<p className="text-sm font-medium text-slate-900 dark:text-slate-100">{field.label}</p>
-								{field.hint ? <p className="text-xs text-slate-500 dark:text-slate-400">{field.hint}</p> : null}
-								{field.options.length ? (
-									<div className="flex flex-wrap gap-1.5">
-										{field.options.map((option) => <button key={option} type="button" disabled={sent} aria-pressed={answer.picked.includes(option)} onClick={() => toggle(index, option)} className={`${chip} ${answer.picked.includes(option) ? chipOn : chipIdle} disabled:cursor-default disabled:opacity-70`}>{option}</button>)}
-									</div>
-								) : null}
-								<input value={answer.text} disabled={sent} onChange={(event) => update(index, { text: event.target.value, ...(field.kind === "choice" && event.target.value ? { picked: [] } : {}) })} placeholder={field.options.length ? "Other (type your own answer)" : field.placeholder ?? "Type your answer"} aria-label={field.label} className={`${inputClass} disabled:opacity-70`} />
-							</div>
-						</li>
-					);
-				})}
-			</ol>
-			<div className="mt-4 flex items-center justify-between gap-3">
-				<p className="text-xs text-slate-500">Answer what you can; you can skip the rest.</p>
-				<button type="button" onClick={send} disabled={!reply || sent || done === 0} className="rounded-full bg-slate-900 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-slate-100 dark:text-slate-900">{sent ? "Sent" : `${block.submit ?? "Send answers"} (${done}/${total})`}</button>
-			</div>
-		</div>
-	);
+function ScopedForm({ block: initialBlock, scope }: { block: FormBlock; scope?: string }) {
+  // The wrapper's key remounts on semantic changes, not on new object references.
+  const block = useRef(initialBlock).current;
+  const reply = useContext(ReplyContext);
+  const [state, setState] = useState(() => emptyFormState(block));
+  const [ready, setReady] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const busy = useRef(false);
+  const mounted = useRef(false);
+  const { copy, status, reset } = usePresentationCopy();
+  const id = useId();
+  useEffect(() => {
+    mounted.current = true;
+    setState(loadFormState(scope, block) ?? emptyFormState(block));
+    setReady(true);
+    return () => { mounted.current = false; };
+  }, [scope, block]);
+  useEffect(() => { if (ready) saveFormState(scope, block, state); }, [ready, scope, block, state]);
+  const { answers, sent } = state;
+  const done = answers.filter((answer) => formAnswerValues(answer).length > 0).length;
+  const total = block.fields.length;
+  const disabled = !ready || sending || sent;
+  const update = (index: number, change: Partial<FormAnswer>) => {
+    if (disabled || busy.current) return;
+    reset(); setError("");
+    setState((current) => ({ ...current, answers: current.answers.map((answer, i) => i === index ? { ...answer, ...change } : answer) }));
+  };
+  function toggle(index: number, option: string) {
+    const field = block.fields[index];
+    const picked = answers[index].picked;
+    update(index, field.kind === "multi"
+      ? { picked: picked.includes(option) ? picked.filter((item) => item !== option) : [...picked, option] }
+      : { picked: [option], text: "", other: false });
+  }
+  function summary() {
+    const lines = block.fields.flatMap((field, index) => {
+      const values = formAnswerValues(answers[index]);
+      return values.length ? [`- ${field.label}: ${values.join(", ")}`] : [];
+    });
+    return `My answers:\n${lines.join("\n")}${total > done ? `\n(${total - done} not answered.)` : ""}`;
+  }
+  async function send() {
+    if (!reply || disabled || !done || busy.current) return;
+    busy.current = true; setSending(true); setError("");
+    try {
+      await reply(summary());
+      const confirmed = { answers, sent: true };
+      saveFormState(scope, block, confirmed);
+      if (mounted.current) setState(confirmed);
+    } catch {
+      if (mounted.current) setError("Could not send your answers. Your selections remain in this form; please try again.");
+    } finally {
+      busy.current = false;
+      if (mounted.current) setSending(false);
+    }
+  }
+  return <section aria-labelledby={`${id}-title`} aria-busy={!ready || sending} className="not-prose my-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+    <header className="flex items-center justify-between gap-3">
+      <h3 id={`${id}-title`} className="!m-0 flex items-center gap-2 !text-sm font-semibold"><ClipboardList aria-hidden="true" size={17} />{block.title || "A few questions"}</h3>
+      <span className="shrink-0 text-xs tabular-nums text-slate-500">{done}/{total} answered</span>
+    </header>
+    {block.intro && <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{block.intro}</p>}
+    <div className="mt-4 space-y-5">
+      {block.fields.map((field, index) => {
+        const answer = answers[index];
+        const fieldId = `${id}-${index}`;
+        return <fieldset key={fieldId} disabled={disabled} aria-describedby={field.hint ? `${fieldId}-hint` : undefined} className="min-w-0 space-y-2">
+          <legend className="mb-2 text-sm font-medium">{index + 1}. {field.label}</legend>
+          {field.hint && <p id={`${fieldId}-hint`} className="text-xs text-slate-500 dark:text-slate-400">{field.hint}</p>}
+          {!!field.options.length && <div className="flex flex-wrap gap-2">
+            {Array.from(new Set(field.options)).map((option) => <label key={option} className={`${chip} ${answer.picked.includes(option) ? chipOn : chipIdle}`}>
+              <input type={field.kind === "multi" ? "checkbox" : "radio"} name={`${fieldId}-choices`} value={option}
+                checked={answer.picked.includes(option)} onChange={() => toggle(index, option)} className="h-4 w-4 shrink-0 accent-slate-700" />{option}
+            </label>)}
+            {field.kind === "choice" && <label className={`${chip} ${answer.other ? chipOn : chipIdle}`}>
+              <input type="radio" name={`${fieldId}-choices`} value="other" checked={answer.other}
+                onChange={() => update(index, { picked: [], other: true })} className="h-4 w-4 shrink-0 accent-slate-700" />Other (write your own)
+            </label>}
+          </div>}
+          <label htmlFor={`${fieldId}-text`} className="block text-xs text-slate-500 dark:text-slate-400">{field.options.length ? "Your own answer (optional)" : "Your answer"}</label>
+          <input id={`${fieldId}-text`} value={answer.text} maxLength={FORM_TEXT_LIMIT}
+            onChange={(event) => update(index, { text: event.target.value.slice(0, FORM_TEXT_LIMIT), ...(field.kind === "choice" ? { picked: [], other: true } : {}) })}
+            placeholder={field.placeholder || (field.options.length ? "Type another answer" : "Type your answer")} className={inputClass} />
+          {(formAnswerValues(answer).length > 0 || answer.other) && !disabled && <button type="button" onClick={() => update(index, emptyFormAnswer())} className="min-h-8 text-xs text-slate-500 underline underline-offset-4" aria-label={`Clear answer to ${field.label}`}>Clear answer</button>}
+        </fieldset>;
+      })}
+    </div>
+    <footer className="mt-5 flex flex-wrap items-center justify-between gap-3">
+      <p className="text-xs text-slate-500">Answer what you can; every question is optional.</p>
+      {reply ? <button type="button" onClick={() => void send()} disabled={disabled || !done}
+        className="inline-flex min-h-10 items-center gap-2 rounded-full bg-slate-900 px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900">
+        {sending ? <Loader2 aria-hidden="true" size={15} className="animate-spin" /> : sent ? <Check aria-hidden="true" size={15} /> : null}
+        {sending ? "Sending…" : sent ? "Sent" : block.submit || "Send answers"}
+      </button> : <button type="button" onClick={() => void copy(summary())} disabled={!ready || !done}
+        className="inline-flex min-h-10 items-center gap-2 rounded-full border border-slate-300 px-4 text-sm disabled:opacity-50 dark:border-slate-600">
+        {status === "copied" ? <Check aria-hidden="true" size={15} /> : <Copy aria-hidden="true" size={15} />}{status === "copied" ? "Copied" : "Copy answers"}
+      </button>}
+    </footer>
+    <div role="status" aria-live="polite" className="mt-2 text-xs text-slate-500">
+      {error || (status === "error" ? "Could not copy. Your answers remain in this form." : sent ? "Your answers were sent." : status === "copied" ? "Answers copied. They have not been sent." : "")}
+    </div>
+  </section>;
 }

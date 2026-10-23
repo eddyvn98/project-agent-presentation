@@ -1,0 +1,52 @@
+name: Presentation regression gates
+
+on:
+  push:
+    branches: [gpt/presentation-upgrade]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: presentation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install exactly from lockfile
+        run: npm ci
+      - name: Typecheck and line limits
+        run: |
+          npm run typecheck
+          npm run check:lines
+      - name: Unit tests
+        run: npm test
+      - name: Build demo
+        run: npm run build:demo
+      - name: Report initial and deferred JavaScript bundle sizes
+        run: npm run report:bundle
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser regression tests
+        run: npm run test:e2e
+      - name: Production dependency audit
+        run: npm audit --omit=dev
+      - name: Store browser failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
