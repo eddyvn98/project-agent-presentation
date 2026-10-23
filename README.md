@@ -88,3 +88,34 @@ An optional `quiz` block supports a short, accessible, one-question knowledge ch
 Recharts is imported **only** for a valid `agent-ui` chart, via a deferred `ProjectAgentChart` module. Answers without charts do not download the chart renderer. Mermaid already loads dynamically; syntax highlighting uses a separate client-side module. Run `npm run build:demo && npm run report:bundle` to report the entry JavaScript and chart chunks, both raw and gzip sizes. The report fails if the chart renderer accidentally returns to the initial bundle. Use the synthetic `/?chart=1` demo route to test chart loading and table fallback.
 
 If port 4173 is already occupied, run `PLAYWRIGHT_PORT=4181 npm run test:e2e` (choose an unused port). Playwright launches its **own** Vite server with `--strictPort` and `reuseExistingServer: false` so it cannot silently test the wrong app. The default remains port 4173.
+
+## On-demand math and diagram rendering
+
+`ProjectAgentAnswer` now renders ordinary Markdown without downloading the KaTeX renderer. When a visible answer section contains unescaped `$...$` or `$$` TeX syntax, it loads `ProjectAgentMathMarkdown` and its KaTeX stylesheet in a separate async chunk. Its Suspense fallback keeps plain Markdown readable until math is ready. `containsMathMarkdown` ignores fenced/inline code and escaped currency; supported TeX syntax remains unchanged. In presentation mode, detection is based on the active section.
+
+Mermaid rendering is already dynamically imported. Additionally, the renderer waits until each diagram is within 400px of the viewport before importing/rendering it. The Enlarge button can activate an offscreen diagram immediately; browsers without IntersectionObserver retain eager rendering. Captions and explanatory Markdown always remain accessible. The synthetic `/?plain=1` route and optional browser test check that prose-only replies do not download the math component.
+
+## Agent host integration (no provider coupling)
+
+The new `createAgentPresentationContext(prompt, { audience, includeVisualSchema })` returns deterministic `plan` and optional `instructions` for the actual agent runtime. The host remains responsible for model and tool calls. After obtaining model output, call `reviewAgentPresentation(markdown, sources, streaming)` to obtain `readyToPublish`, `completedMarkdown`, and a structural validation report. The report **does not verify factual claims, source authenticity, link targets or numerical assumptions**.
+
+```ts
+import { createAgentPresentationContext, reviewAgentPresentation } from "./src";
+
+const context = createAgentPresentationContext(userPrompt, {
+  audience: "beginner",
+  includeVisualSchema: true,
+});
+// Pass context.instructions to your own model/harness; no provider is bundled.
+// const markdown = await yourAgent.generate(...);
+const checked = reviewAgentPresentation(markdown, sources);
+if (checked.readyToPublish) {
+  // Display with <ProjectAgentAnswer markdown={markdown} sources={sources} />
+} else {
+  // Repair the structure or show the validation issues.
+}
+```
+
+The adapter is a reusable integration contract, not an autonomous tool-using or fact-checking agent.
+
+The changes in this performance follow-up are committed with `[skip ci]` at the user's request. They have **not** been CI-verified yet; run typecheck, unit tests, browser tests and the bundle report before merge or production use.
