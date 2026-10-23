@@ -82,3 +82,9 @@ The production dependency remediation was verified on a Node 24 GitHub Actions r
 Run `npm audit --omit=dev`, `npm run typecheck`, `npm run check:lines`, `npm test`, `npm run build:demo` and `npm run test:e2e` after dependency changes. Test equations, Mermaid diagrams, Prism highlighting, responsive visual sizing and stream fallback on mobile and desktop.
 
 An optional `quiz` block supports a short, accessible, one-question knowledge check (2–5 choices, zero-based `answerIndex`, and a supplied explanation). Feedback remains local and is not a grading or analytics service. Citation chips can show a source's optional, host-supplied `excerpt` and `publishedAt`; the renderer does not independently retrieve or validate that excerpt.
+
+## Performance and repeatable browser tests
+
+Recharts is imported **only** for a valid `agent-ui` chart, via a deferred `ProjectAgentChart` module. Answers without charts do not download the chart renderer. Mermaid already loads dynamically; syntax highlighting uses a separate client-side module. Run `npm run build:demo && npm run report:bundle` to report the entry JavaScript and chart chunks, both raw and gzip sizes. The report fails if the chart renderer accidentally returns to the initial bundle. Use the synthetic `/?chart=1` demo route to test chart loading and table fallback.
+
+If port 4173 is already occupied, run `PLAYWRIGHT_PORT=4181 npm run test:e2e` (choose an unused port). Playwright launches its **own** Vite server with `--strictPort` and `reuseExistingServer: false` so it cannot silently test the wrong app. The default remains port 4173.
