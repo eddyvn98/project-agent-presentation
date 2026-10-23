@@ -78,6 +78,10 @@ function strings(value: unknown): string[] | undefined {
 }
 
 function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string } {
+	if (raw.action === "shell" && raw.timeout !== undefined && (typeof raw.timeout !== "number" || !Number.isFinite(raw.timeout) || raw.timeout <= 0)) return { error: "shell timeout must be a positive finite number" };
+	if (raw.action === "web_fetch" && raw.offset !== undefined && (typeof raw.offset !== "number" || !Number.isSafeInteger(raw.offset) || raw.offset < 0)) return { error: "web_fetch offset must be a non-negative integer" };
+	if (raw.action === "generate_image" && raw.count !== undefined && (typeof raw.count !== "number" || !Number.isSafeInteger(raw.count) || raw.count < 1 || raw.count > 4)) return { error: "generate_image count must be an integer from 1 to 4" };
+	if (raw.action === "render" && raw.pages !== undefined && raw.pages !== "sample" && (!Array.isArray(raw.pages) || !raw.pages.length || raw.pages.some((page) => !Number.isSafeInteger(page) || page < 1))) return { error: "render pages must be sample or positive integer page numbers" };
 	const note = typeof raw.note === "string" ? raw.note.slice(0, 200) : undefined;
 	switch (raw.action) {
 		case "shell":

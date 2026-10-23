@@ -1,3 +1,5 @@
+import { validateProjectAgentRequest } from "@/lib/project-agent/request-validation";
+import { toPublicProjectAgentTask } from "@/lib/project-agent/public-task";
 /**
  * lib/mcp/tools/project-agent-tools.ts
  *
@@ -6,7 +8,7 @@
  * agents discover projects and submit work to the Dify-backed Project Agent.
  */
 
-import { Tool } from "@modelcontextprotocol/sdk/types.js";
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import * as projectCap from "@/lib/capabilities/project";
 import { createProjectAgentTask } from "@/lib/project-agent/task-store";
 import { isProjectAgentDifyConfigured, runProjectAgentTask } from "@/lib/project-agent/dify-agent";
@@ -72,12 +74,14 @@ export async function handleProjectAgentTool(
 
     case "delegate_to_web_ai": {
       if (!isProjectAgentDifyConfigured()) return { error: "dify_project_agent_not_configured" };
-      const projectId = String(args.project_id ?? "").trim();
-      const prompt = String(args.prompt ?? "").trim();
+      const projectId = typeof args.project_id === "string" ? args.project_id.trim() : "";
+      const prompt = typeof args.prompt === "string" ? args.prompt.trim() : "";
       const conversationId = typeof args.conversation_id === "string" ? args.conversation_id : undefined;
 
       if (!projectId) return { error: "project_id_required" };
       if (!prompt) return { error: "prompt_required" };
+      const invalid = validateProjectAgentRequest({ prompt, ...(args.conversation_id !== undefined ? { conversationId: args.conversation_id } : {}) });
+      if (invalid) return { error: invalid.error };
 
       const project = await projectCap.getProject(projectId, ownerEmail);
       if (!project.ok) return { error: "project_not_found", project_id: projectId };
@@ -87,11 +91,13 @@ export async function handleProjectAgentTool(
         ownerEmail,
         prompt,
         conversationId,
+        // MCP has no host module guard context. Do not inherit legacy unrestricted engines.
+        engines: [],
       });
 
       const finished = await runProjectAgentTask(task.id);
       return {
-        task: finished,
+        task: toPublicProjectAgentTask(finished, ownerEmail),
         completed: finished.status === "done",
         task_url: buildProjectAgentTaskUrl(projectId, task.id),
       };

@@ -3,7 +3,7 @@ import { inferProjectAgentFileMetadata } from "./files";
 import { readProjectAgentFile } from "./task-store";
 import { planFromLog, type PlanItem } from "./plan";
 
-export type PublicProjectAgentTask = Omit<ProjectAgentTask, "ownerEmail" | "log" | "inputFiles"> & { attachments?: ProjectAgentTaskInputFile[]; progress?: string; steps?: string[]; activity?: ProjectAgentActivityStep[]; plan?: PlanItem[]; canContinue: boolean };
+export type PublicProjectAgentTask = Omit<ProjectAgentTask, "ownerEmail" | "projectOwnerEmail" | "difyConversationId" | "bootId" | "log" | "inputFiles"> & { attachments?: ProjectAgentTaskInputFile[]; progress?: string; steps?: string[]; activity?: ProjectAgentActivityStep[]; plan?: PlanItem[]; canContinue: boolean };
 
 export interface ProjectAgentActivityStep { label: string; kind: "search" | "read" | "other"; count: number; details: string[]; images?: string[] }
 
@@ -111,7 +111,8 @@ export function taskActivity(log: string[]): ProjectAgentActivityStep[] {
 }
 
 export function toPublicProjectAgentTask(task: ProjectAgentTask, viewerEmail = task.ownerEmail): PublicProjectAgentTask {
-	const { ownerEmail: _ownerEmail, log: _log, inputFiles: _inputFiles, ...publicTask } = task;
+	const { ownerEmail: _ownerEmail, projectOwnerEmail: _projectOwnerEmail, difyConversationId: _difyConversationId,
+		bootId: _bootId, log: _log, inputFiles: _inputFiles, ...publicTask } = task;
 	const filesAvailable = !task.filesExpireAt || Date.parse(task.filesExpireAt) > Date.now();
 	const canContinue = task.ownerEmail.trim().toLowerCase() === viewerEmail.trim().toLowerCase();
 	return {

@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef } from "react";
+
 import type { Dispatch, FormEvent, MutableRefObject, SetStateAction } from "react";
 import type { PublicProjectAgentTask } from "@/lib/project-agent/public-task";
 import { runProjectAgentTaskFromClient } from "@/lib/project-agent/client";
@@ -43,19 +45,26 @@ interface SubmitOptions {
 
 /** Owns the send path so the conversation component can focus on view state and rendering. */
 export function useProjectAgentSubmit(options: SubmitOptions) {
+	const sendingRef = useRef(false);
 	return async function send(event: FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		if (sendingRef.current && !options.busy) return;
 		const { projectId, viewId, activeFileContext } = options;
 		if (!projectId || !viewId) return;
 		try { if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); } catch { /* optional */ }
-		event.preventDefault();
 		const rawPrompt = (options.regeneratePromptRef.current ?? options.initialPromptRef.current ?? options.draft).trim();
 		const latestTask = options.orderedTasks.at(-1);
 		const goalCommand = parseGoalCommand(rawPrompt);
 		if (goalCommand?.kind === "control") {
-			options.setDraft("");
-			if (goalCommand.action !== "status" && latestTask?.conversationId) {
-				await fetch(`/api/projects/${encodeURIComponent(projectId)}/agent/goal?conversationId=${encodeURIComponent(latestTask.conversationId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: goalCommand.action }) }).catch(() => undefined);
-			}
+			if (goalCommand.action === "status") { options.setDraft(""); return; }
+			if (!latestTask?.conversationId) { options.setError("Start a chat before changing its goal."); return; }
+			sendingRef.current = true;
+			try {
+				const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/agent/goal?conversationId=${encodeURIComponent(latestTask.conversationId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: goalCommand.action }) });
+				if (!response.ok) throw new Error(`Could not update the goal (${response.status})`);
+				options.setError(""); options.setDraft("");
+			} catch (cause) { options.setError(cause instanceof Error ? cause.message : "Could not update the goal"); }
+			finally { sendingRef.current = false; }
 			return;
 		}
 		const typedPrompt = goalCommand?.kind === "set" ? goalCommand.objective : rawPrompt;
@@ -63,9 +72,10 @@ export function useProjectAgentSubmit(options: SubmitOptions) {
 			options.regeneratePromptRef.current = null;
 			options.setDraft("");
 			options.setBusy(true);
+			sendingRef.current = true;
 			try { options.onCompacted(await compactProjectAgentChat(projectId, latestTask.id)); }
 			catch (cause) { options.setError(cause instanceof Error ? cause.message : "Could not compact this chat"); }
-			finally { options.setBusy(false); }
+			finally { sendingRef.current = false; options.setBusy(false); }
 			return;
 		}
 		options.regeneratePromptRef.current = null;
@@ -79,6 +89,7 @@ export function useProjectAgentSubmit(options: SubmitOptions) {
 			return;
 		}
 		if (!prompt) return;
+		sendingRef.current = true;
 		if (options.quotes.length) options.setQuotes([]);
 		options.setBusy(true);
 		options.setError("");
@@ -148,6 +159,6 @@ export function useProjectAgentSubmit(options: SubmitOptions) {
 				options.setDraft(prompt);
 				options.setPendingFiles(attachedFiles);
 			}
-		} finally { options.setBusy(false); }
+		} finally { sendingRef.current = false; options.setBusy(false); }
 	};
 }

@@ -29,5 +29,9 @@
     "tests/**/*.tsx",
     "vite.config.ts",
     "playwright.config.ts"
+  ],
+  "exclude": [
+    "tests/agent",
+    "tests/agent-host"
   ]
 }

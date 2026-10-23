@@ -10,7 +10,11 @@ export const ENGINES: Record<string, { module: string; label: string }> = {
 /** Engines whose module the caller may use; resolved when the task is created (the request carries the access context). */
 export async function allowedEngines(guard: (moduleId: string) => Promise<ReadonlySet<string> | null>): Promise<string[]> {
 	const allowed: string[] = [];
-	for (const [action, engine] of Object.entries(ENGINES)) if ((await guard(engine.module))?.has(engine.module)) allowed.push(action);
+	const modules = new Map<string, ReadonlySet<string> | null>();
+	for (const [action, engine] of Object.entries(ENGINES)) {
+		if (!modules.has(engine.module)) modules.set(engine.module, await guard(engine.module));
+		if (modules.get(engine.module)?.has(engine.module)) allowed.push(action);
+	}
 	return allowed;
 }
 

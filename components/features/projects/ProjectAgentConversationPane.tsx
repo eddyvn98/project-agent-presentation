@@ -28,6 +28,8 @@ import { ProjectAgentGoalBar } from "./ProjectAgentGoalBar";
 import { ProjectAgentActivity, ProjectAgentSourceList, extractSources } from "./ProjectAgentActivity";
 import { extractAskBlock } from "@/lib/project-agent/rich-ui";
 import { inlinedImageNames, resolveInlineImage } from "./projectAgentInlineImages";
+import { useProjectAgentConversationSync } from "./useProjectAgentConversationSync";
+import { useProjectAgentTaskControls } from "./useProjectAgentTaskControls";
 import { useProjectAgentSubmit } from "./useProjectAgentSubmit";
 import { ProjectAgentTaskAnswer } from "./ProjectAgentTaskAnswer";
 
@@ -60,19 +62,9 @@ export function ProjectAgentConversationPane() {
 	const skipPendingRef = useRef(false);
 	const [dismissedAskId, setDismissedAskId] = useState<string | null>(null);
 	const { copiedTaskId, copyResult } = useCopyResult(setError);
+	const { stopTask, setFeedback } = useProjectAgentTaskControls(projectId, setTasks, setError);
 	async function skipTask(task: PublicProjectAgentTask) {
-		skipPendingRef.current = true;
-		await stopTask(task);
-	}
-	async function stopTask(task: PublicProjectAgentTask) {
-		try { await fetch(`/api/projects/${encodeURIComponent(projectId!)}/agent/tasks/${encodeURIComponent(task.id)}/stop`, { method: "POST" }); }
-		catch { setError("Could not stop this task. Check your connection."); }
-	}
-	async function setFeedback(task: PublicProjectAgentTask, feedback: "like" | "dislike") {
-		const next = task.feedback === feedback ? null : feedback;
-		setTasks((current) => current.map((item) => item.id === task.id ? { ...item, feedback: next ?? undefined } : item));
-		try { await fetch(`/api/projects/${encodeURIComponent(projectId!)}/agent/tasks/${encodeURIComponent(task.id)}/feedback`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback: next }) }); }
-		catch { setError("Could not save your feedback."); }
+		if (await stopTask(task)) skipPendingRef.current = true;
 	}
 	function regenerate(task: PublicProjectAgentTask) {
 		if (busy) return;
@@ -115,36 +107,7 @@ export function ProjectAgentConversationPane() {
 		return subscribeToProjectAgentView(projectId, sync);
 	}, [projectId]);
 
-	useEffect(() => {
-		if (!projectId || !viewId) { setTasks([]); setLoadError(""); return; }
-		let cancelled = false;
-		let lastPayload = "";
-		setLoadError("");
-		const load = async () => {
-			try {
-				const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/agent/tasks?limit=20`);
-				if (!response.ok) throw new Error("Could not load this Project Agent chat");
-				const raw = await response.text();
-				const data = JSON.parse(raw) as { tasks?: PublicProjectAgentTask[] };
-				if (!cancelled && raw !== lastPayload) {
-					lastPayload = raw;
-					const all = data.tasks ?? [];
-					// A chat opened before its first task got a conversation id is addressed by task id; canonicalize it.
-					const byTaskId = all.find((task) => task.id === viewId);
-					const key = byTaskId?.conversationId ?? viewId;
-					setTasks(viewId === NEW_PROJECT_AGENT_VIEW_ID ? [] : all.filter((task) => (task.conversationId ?? task.id) === key));
-					setLoadedViewId(viewId);
-					setLoadError("");
-					if (byTaskId?.conversationId && byTaskId.conversationId !== viewId) selectProjectAgentView(projectId, byTaskId.conversationId);
-				}
-			} catch (cause) {
-				if (!cancelled) setLoadError(cause instanceof Error ? cause.message : "Could not load Project Agent chat");
-			}
-		};
-		void load();
-		const timer = window.setInterval(() => void load(), 1500);
-		return () => { cancelled = true; window.clearInterval(timer); };
-	}, [projectId, viewId]);
+	useProjectAgentConversationSync(projectId, viewId, setTasks, setLoadedViewId, setLoadError);
 
 	useEffect(() => {
 		if (!projectId || viewId !== NEW_PROJECT_AGENT_VIEW_ID) return;

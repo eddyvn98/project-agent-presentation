@@ -48,10 +48,18 @@ export function parseProjectAgentRequestedFiles(value: unknown): { files: Projec
 	}
 	let totalBytes = 0, largePdfBytes = 0;
 	const files: ProjectAgentRequestedFile[] = [];
+	const ids = new Set<string>();
 	for (const file of requested) {
 		if (!file || typeof file.id !== "string" || typeof file.name !== "string" || typeof file.mimeType !== "string"
 			|| !Number.isSafeInteger(file.size) || file.size <= 0 || file.size > inputFileMaxBytes(file)) {
 			return { error: "Invalid or oversized Project Agent attachment", status: 413 };
+		}
+		if (!/^[A-Za-z0-9_-]{3,128}$/.test(file.id) || ids.has(file.id) || !file.name.trim() || file.name.length > 255 || file.mimeType.length > 255) {
+			return { error: "Invalid or duplicate Project Agent attachment", status: 400 };
+		}
+		ids.add(file.id);
+		if (file.projectSourceId !== undefined && (typeof file.projectSourceId !== "string" || !/^[A-Za-z0-9_-]{3,64}$/.test(file.projectSourceId))) {
+			return { error: "Invalid Project source attachment", status: 400 };
 		}
 		if (isLargePdfInput(file)) largePdfBytes += file.size; else totalBytes += file.size;
 		const projectSourceId = typeof file.projectSourceId === "string" && /^[A-Za-z0-9_-]{3,64}$/.test(file.projectSourceId) ? file.projectSourceId : undefined;

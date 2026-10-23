@@ -10,7 +10,8 @@
     "demo": "vite --host 127.0.0.1",
     "build:demo": "vite build",
     "test:e2e": "playwright test",
-    "check:lines": "node tests/check-lines.mjs"
+    "check:lines": "node tests/check-lines.mjs",
+    "test:agent": "vitest run --config vitest.agent.config.ts"
   },
   "peerDependencies": {
     "next": ">=14",

@@ -1,3 +1,4 @@
+import { abortTaskObservation, transientTaskStatus, waitForTaskPoll } from "./client-poll";
 import type { PublicProjectAgentTask } from "./public-task";
 import { xhrUpload } from "@/lib/upload-progress";
 import { getProjectAgentConversationId, setProjectAgentConversationId } from "./conversation-session";
@@ -30,12 +31,9 @@ interface RunProjectAgentTaskClientInput {
   /** Retrying a failed task: the server reuses that task's attachments. */
   retryOfTaskId?: string;
   maxPolls?: number;
+  /** Stops client observation only; it does not cancel a server task. */
+  signal?: AbortSignal;
   onProgress?: (task: PublicProjectAgentTask) => void;
-}
-
-function sleep(ms: number): Promise<void> {
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isNetworkError(cause: unknown): boolean {
@@ -49,7 +47,7 @@ function parseTaskResponse(data: unknown): { task?: PublicProjectAgentTask; erro
 
 async function readTaskResponse(res: Awaited<ReturnType<ProjectAgentFetch>>): Promise<PublicProjectAgentTask> {
   const data = parseTaskResponse(await res.json().catch(() => ({})));
-  if (!res.ok || !data.task) {
+  if (!res.ok || !data.task || typeof data.task.id !== "string" || !data.task.id || typeof data.task.projectId !== "string" || !["queued", "running", "done", "failed"].includes(data.task.status)) {
     throw new Error(data.error ?? `Project Agent failed: ${res.status}`);
   }
   return data.task;
@@ -70,24 +68,29 @@ export async function runProjectAgentTaskFromClient({
   pollIntervalMs = 1_500,
   maxPolls = 1_200,
   onProgress,
+  signal,
 }: RunProjectAgentTaskClientInput): Promise<PublicProjectAgentTask> {
+  abortTaskObservation(signal);
   const projectPath = `/api/projects/${encodeURIComponent(projectId)}/agent/tasks`;
   const selectedConversationId = conversationId === null ? undefined : conversationId ?? getProjectAgentConversationId(projectId);
   type InputFile = { id: string; name: string; mimeType: string; size: number; projectSourceId?: string };
   const uploadedFiles: InputFile[] = [];
   for (const [index, file] of files.entries()) {
+    abortTaskObservation(signal);
     const headers = { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name), "X-File-Type": file.type || "application/octet-stream" };
     const real = fetcher === fetch && onUploadProgress !== undefined;
     const sent = real
       ? await xhrUpload(`${projectPath}/uploads`, { headers, body: file, onProgress: (fraction) => onUploadProgress(index, fraction) })
-      : await (async () => { const response = await fetcher(`${projectPath}/uploads`, { method: "POST", headers, body: file }); return { ok: response.ok, status: response.status, data: await response.json().catch(() => ({})) }; })();
+      : await (async () => { const response = await fetcher(`${projectPath}/uploads`, { method: "POST", headers, body: file, signal }); return { ok: response.ok, status: response.status, data: await response.json().catch(() => ({})) }; })();
     const upload = parseTaskResponse(sent.data) as { file?: InputFile; error?: string };
     if (!sent.ok || !upload.file) throw new Error(upload.error ?? `Attachment upload failed: ${sent.status}`);
     uploadedFiles.push(upload.file);
   }
   for (const source of sourceFiles) uploadedFiles.push({ id: crypto.randomUUID(), name: source.name, mimeType: source.mimeType, size: source.size, projectSourceId: source.projectSourceId });
+  abortTaskObservation(signal);
   const createRes = await fetcher(projectPath, {
     method: "POST",
+    signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, ...(userPrompt ? { userPrompt } : {}), ...(selectedConversationId ? { conversationId: selectedConversationId } : {}), ...(modelSelector ? { modelSelector } : {}), ...(goal ? { goal } : {}), ...(retryOfTaskId ? { retryOfTaskId } : {}), ...(uploadedFiles.length ? { inputFiles: uploadedFiles } : {}) }),
   });
@@ -97,24 +100,29 @@ export async function runProjectAgentTaskFromClient({
     onProgress?.(value);
     return value;
   };
-  let task = reportTask(await readTaskResponse(createRes));
+  const created = await readTaskResponse(createRes);
+  if (created.projectId !== projectId) throw new Error("Unexpected Project Agent project response");
+  let task = reportTask(created);
   for (let attempt = 0; attempt < maxPolls; attempt += 1) {
     if (task.status === "done" || task.status === "failed") return task;
 
-    await sleep(pollIntervalMs);
+    await waitForTaskPoll(pollIntervalMs, signal);
     const pollUrl = `/api/projects/${encodeURIComponent(projectId)}/agent/tasks/${encodeURIComponent(task.id)}`;
     let pollRes: Awaited<ReturnType<ProjectAgentFetch>> | undefined;
     for (let retry = 0; retry < 3; retry += 1) {
       try {
-        pollRes = await fetcher(pollUrl);
-        break;
+        abortTaskObservation(signal);
+        pollRes = await fetcher(pollUrl, { signal });
+        if (!transientTaskStatus(pollRes.status) || retry === 2) break;
       } catch (cause) {
         if (!isNetworkError(cause) || retry === 2) throw cause;
-        await sleep(pollIntervalMs * (retry + 1));
       }
+      await waitForTaskPoll(pollIntervalMs * (retry + 1), signal);
     }
     if (!pollRes) throw new Error("Project Agent task status is temporarily unavailable");
-    task = reportTask(await readTaskResponse(pollRes));
+    const next = await readTaskResponse(pollRes);
+    if (next.id !== task.id || next.projectId !== projectId) throw new Error("Unexpected Project Agent task response");
+    task = reportTask(next);
   }
 
   return task;

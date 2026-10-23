@@ -1,3 +1,4 @@
+import { validateProjectAgentRequest } from "@/lib/project-agent/request-validation";
 import { NextRequest, NextResponse } from "next/server";
 import type { CreateProjectAgentTaskInput } from "@/lib/project-agent/types";
 import { createProjectAgentTask, listProjectAgentTaskPage, readProjectAgentTask } from "@/lib/project-agent/task-store";
@@ -17,7 +18,6 @@ import { goalTurnPrompt } from "@/lib/project-agent/goal-prompts";
 
 export const runtime = "nodejs";
 export const maxDuration = 600;
-const PROJECT_AGENT_USER_PROMPT_MAX_CHARS = 12_000;
 
 export async function GET(
   req: NextRequest,
@@ -60,11 +60,10 @@ export async function POST(
   const body = await req.json().catch(() => ({})) as {
     prompt?: unknown; userPrompt?: unknown; conversationId?: unknown; modelSelector?: unknown; inputFiles?: CreateProjectAgentTaskInput["inputFiles"]; retryOfTaskId?: unknown; goal?: { objective?: unknown; condition?: unknown };
   };
-  prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+  const invalid = validateProjectAgentRequest(body);
+  if (invalid) return NextResponse.json({ error: invalid.error }, { status: invalid.status });
+  prompt = (body.prompt as string).trim();
   userPrompt = typeof body.userPrompt === "string" ? body.userPrompt.trim() : undefined;
-  if (userPrompt && userPrompt.length > PROJECT_AGENT_USER_PROMPT_MAX_CHARS) {
-    return NextResponse.json({ error: "User message is too long" }, { status: 413 });
-  }
   conversationId = typeof body.conversationId === "string" ? body.conversationId : undefined;
   const parsedFiles = parseProjectAgentRequestedFiles(body.inputFiles);
   if ("error" in parsedFiles) return NextResponse.json({ error: parsedFiles.error }, { status: parsedFiles.status });

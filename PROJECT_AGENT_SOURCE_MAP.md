@@ -21,3 +21,7 @@ The Dify chat endpoint is configured with `PROJECT_AGENT_DIFY_API_BASE`, default
 ## Scope for follow-up work
 
 Review and improve the complete agent experience: project chat lifecycle, task streaming and recovery, attachments and deliverables, source handling, knowledge ingestion, runtime/tool behavior, accessibility, responsive presentation, errors, and performance. Preserve existing adapters and authorization boundaries. Do not treat presentation demos as proof of backend behavior.
+
+## Full-agent upgrade and verification
+
+See `FULL_AGENT_UPGRADE.md` for the reviewed defects, implemented changes, exact neutral test results, compatibility notes, and original-host verification still required. Run `npm run test:agent` for the separate full-agent regression suite; `npm test` retains the presentation suite.
