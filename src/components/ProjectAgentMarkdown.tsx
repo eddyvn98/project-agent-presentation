@@ -8,7 +8,7 @@ import { repairAgentUiFences } from "@/lib/project-agent/rich-ui";
 import { ProjectAgentCodeBlock } from "./ProjectAgentCodeBlocks";
 import { ProjectAgentDocumentCard } from "./ProjectAgentDocumentCard";
 import type { ProjectAgentTaskSource } from "@/lib/project-agent/types";
-import { ProjectAgentZoomImage } from "./ProjectAgentZoomImage";
+import { ProjectAgentFigure, type ImagePresentation } from "./ProjectAgentFigure";
 import { isLocalImageSource } from "./projectAgentInlineImages";
 
 const malformedProjectFileLink = /\[([^\]\n]+)\]\(\s*<a\s+href=(["'])(\/api\/projects\/[^"'<>\s]+)\2[^>]*>[\s\S]*?<\/a>\s*\)/gi;
@@ -22,10 +22,11 @@ function externalHost(href: string | undefined): string | null {
 	try { return new URL(href).hostname.replace(/^www\./, ""); } catch { return null; }
 }
 
-export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSource[] = [], resolveImage?: (src: string) => string | null): Components {
+export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSource[] = [], resolveImage?: (src: string) => string | null, images: Record<string, ImagePresentation> = {}): Components {
 	const sourceTitles = new Map(sources.map((source) => [sourceKey(source.url), source.title]));
 	return {
-	a: ({ href, children }) => {
+	a: ({ href, children, node }) => {
+		if (node?.children.some((child) => child.type === "element" && child.tagName === "img")) return <>{children}</>;
 		const host = externalHost(href);
 		if (!host || !href) return <a href={href}>{children}</a>;
 		const label = typeof children === "string" ? children : Array.isArray(children) && children.every((child) => typeof child === "string") ? children.join("") : "";
@@ -48,17 +49,17 @@ export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSo
 	},
 	code: ({ className, children }) => className ? <code className={className}>{children}</code> : <code className="not-prose rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[0.85em] text-slate-800 before:content-none after:content-none dark:bg-slate-800 dark:text-slate-100">{children}</code>,
 	blockquote: ({ children }) => <blockquote className="not-prose my-4 rounded-r-lg border-l-4 border-orange-300 bg-orange-50/50 px-4 py-2 text-slate-700 dark:border-orange-500/60 dark:bg-orange-950/20 dark:text-slate-300 [&>p]:my-1">{children}</blockquote>,
+	span: ({ node: _node, className, children, ...props }) => className?.split(" ").includes("katex-display")
+        ? <span {...props} className={className} role="region" aria-label="Scrollable formula" tabIndex={0}>{children}</span>
+        : <span {...props} className={className}>{children}</span>,
 	hr: () => <hr className="not-prose my-6 border-slate-200 dark:border-slate-700" />,
 	img: ({ src, alt }) => {
 		if (typeof src !== "string") return null;
 		const url = resolveImage?.(src) ?? (resolveImage && isLocalImageSource(src) ? null : src);
-		if (!url) return null;
-		const caption = alt?.trim();
-		return <figure className="not-prose my-4">
-			<ProjectAgentZoomImage src={url} alt={caption ?? ""} title={caption ?? ""} label={`Enlarge ${caption || "picture"}`} className="block"><img src={url} alt={caption ?? ""} loading="lazy" className="h-auto max-h-[360px] w-auto max-w-[min(100%,560px)] rounded-xl border border-slate-200 object-contain dark:border-slate-700" /></ProjectAgentZoomImage>
-			{caption ? <figcaption className="mt-1.5 text-xs leading-5 text-slate-500 dark:text-slate-400">{caption}</figcaption> : null}
-		</figure>;
+		return <ProjectAgentFigure key={url || src} src={url || ""} alt={alt} presentation={images[src]} />;
 	},
+	p: ({ children, node }) => node?.children.some((child) => child.type === "element" && (child.tagName === "img" || (child.tagName === "a" && child.children.some((nested) => nested.type === "element" && nested.tagName === "img"))))
+		? <div className="my-4">{children}</div> : <p>{children}</p>,
 	table: ({ children }) => (
 		<div
 			role="region"

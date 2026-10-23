@@ -1,7 +1,10 @@
 import type { ProjectAgentTaskFile } from "@/lib/project-agent/types";
 
 const IMAGE_LINK = /!\[[^\]\n]*\]\(\s*<?([^)\s>]+)>?[^)]*\)/g;
-const baseName = (value: string) => decodeURIComponent(value.split(/[?#]/)[0]).split("/").pop()?.toLowerCase() ?? "";
+const baseName = (value: string) => {
+  try { return decodeURIComponent(value.split(/[?#]/)[0]).split("/").pop()?.toLowerCase() ?? ""; }
+  catch { return ""; }
+};
 const isRaster = (file: ProjectAgentTaskFile) => file.mimeType.startsWith("image/") && file.mimeType !== "image/svg+xml";
 const isLocal = (src: string) => !/^(https?:|data:|blob:|\/)/i.test(src);
 

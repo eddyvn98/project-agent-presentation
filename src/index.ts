@@ -5,3 +5,6 @@ export { ProjectAgentZoomImage } from "./components/ProjectAgentZoomImage";
 export { parseRichUiBlock, extractAskBlock, RICH_UI_INSTRUCTIONS, type RichUiBlock } from "./lib/project-agent/rich-ui";
 export { inlinedImageNames, resolveInlineImage } from "./components/projectAgentInlineImages";
 export type { ProjectAgentTaskFile, ProjectAgentTaskSource } from "./lib/project-agent/types";
+
+export { ProjectAgentAnswer } from "./components/ProjectAgentAnswer";
+export type { ImagePresentation } from "./components/ProjectAgentFigure";

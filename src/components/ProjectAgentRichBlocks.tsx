@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, memo, useMemo, useRef, useState, type ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AlertTriangle, CheckCircle2, Download, Info, Share2, Table2, OctagonAlert } from "lucide-react";
 import { AskBlock, FollowupsBlock } from "./ProjectAgentReply";
@@ -43,7 +43,7 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 	const chartRef = useRef<HTMLDivElement>(null);
 	const [showTable, setShowTable] = useState(false);
 	const [shareError, setShareError] = useState("");
-	const data = useMemo(() => block.categories.map((name, index) => Object.fromEntries([["name", name], ...block.series.map((series) => [series.name, series.values[index] ?? 0])])), [block]);
+	const data = useMemo(() => block.categories.map((name, index) => Object.fromEntries([["name", name], ...block.series.map((series) => [series.name, series.values[index]])])), [block]);
 	const unit = block.unit ? ` ${block.unit}` : "";
 	const formatter = useMemo(() => (value: unknown) => `${typeof value === "number" ? value.toLocaleString() : String(value)}${unit}`, [unit]);
 	const tooltip = <Tooltip formatter={formatter} />;
@@ -80,7 +80,7 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 				<button type="button" onClick={() => setShowTable((value) => !value)} aria-pressed={showTable} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Table2 className="h-3.5 w-3.5" />{showTable ? "Chart" : "Table"}</button>
 			</div>
 			{shareError && <p role="status" className="mb-2 text-right text-xs text-slate-500">{shareError}</p>}
-			{showTable ? <div className="max-h-64 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700"><table className="min-w-full text-left text-xs"><thead className="bg-slate-50 dark:bg-slate-800"><tr><th className="px-3 py-2">Category</th>{block.series.map((series) => <th key={series.name} className="px-3 py-2">{series.name}{unit}</th>)}</tr></thead><tbody>{block.categories.map((category, index) => <tr key={`${category}-${index}`} className="border-t border-slate-100 dark:border-slate-800"><th className="px-3 py-2 font-medium">{category}</th>{block.series.map((series) => <td key={series.name} className="px-3 py-2 tabular-nums">{(series.values[index] ?? 0).toLocaleString()}{unit}</td>)}</tr>)}</tbody></table></div> : <div ref={chartRef} className="h-64 w-full" role="img" aria-label={block.title ?? "Chart"}>
+			{showTable ? <div className="max-h-64 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700"><table className="min-w-full text-left text-xs"><thead className="bg-slate-50 dark:bg-slate-800"><tr><th className="px-3 py-2">Category</th>{block.series.map((series) => <th key={series.name} className="px-3 py-2">{series.name}{unit}</th>)}</tr></thead><tbody>{block.categories.map((category, index) => <tr key={`${category}-${index}`} className="border-t border-slate-100 dark:border-slate-800"><th className="px-3 py-2 font-medium">{category}</th>{block.series.map((series) => <td key={series.name} className="px-3 py-2 tabular-nums">{(series.values[index]).toLocaleString()}{unit}</td>)}</tr>)}</tbody></table></div> : <div ref={chartRef} className="h-64 w-full" role="img" aria-label={block.title ?? "Chart"}>
 				<ResponsiveContainer width="100%" height="100%">
 					{block.kind === "pie" ? (
 						<PieChart>
@@ -117,11 +117,10 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 
 const CALLOUT_ICON: Record<RichTone, typeof Info> = { neutral: Info, info: Info, success: CheckCircle2, warning: AlertTriangle, danger: OctagonAlert };
 
-export function ProjectAgentRichBlock({ source }: { source: string }) {
+function RichBlock({ source }: { source: string }) {
 	const block = useMemo(() => parseRichUiBlock(source), [source]);
 	if (!block) {
-		// Unfinished while streaming, or invalid JSON: show a quiet placeholder rather than raw JSON.
-		return <p className="not-prose my-3 animate-pulse text-xs text-slate-400">Preparing visual…</p>;
+		return <VisualFallback />;
 	}
 	switch (block.type) {
 		case "kpis":
@@ -222,4 +221,18 @@ export function ProjectAgentRichBlock({ source }: { source: string }) {
 		case "mermaid":
 			return <ProjectAgentMermaid code={block.code} title={block.title} caption={block.caption} />;
 	}
+}
+
+function VisualFallback() {
+  return <p role="status" className="not-prose my-3 text-sm text-slate-500">Visual unavailable. Continue with the accompanying explanation.</p>;
+}
+
+class VisualBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? <VisualFallback /> : this.props.children; }
+}
+
+export function ProjectAgentRichBlock({ source }: { source: string }) {
+  return <VisualBoundary key={source}><RichBlock source={source} /></VisualBoundary>;
 }

@@ -31,11 +31,11 @@ const TONES: RichTone[] = ["neutral", "info", "success", "warning", "danger"];
 const text = (value: unknown, max = 300): string => (typeof value === "string" || typeof value === "number" ? String(value).trim().slice(0, max) : "");
 const tone = (value: unknown): RichTone => (TONES.includes(value as RichTone) ? (value as RichTone) : "neutral");
 const list = (value: unknown, max = MAX_ITEMS): unknown[] => (Array.isArray(value) ? value.slice(0, max) : []);
-const num = (value: unknown): number | null => {
-	const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value.replace(/[^\d.+-]/g, "")) : NaN;
-	return Number.isFinite(parsed) ? parsed : null;
+const decimal = (value: unknown): number | null => {
+    const parsed = typeof value === "number" ? value : typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value.trim()) ? Number(value) : NaN;
+    return Number.isFinite(parsed) ? parsed : null;
 };
-const decimal = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? value : typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value.trim()) ? Number(value) : null;
+const num = decimal;
 const sceneColor = (value: unknown): RichSceneColor => ["blue", "orange", "yellow", "green", "red", "purple", "slate", "white", "black"].includes(String(value)) ? value as RichSceneColor : "slate";
 const bounded = (value: unknown, min: number, max: number): number | null => {
 	const parsed = decimal(value);
@@ -81,10 +81,13 @@ export function parseRichUiBlock(source: string): RichUiBlock | null {
 		}
 		case "chart": {
 			const kind = raw.kind === "line" || raw.kind === "pie" || raw.kind === "stacked" ? raw.kind : "bar";
-			const categories = list(raw.categories, 40).map((item) => text(item, 40));
-			const series = list(raw.series, 6).map(record).map((item) => ({ name: text(item.name, 40) || "Series", values: list(item.values, 40).map((value) => num(value) ?? 0) })).filter((item) => item.values.length > 0);
-			if (!categories.length || !series.length) return null;
-			return { type: "chart", kind, title: text(raw.title, 120) || undefined, caption: text(raw.caption, 240) || undefined, unit: text(raw.unit, 20) || undefined, categories, series };
+			// Reject incomplete/invalid numeric series; never invent observations as zero.
+            if (!Array.isArray(raw.categories) || raw.categories.length > 40 || !Array.isArray(raw.series) || raw.series.length > 6) return null;
+            const categories = raw.categories.map((item) => text(item, 40));
+            const series = raw.series.map(record).map((item) => ({ name: text(item.name, 40) || "Series", values: Array.isArray(item.values) ? item.values.map(decimal) : [] }));
+            if (!categories.length || categories.some((item) => !item) || !series.length || series.some((item) => item.values.length !== categories.length || item.values.some((value) => value === null))) return null;
+            const validSeries = series.map((item) => ({ ...item, values: item.values as number[] }));
+			return { type: "chart", kind, title: text(raw.title, 120) || undefined, caption: text(raw.caption, 240) || undefined, unit: text(raw.unit, 20) || undefined, categories, series: validSeries };
 		}
 		case "progress": {
 			const value = num(raw.value);
@@ -178,6 +181,7 @@ export const RICH_UI_INSTRUCTIONS = [
 	'form: {"type":"form","title":"Planning survey","intro":"Rough numbers are fine","fields":[{"label":"Primary need","hint":"Brief context","kind":"text","placeholder":"e.g. improve team workflow"},{"label":"Main challenge","kind":"choice","options":["Speed","Clarity","Quality","Cost"]},{"label":"Channels","kind":"multi","options":["Zalo","Facebook","Shopee"]}]} (a fillable survey card in the chat for 5 to 10 questions; kind text = free typing, choice = tap one, multi = tap several; every field also has an "Other" box; the user fills what they can and sends once)',
 	'followups: {"type":"followups","items":[{"label":"Go deeper: foundation options","prompt":"Compare foundation options in detail"}]} (exactly 3 items)',
 	'writing: a fenced ```agent-doc block, first line "title: Weekly minutes", then the finished text as Markdown (headings, lists, tables). Use it when the user asks you to draft something to copy or send: a letter, email, memo, minutes, proposal, policy, speech, post. Put one short sentence before it and nothing inside it except the text itself; if the text contains code fences, open and close the block with four backticks. Do not use it for ordinary answers or explanations.',
+	"Keep the surrounding prose complete when a visual is absent or fails. Start with a short answer, then use sections only when they help scanning. Keep each image beside the paragraph it explains, use concise captions and supplied source attribution, and avoid image walls or duplicate representations. Never invent data or sources. Use $...$ for inline math and $$ on separate lines for display math; escape literal currency dollar signs. Structured visuals are optional.",
 	"Structure long answers with Markdown headings (## Section) and short paragraphs. Use blocks sparingly: a short answer needs none. For a linear explanation, prefer a readable ordered list; choose an explorer when stepping through states or changing a value teaches something, and avoid wide flowcharts that hide most steps beyond horizontal scrolling. Tables stay as normal Markdown tables.",
 	"ASKING BACK: before doing substantial work, ask when the request is broad, ambiguous, missing key numbers or constraints (budget, location, audience, scale, deadline), or high-stakes (money, legal, safety, a large deliverable). Ask in ONE ask block with 1 to 4 questions (or, when you need 5 to 10 facts such as an intake for a business, project or brief, ONE form block with those fields, put the most decisive first and let the user skip any), each with concrete options, after at most two sentences of text; if useful, say what you would assume otherwise. Do not run the full task until the user answers. Do not ask for simple factual requests, when the user says to just do it or 'whatever you prefer', or twice for the same information; then proceed and state your assumptions in a callout.",
 	"CLARIFY, EXPAND, DEEPEN: after a substantive answer, finish with one followups block of exactly 3 items: one that goes deeper on the most important point, one that broadens to a related area or alternative, and one that checks or challenges the result (risks, sources, edge cases). Write each label in the user's language as a short action.",
