@@ -7,6 +7,7 @@ import { AskBlock, FollowupsBlock } from "./ProjectAgentReply";
 import { ProjectAgentExplorer } from "./ProjectAgentExplorer";
 import { ProjectAgentFormBlock } from "./ProjectAgentFormBlock";
 import { ProjectAgentMermaid } from "./ProjectAgentMermaid";
+import { ProjectAgentInteractive } from "./ProjectAgentInteractive";
 import { parseRichUiBlock, type RichTone, type RichUiBlock } from "@/lib/project-agent/rich-ui";
 
 const AXIS_TICK = { fontSize: 11 } as const;
@@ -218,6 +219,8 @@ function RichBlock({ source }: { source: string }) {
 			return <ProjectAgentFormBlock block={block} />;
 		case "followups":
 			return <FollowupsBlock block={block} />;
+		case "interactive":
+			return <ProjectAgentInteractive block={block} />;
 		case "mermaid":
 			return <ProjectAgentMermaid code={block.code} title={block.title} caption={block.caption} />;
 	}
