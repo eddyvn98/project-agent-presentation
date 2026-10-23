@@ -74,5 +74,10 @@ export const interactiveFixture = {
     }] },
   },
 };
+export const quizFixture = {
+  type: "quiz", title: "Quick knowledge check", question: "What is 2 + 2?",
+  options: ["3", "4", "5"], answerIndex: 1, explanation: "Adding two groups of two gives four.",
+};
 export const enhancedMarkdown = markdown + "\n\n## Interactive model\n\nAdjust a parameter to understand how the fictional balance changes.\n\n" +
-  "```agent-ui\n" + JSON.stringify(interactiveFixture) + "\n```\n";
+  "```agent-ui\n" + JSON.stringify(interactiveFixture) + "\n```\n\n## Knowledge check\n\n" +
+  "```agent-ui\n" + JSON.stringify(quizFixture) + "\n```\n";
