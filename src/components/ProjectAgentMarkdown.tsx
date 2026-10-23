@@ -23,7 +23,7 @@ function externalHost(href: string | undefined): string | null {
 }
 
 export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSource[] = [], resolveImage?: (src: string) => string | null, images: Record<string, ImagePresentation> = {}): Components {
-	const sourceTitles = new Map(sources.map((source) => [sourceKey(source.url), source.title]));
+	const sourceMetadata = new Map(sources.map((source) => [sourceKey(source.url), source]));
 	return {
 	a: ({ href, children, node }) => {
 		if (node?.children.some((child) => child.type === "element" && child.tagName === "img")) return <>{children}</>;
@@ -32,7 +32,7 @@ export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSo
 		const label = typeof children === "string" ? children : Array.isArray(children) && children.every((child) => typeof child === "string") ? children.join("") : "";
 		const isBareUrl = !label || label === href || /^https?:\/\//i.test(label);
 		const visibleLabel = isBareUrl || label.length > 28 ? host : label;
-		return <ProjectAgentSourceLink href={href} host={host} label={visibleLabel} title={sourceTitles.get(sourceKey(href)) || (isBareUrl ? host : label)} />;
+		return <ProjectAgentSourceLink href={href} host={host} label={visibleLabel} title={sourceMetadata.get(sourceKey(href))?.title || (isBareUrl ? host : label)} excerpt={sourceMetadata.get(sourceKey(href))?.excerpt} publishedAt={sourceMetadata.get(sourceKey(href))?.publishedAt} />;
 	},
 	pre: ({ children }) => {
 		const code = Array.isArray(children) ? children[0] : children;
