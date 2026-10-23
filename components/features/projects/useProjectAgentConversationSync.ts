@@ -94,6 +94,8 @@ export function useProjectAgentConversationSync(
         const signature = JSON.stringify(page);
         const changed = initial || signature !== lastPayload;
         lastPayload = signature;
+        // Preserve turns falling off the newest page while a long chat is open.
+        for (const task of latest) older.set(task.id, task);
         latest = page.tasks!;
         if (initial) {
           initial = false;
