@@ -1,5 +1,5 @@
 import { runCalculationStep } from "./calculate";
-import { contextOutputAction, externalizeActionOutput } from "./context-output-manager";
+import { contextOutputAction, externalizeActionOutput } from "./context-output-manager"; import { runXerjAction } from "../xerj/runtime-action";
 import { recordContextCheckpoint } from "./context-checkpoint";
 import { RuntimeTurnContext } from "./turn-context";
 import fs from "node:fs/promises";
@@ -56,7 +56,7 @@ async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { a
 	if (!input.depth && action.note && action.action !== "progress") input.onStep?.({ tool: "progress_message", detail: redactSecrets(action.note).replace(/\s+/g, " ").trim().slice(0, 200) });
 	if (action.action === "progress") { if (!input.depth) input.onStep?.({ tool: "progress_message", detail: redactSecrets(action.message) }); return { text: "Progress note shown to user; continue with the actions needed for the request." }; }
 	if (action.action === "calculate") return runCalculationStep(action.expression, input.onStep);
-	if (action.action === "search_output" || action.action === "read_output") return contextOutputAction(input, action);
+	if (action.action === "search_output" || action.action === "read_output") return contextOutputAction(input, action); if (action.action === "xerj_search" || action.action === "xerj_read") return runXerjAction(input, action);
 	if (action.action === "shell") {
 		input.onStep?.({ tool: "sandbox_shell", detail: action.note || action.command });
 		const result = await execInSandbox(input.chatId, action.command, action.timeout, input.readOnly);
@@ -214,7 +214,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 			metrics.invalid += 1;
 			input.onStep?.({ tool: "invalid_reply", detail: `${actions.error}: ${reply.answer.slice(0, 160).replace(/\s+/g, " ")}` });
 			if (++invalid > MAX_INVALID_REPLIES) throw new Error(`The model kept replying without a valid action (${actions.error})`);
-			query = `Your reply was not a valid action (${actions.error}). Reply with ONLY JSON, no <think> text and no prose, for example {"action":"shell","command":"ls /work/inputs"} (other actions: calculate {expression}, write_file {path,content}, render {path}, reference {query} or {id,find}, web_fetch {url}, web_search {query}, browser {op,url,ref,text,value,...}, workspace_commands {categories}, workspace_view {}, workspace_apply {actions}, workspace_read {}, plan {items}, generate_image {prompt,...}, final {answer,files}). If your last reply was cut off for being too long, split big scripts into write_file parts of under 150 lines.`;
+			query = `Your reply was not a valid action (${actions.error}). Reply with ONLY JSON, no <think> text and no prose, for example {"action":"shell","command":"ls /work/inputs"} (other actions: xerj_search {query}, xerj_read {index,id}, calculate {expression}, write_file {path,content}, render {path}, reference {query} or {id,find}, web_fetch {url}, web_search {query}, browser {op,url,ref,text,value,...}, workspace_commands {categories}, workspace_view {}, workspace_apply {actions}, workspace_read {}, plan {items}, generate_image {prompt,...}, final {answer,files}). If your last reply was cut off for being too long, split big scripts into write_file parts of under 150 lines.`;
 			continue;
 		}
 		invalid = 0;

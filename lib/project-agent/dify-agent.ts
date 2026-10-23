@@ -46,7 +46,7 @@ import { buildLintFixQuery, lintDeliverables, uploadLintSheets, MAX_LOCAL_FIX_RO
 import { hideRichFileBlocks, stripUnverifiedDisclaimers } from "./rich-files";
 import { lessonsForTask, lessonsPrompt, recordLessonCandidates } from "./learning/global-lessons";
 import { reflectOnTask } from "./learning/reflect";
-import { recallProjectHindsight, retainProjectHindsight } from "./hindsight/memory";
+import { retainProjectHindsight } from "./hindsight/memory"; import { loadAgentSearchContext } from "./xerj/agent-context";
 const DIFY_MAX_FILES_PER_MESSAGE = Math.max(1, Number(process.env.PROJECT_AGENT_DIFY_MAX_FILES) || 3);
 export { buildProjectAgentQuery, PROJECT_AGENT_DELIVERABLE_QUALITY_GATE } from "./dify-query";
 export { readDifyAgentAnswer, readDifyAgentMessage } from "./dify-stream";
@@ -84,7 +84,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			loadProjectAgentTaskContext(task.projectId, task.ownerEmail, task.id, task.userPrompt ?? task.prompt),
 			loadDefaultMemoryContext(task.projectId, task.ownerEmail),
 		]);
-		const hindsightMemory = await recallProjectHindsight({ projectId: task.projectId, query: task.userPrompt ?? task.prompt, signal, log: (detail) => { void updateProjectAgentTask(task.id, { logLine: detail }).catch(() => {}); } });
+		const { hindsightMemory, xerjContext } = await loadAgentSearchContext({ projectId: task.projectId, query: task.userPrompt ?? task.prompt, signal, log: (detail) => { void updateProjectAgentTask(task.id, { logLine: detail }).catch(() => {}); } });
 		const user = projectAgentDifyUser(task.ownerEmail, task.projectId);
 		await updateProjectAgentTask(task.id, { logLine: "app_stage :: preparing_inputs" });
 		const taskInputs = await uploadProjectAgentTaskInputFiles(task.inputFiles ?? [], task.id, user, endpoint, apiKey);
@@ -113,7 +113,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		let savedSources: AgentWebSource[] = [];
 		const firstCall = {
 			endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] },
-			query: buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory, personalChats, inputReadback, skillSet.context, await loadRunbookPrompt(task.projectId, projectOwnerEmail), false, hindsightMemory),
+			query: buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory, personalChats, inputReadback, skillSet.context, await loadRunbookPrompt(task.projectId, projectOwnerEmail), false, hindsightMemory, xerjContext),
 			files: attached.files,
 		};
 		// PROJECT_AGENT_RUNTIME=sandbox: the app runs the agent loop in a Docker sandbox; Dify only supplies the model step.
@@ -134,7 +134,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			const runbookText = await loadRunbookPrompt(task.projectId, projectOwnerEmail);
 			const learned = await lessonsForTask(task.id).catch(() => []);
 			if (learned.length) void updateProjectAgentTask(task.id, { logLine: `learned :: ${learned.map((lesson) => lesson.id).join(",")}` }).catch(() => {});
-			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory.slice(0, 3_000), personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true, hindsightMemory)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
+			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory.slice(0, 3_000), personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true, hindsightMemory, xerjContext)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
 			void updateProjectAgentTask(task.id, { logLine: `context :: query_chars=${firstCall.query.length} knowledge=${knowledge.length} project_chats=${projectChats.length} default_memory=${personalChats.length} agent_history=${projectAgentHistory.length} readback=${inputReadback.length} skills=${skillSet.context.length} runbook=${String(runbookText ?? "").length}` }).catch(() => {});
 		}
 		await updateProjectAgentTask(task.id, { logLine: "app_stage :: processing_request" });

@@ -43,3 +43,7 @@ See HINDSIGHT_PROJECT_MEMORY_INTEGRATION.md for the opt-in app-hosted Retain/Rec
 ## Dify SSE activity transport
 
 See USER_LANGUAGE_ACTIVITY.md for the app-hosted started/returned tool lifecycle, server stage events, per-request locale conversion and the distinction between an observed tool response and verified output.
+
+## XERJ Project-scoped search
+
+See XERJ_PROJECT_SEARCH_INTEGRATION.md for read-only XERJ REST integration, per-Project prefix and key requirements, optional indexed-source retrieval in Dify/sandbox, opt-in installation, manually provisioned indexes and deletion/privacy limitations. Source code: lib/project-agent/xerj/*, scripts/xerj-project-prefix.mjs.

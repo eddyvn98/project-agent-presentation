@@ -23,6 +23,8 @@ export type RuntimeAction =
 	| { action: "calculate"; expression: string; note?: string }
 	| { action: "shell"; command: string; timeout?: number; note?: string }
 	| { action: "search_output"; id: string; query: string; limit?: number; note?: string }
+	| { action: "xerj_search"; query: string; count?: number; note?: string }
+	| { action: "xerj_read"; index: string; id: string; note?: string }
 	| { action: "read_output"; id: string; offset?: number; length?: number; note?: string }
 	| { action: "write_file"; path: string; content: string; note?: string }
 	| { action: "render"; path: string; pages?: "sample" | number[]; region?: RenderRegion; note?: string }
@@ -93,6 +95,16 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
 			return typeof raw.message === "string" && raw.message.trim().length >= 8 && raw.message.length <= 240 ? { action: "progress", message: raw.message.trim() } : { error: "progress needs a short user-facing message (8-240 characters)" };
 		case "calculate":
 			return typeof raw.expression === "string" && raw.expression.trim() && raw.expression.length <= MAX_CALCULATION_CHARS ? { action: "calculate", expression: raw.expression, note } : { error: "calculate needs an expression of 1-512 characters" };
+		case "xerj_search": {
+			if (typeof raw.query !== "string" || raw.query.trim().length < 2 || raw.query.length > 300) return { error: "xerj_search query must be 2-300 characters" };
+			if (raw.count !== undefined && (typeof raw.count !== "number" || !Number.isSafeInteger(raw.count) || raw.count < 1 || raw.count > 6)) return { error: "xerj_search count must be 1-6" };
+			return { action: "xerj_search", query: raw.query.trim(), count: typeof raw.count === "number" ? raw.count : undefined, note };
+		}
+		case "xerj_read": {
+			if (typeof raw.index !== "string" || !/^[a-z0-9][a-z0-9_-]{1,180}$/.test(raw.index)) return { error: "xerj_read index must be a concrete index name" };
+			if (typeof raw.id !== "string" || !raw.id || raw.id.length > 300 || /[\x00-\x1f]/.test(raw.id)) return { error: "xerj_read requires a bounded document id" };
+			return { action: "xerj_read", index: raw.index, id: raw.id, note };
+		}
 		case "search_output": {
 			if (typeof raw.id !== "string" || !/^out_[a-f0-9]{20}$/.test(raw.id)) return { error: "search_output needs a saved output id" };
 			if (typeof raw.query !== "string" || raw.query.trim().length < 2 || raw.query.trim().length > 160) return { error: "search_output query must be 2-160 characters" };
