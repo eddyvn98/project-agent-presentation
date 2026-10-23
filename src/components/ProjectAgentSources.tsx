@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, ExternalLink, Globe2 } from "lucide-react";
+import { ChevronDown, ExternalLink } from "lucide-react";
 import type { ProjectAgentTaskSource } from "@/lib/project-agent/types";
 import { presentationSourceDate, presentationSourceUrl, uniquePresentationSources } from "./presentation-source-utils";
 import "./presentation-visuals.css";
+import "./response-controls.css";
 
 export interface ProjectAgentSourcesProps {
   sources: ProjectAgentTaskSource[];
@@ -13,14 +14,18 @@ export interface ProjectAgentSourcesProps {
   label?: string;
 }
 
-/** A compact source list made solely from metadata supplied by the host. */
+/** Source initials are local labels, not fabricated logos or remote favicon requests. */
 export function ProjectAgentSources({ sources, defaultOpen = false, label = "Sources" }: ProjectAgentSourcesProps) {
   const [open, setOpen] = useState(defaultOpen);
   const items = useMemo(() => uniquePresentationSources(sources), [sources]);
+  const hosts = useMemo(() => Array.from(new Set(items.map((source) =>
+    presentationSourceUrl(source.url)!.hostname.replace(/^www\./, "")))).slice(0, 3), [items]);
   if (!items.length) return null;
   return <details className="agent-sources not-prose" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary className="agent-sources-summary">
-      <Globe2 aria-hidden className="h-4 w-4" />
+      <span className="agent-source-identities" aria-hidden>
+        {hosts.map((host) => <span key={host} className="agent-source-identity">{host.charAt(0).toUpperCase()}</span>)}
+      </span>
       <span>{label}</span><span className="agent-sources-count">{items.length}</span>
       <ChevronDown aria-hidden className="agent-sources-chevron h-4 w-4" />
     </summary>
