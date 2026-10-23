@@ -16,3 +16,7 @@ export type { ValidationReport, ValidationIssue } from "./lib/project-agent/answ
 export { parseInteractiveModel, evaluateExpression } from "./lib/project-agent/interactive-model";
 export type { InteractiveModel, NumericExpression } from "./lib/project-agent/interactive-model";
 export { splitPresentationSections, completedStreamingMarkdown } from "./lib/project-agent/presentation-mode";
+
+export { containsMathMarkdown } from "./lib/project-agent/math-detection";
+export { createAgentPresentationContext, reviewAgentPresentation } from "./lib/project-agent/agent-integration";
+export type { AgentPresentationContext, AgentPresentationReview } from "./lib/project-agent/agent-integration";
