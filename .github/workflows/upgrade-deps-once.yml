@@ -1,9 +1,8 @@
 name: One-time dependency security upgrade
 
 on:
-  push:
-    branches:
-      - gpt/presentation-upgrade
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -11,12 +10,14 @@ permissions:
 
 jobs:
   validate-and-commit:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout original branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.head_ref || github.ref_name }}
           fetch-depth: 0
 
       - name: Set up Node 24
