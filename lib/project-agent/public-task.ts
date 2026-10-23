@@ -8,7 +8,7 @@ export type PublicProjectAgentTask = Omit<ProjectAgentTask, "ownerEmail" | "proj
 export interface ProjectAgentActivityStep { label: string; kind: "search" | "read" | "other"; count: number; details: string[]; images?: string[] }
 
 const TOOL_LABELS: Record<string, string> = {
-	calculate: "Calculating an expression",
+	calculate: "Calculated an expression",
 	shell_run: "Running commands in the sandbox",
 	sandbox_shell: "Running a command in the sandbox",
 	sandbox_write: "Writing a file in the sandbox",
@@ -73,7 +73,7 @@ function taskProgress(task: ProjectAgentTask): string {
 	const used = latest.match(/^using tool (\S+)(?: #\S+)?(?: :: (.*))?$/i);
 	if (used) {
 		const label = TOOL_LABELS[used[1].toLowerCase()] ?? `Using tool ${used[1]}`;
-		const detail = used[1].startsWith("sandbox_") || used[1] === "render_pages" || used[1] === "web_fetch" || used[1] === "web_search" || used[1] === "workspace" || used[1] === "delegate" || used[1] === "generate_image" ? used[2]?.replace(/\s+/g, " ").trim().slice(0, 90) : "";
+		const detail = used[1].startsWith("sandbox_") || used[1] === "render_pages" || used[1] === "web_fetch" || used[1] === "web_search" || used[1] === "workspace" || used[1] === "delegate" || used[1] === "generate_image" || used[1] === "calculate" ? used[2]?.replace(/\s+/g, " ").trim().slice(0, 90) : "";
 		return detail ? `${label}: ${detail}` : label;
 	}
 	return "Working with the Project Agent";

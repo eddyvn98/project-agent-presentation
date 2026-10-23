@@ -27,3 +27,5 @@ Review and improve the complete agent experience: project chat lifecycle, task s
 See `FULL_AGENT_UPGRADE.md` for the reviewed defects, implemented changes, exact neutral test results, compatibility notes, and original-host verification still required. Run `npm run test:agent` for the separate full-agent regression suite; `npm test` retains the presentation suite.
 
 For the arithmetic and optional model-selector compatibility follow-up, see `CALCULATION_RELIABILITY.md`. Exact arithmetic is a runtime action; ordinary Dify receives guidance for tools that actually exist, and no UI reasoning verifier is introduced.
+
+See `ACTION_TRANSPORT_REVIEW.md` for the standard-Dify/runtime distinction, explicit runtime action/result transport, result activity, negative-control regression and the ordinary-Dify calculator registration blocker.

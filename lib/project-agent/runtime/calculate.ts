@@ -62,3 +62,11 @@ export function runCalculation(expression: string): { text: string; failed?: boo
   try { return { text: JSON.stringify({ expression, exact: calculateExact(expression), scope: "Arithmetic only; inputs, units, formula choice and answer prose are not verified." }) }; }
   catch (cause) { return { text: `Calculation failed: ${cause instanceof Error ? cause.message : "Invalid expression"}`, failed: true }; }
 }
+
+/** Log the actual result after execution so task activity distinguishes results from requests. */
+export function runCalculationStep(expression: string, onStep?: (step: { tool: string; detail: string }) => void): { text: string; failed?: boolean } {
+  const result = runCalculation(expression);
+  const detail = result.failed ? result.text : `Exact result: ${JSON.parse(result.text).exact}; expression: ${expression}`;
+  onStep?.({ tool: "calculate", detail });
+  return result;
+}

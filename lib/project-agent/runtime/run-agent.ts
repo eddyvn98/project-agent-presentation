@@ -1,4 +1,5 @@
-import { runCalculation } from "./calculate";
+import { runCalculationStep } from "./calculate";
+import { RuntimeTurnContext } from "./turn-context";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { DifyAgentMessage } from "../dify-stream";
@@ -18,7 +19,6 @@ import { renderFileId } from "../render-ids";
 import { writeProjectAgentFile } from "../task-store";
 import { callRuntimeModel, isConversationLostError, uploadRuntimeImage, type RuntimeModelReply } from "./model";
 import { restartAfterLoss } from "./lost-conversation";
-import { runtimeTaskInstructions } from "./instructions";
 import { webSearch } from "./web-search";
 import { workspaceRead } from "./workspace-engine";
 import { initialWorkspacePrompt, runDirectWorkspace } from "./workspace-direct";
@@ -54,7 +54,7 @@ export const isRuntimeEnabled = () => process.env.PROJECT_AGENT_RUNTIME === "san
 async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { action: "final" }>, loopStep: number, imageCalls: { value: number }, budget: { delegates: number }): Promise<{ text: string; image?: DifyChatFile; images?: DifyChatFile[]; failed?: boolean; sources?: ProjectAgentTaskSource[] }> {
 	// Sub-agents count their render images from 100 so they never overwrite the lead agent's thumbnails.
 	const step = loopStep + (input.depth ? 100 * ((input.slot ?? 0) + 1) : 0);
-	if (action.action === "calculate") { input.onStep?.({ tool: "calculate", detail: action.note || action.expression }); return runCalculation(action.expression); }
+	if (action.action === "calculate") return runCalculationStep(action.expression, input.onStep);
 	if (action.action === "shell") {
 		input.onStep?.({ tool: "sandbox_shell", detail: action.note || action.command });
 		const result = await execInSandbox(input.chatId, action.command, action.timeout, input.readOnly);
@@ -163,6 +163,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 	const imageCalls = { value: 0 };
 	const maxSteps = input.maxSteps ?? MAX_STEPS;
 	const guard = new StallGuard();
+	const turnContext = new RuntimeTurnContext(input.userPrompt ?? input.query);
 	let wrapReason: string | null = null, wrapLeft = 1;
 	for (let step = 1; step <= maxSteps; step += 1) {
 		if (input.signal?.aborted) throw new Error("Task stopped");
@@ -188,12 +189,12 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 		}
 		const modelStarted = Date.now();
 		let reply: RuntimeModelReply;
-		try { reply = await callRuntimeModel({ query, user: input.user, conversationId, images, signal: input.signal, modelSelector: input.modelSelector }); } catch (cause) {
+		try { reply = await callRuntimeModel({ query: turnContext.query(query), user: input.user, conversationId, images, signal: input.signal, modelSelector: input.modelSelector }); } catch (cause) {
 			// The model conversation behind this chat no longer exists (a chat from a previous model-step app): continue once in a new one, briefed with the chat so far.
 			if (!conversationId || input.signal?.aborted || !isConversationLostError(cause)) throw cause;
 			query = await restartAfterLoss(input, query);
 			conversationId = undefined;
-			reply = await callRuntimeModel({ query, user: input.user, images, signal: input.signal, modelSelector: input.modelSelector });
+			reply = await callRuntimeModel({ query: turnContext.query(query), user: input.user, images, signal: input.signal, modelSelector: input.modelSelector });
 			if (reply.conversationId) input.onConversation?.(reply.conversationId);
 		}
 		metrics.modelMs += Date.now() - modelStarted;
@@ -235,7 +236,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 				const budget = input.budget ?? (input.budget = { delegates: 0 });
 				const outcomes = await Promise.all(group.map((candidate) => delegateToSubAgent(runRuntimeAgent, input, candidate, budget, MAX_DELEGATES, SUB_AGENT_STEPS)));
 				metrics.actionMs += Date.now() - started;
-				outcomes.forEach((outcome, offset) => results.push(`[${index + offset + 1}/${actions.length}] ${outcome.text}`));
+				outcomes.forEach((outcome, offset) => { turnContext.record(group[offset], outcome); results.push(`[${index + offset + 1}/${actions.length}] ${outcome.text}`); });
 				continue;
 			}
 			if (action.action === "final" && index > 0) { results.push(`[${index + 1}/${actions.length}] final was not used: it came in the same reply as other actions whose results you had not seen. Check the results above, then send final on its own.`); break; }
@@ -274,6 +275,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 			metrics.actions.set(action.action, (metrics.actions.get(action.action) ?? 0) + 1);
 			const actionStarted = Date.now();
 			const outcome = await withPolicy(input, action, () => runAction(input, action, step, imageCalls, input.budget ?? (input.budget = { delegates: 0 }))) as Awaited<ReturnType<typeof runAction>>;
+			turnContext.record(action, outcome);
 			metrics.actionMs += Date.now() - actionStarted;
 			if (action.action !== "wait" && action.action !== "plan") guard.noteAction(spanKey(action.action, JSON.stringify({ ...action, note: undefined })), Boolean(outcome.failed));
 			else guard.noteAction(`${action.action}:${step}`, Boolean(outcome.failed));

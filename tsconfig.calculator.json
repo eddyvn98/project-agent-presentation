@@ -11,6 +11,7 @@
   },
   "include": [
     "lib/project-agent/runtime/calculate.ts",
+    "lib/project-agent/runtime/turn-context.ts",
     "lib/project-agent/calculation-guidance.ts",
     "lib/project-agent/request-validation.ts"
   ]

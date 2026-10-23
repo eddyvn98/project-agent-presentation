@@ -95,7 +95,8 @@ describe("runRuntimeAgent", () => {
 	it("still restarts when building the recap fails", async () => {
 		mocks.callModel.mockRejectedValueOnce(lost()).mockResolvedValueOnce({ answer: final, conversationId: "d3" });
 		await runRuntimeAgent({ ...base, conversationId: "stale", recoverChatContext: async () => { throw new Error("db down"); } });
-		expect(mocks.callModel.mock.calls[1][0].query).toBe("FIRST QUERY");
+		expect(mocks.callModel.mock.calls[1][0].query).toContain("APP ACTION TRANSPORT");
+		expect(mocks.callModel.mock.calls[1][0].query).toContain("FIRST QUERY");
 	});
 });
 

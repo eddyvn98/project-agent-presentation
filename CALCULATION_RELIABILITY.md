@@ -88,3 +88,7 @@ Exact neutral verification for this follow-up:
 | `git diff --check` | Exit 0 |
 
 Full host `pnpm exec tsc --noEmit --pretty false`, host `pnpm exec vitest run tests/project-agent`, and live Dify replay remain for the user's exact-commit QA. No host target/configuration, authentication, storage, sandbox or provider boundary was changed. No Work task, main merge or staging push is part of this fix.
+
+## Action-transport follow-up
+
+The host replay after `4ae8f40` returned a correct answer but did not establish calculator execution. `ACTION_TRANSPORT_REVIEW.md` documents the runtime request/result framing fix and wire regression, actual result activity, and the concrete ordinary-Dify tool-registration blocker. Those path distinctions supersede any interpretation that runtime unit tests cover ordinary Dify or prove a live model consumed a result.
