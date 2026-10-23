@@ -29,3 +29,19 @@ test("learning check offers accessible feedback", async ({ page }) => {
   await page.getByRole("button", { name: "2. 4" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Correct" })).toBeVisible();
 });
+
+test("chart renderer is loaded only when the answer contains a valid chart", async ({ page }) => {
+  const chartRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/src/components/ProjectAgentChart.tsx")) chartRequests.push(request.url());
+  });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Interactive model" })).toBeVisible();
+  expect(chartRequests).toHaveLength(0);
+
+  await page.goto("/?chart=1");
+  await expect(page.getByRole("img", { name: "Synthetic chart" })).toBeVisible();
+  expect(chartRequests.length).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await expect(page.getByRole("table")).toBeVisible();
+});
