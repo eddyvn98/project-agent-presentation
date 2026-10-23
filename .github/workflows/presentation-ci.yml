@@ -33,6 +33,8 @@ jobs:
         run: npm test
       - name: Build demo
         run: npm run build:demo
+      - name: Report initial and deferred JavaScript bundle sizes
+        run: npm run report:bundle
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Browser regression tests
