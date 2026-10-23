@@ -8,6 +8,7 @@ import { completedStreamingMarkdown, splitPresentationSections } from "../src/li
 import { ProjectAgentRichBlock } from "../src/components/ProjectAgentRichBlocks";
 import { ProjectAgentAnswer } from "../src/components/ProjectAgentAnswer";
 import { interactiveFixture } from "../demo/content";
+import { parseRichUiBlock } from "../src/lib/project-agent/rich-ui";
 
 describe("answer planning does not force decorative blocks", () => {
   it("chooses a concrete explorer for eight lunar phases", () => {
@@ -88,5 +89,22 @@ describe("opt-in presentation remains readable", () => {
     expect(screen.getByText("One.")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Read full answer" }));
     expect(screen.getByText("Two.")).toBeTruthy();
+  });
+});
+
+describe("learning and citations are opt-in and evidence-driven", () => {
+  it("rejects quizzes without a grounded answer index", () => {
+    const source = JSON.stringify({ type: "quiz", question: "Q?", options: ["A", "B"], answerIndex: 3 });
+    expect(parseRichUiBlock(source)).toBeNull();
+  });
+  it("shows quiz feedback only after selecting an answer", async () => {
+    const user = userEvent.setup();
+    render(<ProjectAgentRichBlock source={JSON.stringify({
+      type: "quiz", question: "What is 2 + 2?", options: ["3", "4"], answerIndex: 1,
+      explanation: "Two plus two is four.",
+    })} />);
+    expect(screen.queryByRole("status")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "2. 4" }));
+    expect(screen.getByRole("status").textContent).toContain("Correct");
   });
 });
