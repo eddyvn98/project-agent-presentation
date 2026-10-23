@@ -42,8 +42,8 @@ export function reviewAgentPresentation(markdown: string,
     ? completedStreamingMarkdown(markdown) : { text: markdown, pending: false };
   const report = validateAgentAnswer(completion.text, sources);
   return {
-    readyToPublish: report.valid && !completion.pending && completion.text.trim().length > 0 &&
+    readyToPublish: !streaming && report.valid && !completion.pending && completion.text.trim().length > 0 &&
       !report.issues.some((issue) => issue.code === "INCOMPLETE_FENCE"),
-    report, completedMarkdown: completion.text, pending: completion.pending,
+    report, completedMarkdown: completion.text, pending: streaming || completion.pending,
   };
 }

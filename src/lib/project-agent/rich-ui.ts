@@ -1,4 +1,6 @@
 import { parseInteractiveModel, type InteractiveModel } from "./interactive-model";
+import { repairPresentationFences } from "./normalize-presentation-markdown";
+import { scanMarkdownCode } from "./markdown-code-ranges";
 // The agent can answer with fenced ```agent-ui JSON blocks; the chat renders them as cards, charts and diagrams
 // instead of plain text. Parsing is defensive: a malformed block never breaks the answer, it just falls back.
 
@@ -164,15 +166,16 @@ export function parseRichUiBlock(source: string): RichUiBlock | null {
 
 /** Models sometimes drop the backticks and write "agent-ui" followed by the JSON line; put the fence back so it renders as a block. */
 export function repairAgentUiFences(markdown: string): string {
-	return markdown.replace(/(^|\n)[ \t]*(?:agent-ui|agent_ui)[ \t]*\n?[ \t]*(\{[^\n]*\})[ \t]*(?=\n|$)/g, (_match, lead: string, json: string) => `${lead}\`\`\`agent-ui\n${json}\n\`\`\``);
+	return repairPresentationFences(markdown);
 }
 
 export type RichAskBlock = Extract<RichUiBlock, { type: "ask" }>;
 
 export function extractAskBlock(markdown: string): RichAskBlock | null {
 	let found: RichAskBlock | null = null;
-	for (const [, source] of repairAgentUiFences(markdown).matchAll(/```agent-ui[^\n]*\n([\s\S]*?)```/g)) {
-		const block = parseRichUiBlock(source);
+	for (const fence of scanMarkdownCode(repairAgentUiFences(markdown), false).fences) {
+		if (fence.language !== "agent-ui" || fence.closingStart === null) continue;
+		const block = parseRichUiBlock(fence.content);
 		if (block?.type === "ask") found = block;
 	}
 	return found;

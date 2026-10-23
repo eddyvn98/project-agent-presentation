@@ -1,0 +1,86 @@
+/* Writing blocks own their styles in both the answer column and the dialog portal. */
+.agent-writing-card, .agent-writing-dialog {
+  --writing-bg: var(--agent-presentation-background, #fff);
+  --writing-soft: var(--agent-presentation-muted-background, #f5f5f5);
+  --writing-text: var(--agent-presentation-foreground, #202020);
+  --writing-muted: var(--agent-presentation-muted, #686868);
+  --writing-border: var(--agent-presentation-border, #e5e5e5);
+  --writing-focus: var(--agent-presentation-focus, #2563eb);
+  color: var(--writing-text); background: var(--writing-bg); font-size: .95rem; line-height: 1.65;
+}
+.dark .agent-writing-card, .dark .agent-writing-dialog {
+  --writing-bg: var(--agent-presentation-background, #212121);
+  --writing-soft: var(--agent-presentation-muted-background, #303030);
+  --writing-text: var(--agent-presentation-foreground, #ececec);
+  --writing-muted: var(--agent-presentation-muted, #b4b4b4);
+  --writing-border: var(--agent-presentation-border, #424242);
+  --writing-focus: var(--agent-presentation-focus, #93c5fd);
+}
+.agent-writing-card { margin: 1.25rem 0; min-width: 0; border: 1px solid var(--writing-border); border-radius: 1rem; }
+.agent-writing-header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: .5rem; padding: 1rem 1rem .5rem; }
+.agent-writing-heading { min-width: 0; flex: 1 1 12rem; }
+.agent-writing-heading > span { display: flex; align-items: center; gap: .35rem; color: var(--writing-muted); font-size: .72rem; line-height: 1.4; }
+.agent-writing-heading svg { width: .9rem; height: .9rem; }
+.agent-writing-heading h3 { margin: .35rem 0 0; font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
+.agent-writing-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .15rem; }
+.agent-writing-button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-width: 2.25rem; min-height: 2.25rem; padding: .35rem .55rem; border-radius: .5rem; border: 1px solid transparent; font-size: .8rem; color: var(--writing-muted); background: transparent; cursor: pointer; }
+.agent-writing-button svg { width: 1rem; height: 1rem; flex: none; }
+.agent-writing-button:hover:not(:disabled), .agent-writing-button[aria-pressed=true] { background: var(--writing-soft); color: var(--writing-text); }
+.agent-writing-button:disabled { opacity: .45; cursor: default; }
+.agent-writing-primary { background: var(--writing-text); color: var(--writing-bg); }
+.agent-writing-primary:hover:not(:disabled) { background: var(--writing-text); color: var(--writing-bg); opacity: .85; }
+.agent-writing-preview { padding: 0 1.25rem 1rem; }
+.agent-writing-body { min-width: 0; overflow-wrap: anywhere; }
+.agent-writing-body > :first-child { margin-top: 0; }
+.agent-writing-body > :last-child { margin-bottom: 0; }
+.agent-writing-body p:not(:where(.agent-writing-body .not-prose *)) { margin: 1em 0; }
+.agent-writing-body :is(h1, h2, h3, h4, h5, h6):not(:where(.agent-writing-body .not-prose *)) { font-weight: 650; line-height: 1.35; margin: 1.5em 0 .6em; }
+.agent-writing-body h1:not(:where(.agent-writing-body .not-prose *)) { font-size: 1.55em; }
+.agent-writing-body h2:not(:where(.agent-writing-body .not-prose *)) { font-size: 1.3em; }
+.agent-writing-body h3:not(:where(.agent-writing-body .not-prose *)) { font-size: 1.12em; }
+.agent-writing-body :is(ul, ol):not(:where(.agent-writing-body .not-prose, .agent-writing-body .not-prose *)) { padding-inline-start: 1.5em; margin: .8em 0; }
+.agent-writing-body ul:not(:where(.agent-writing-body .not-prose, .agent-writing-body .not-prose *)) { list-style: disc; }
+.agent-writing-body ol:not(:where(.agent-writing-body .not-prose, .agent-writing-body .not-prose *)) { list-style: decimal; }
+.agent-writing-body li + li:not(:where(.agent-writing-body .not-prose *)) { margin-top: .3em; }
+.agent-writing-body a:not(:where(.agent-writing-body .not-prose *)) { text-decoration: underline; text-underline-offset: .15em; }
+.agent-writing-body blockquote:not(:where(.agent-writing-body .not-prose *)) { border-inline-start: 3px solid var(--writing-border); padding-inline-start: 1em; color: var(--writing-muted); }
+.agent-writing-body .agent-inline-code { padding: .15em .35em; border-radius: .35rem; background: var(--writing-soft); font: .88em ui-monospace, SFMono-Regular, Consolas, monospace; box-decoration-break: clone; }
+.agent-writing-body .agent-inline-code::before, .agent-writing-body .agent-inline-code::after { content: none; }
+.agent-writing-body .katex-display { overflow-x: auto; overflow-y: hidden; padding-block: .6em; }
+.agent-writing-notice, .agent-writing-hint, .agent-writing-feedback { color: var(--writing-muted); font-size: .75rem; line-height: 1.5; }
+.agent-writing-notice { margin: 0 1.25rem .75rem; }
+.agent-writing-feedback { padding: 0 1.25rem .6rem; margin: 0; }
+.agent-writing-feedback:empty { display: none; }
+.agent-writing-empty { font-size: .85rem; color: #686868; }
+.agent-writing-dialog { display: flex !important; flex-direction: column; gap: 0 !important; width: min(72rem, calc(100vw - 1.5rem)) !important; max-width: none !important; height: min(56rem, calc(100dvh - 1.5rem)); max-height: calc(100dvh - 1.5rem) !important; overflow: hidden !important; padding: 0 !important; border-color: var(--writing-border) !important; }
+.agent-writing-dialog-header { flex: none; padding: 1.2rem 4rem .8rem 1.5rem; border-bottom: 1px solid var(--writing-border); }
+.agent-writing-dialog-header h2 { margin: 0; font-size: 1rem; line-height: 1.5; overflow-wrap: anywhere; }
+.agent-writing-dialog-header p { margin: .3rem 0 0; color: var(--writing-muted); font-size: .8rem; }
+.agent-writing-toolbar { display: flex; flex: none; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; padding: .5rem 1rem; border-bottom: 1px solid var(--writing-border); }
+.agent-writing-view { display: flex; border: 1px solid var(--writing-border); border-radius: .55rem; padding: .1rem; }
+.agent-writing-reader { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 1.5rem max(1rem, calc((100% - 48rem) / 2)); }
+.agent-writing-editor { display: flex; flex-direction: column; gap: .65rem; min-width: 0; }
+.agent-writing-editor label { font-size: .8rem; font-weight: 600; }
+.agent-writing-editor :is(input, textarea) { width: 100%; box-sizing: border-box; padding: .7rem .8rem; border: 1px solid var(--writing-border); border-radius: .6rem; color: var(--writing-text); background: var(--writing-bg); font-size: 1rem; }
+.agent-writing-editor textarea { min-height: 18rem; height: min(50vh, 36rem); resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .875rem; line-height: 1.65; tab-size: 2; }
+.agent-writing-editor :is(input, textarea):disabled { opacity: .65; }
+.agent-writing-rendered { min-height: 12rem; padding: 1rem; border: 1px solid var(--writing-border); border-radius: .6rem; }
+.agent-writing-hint { margin: 0; }
+.agent-writing-conflict { margin: 0; padding: .75rem; border: 1px solid #ca8a04; border-radius: .5rem; font-size: .8rem; }
+.agent-writing-edit-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .25rem; }
+.agent-writing-dialog-feedback { flex: none; padding: .5rem 1.25rem; border-top: 1px solid var(--writing-border); }
+:is(.agent-writing-card, .agent-writing-dialog) :focus-visible { outline: 2px solid var(--writing-focus); outline-offset: 3px; }
+.agent-writing-dialog > button { min-width: 2.25rem; min-height: 2.25rem; display: flex; align-items: center; justify-content: center; }
+@media (pointer: coarse) { .agent-writing-button { min-width: 2.75rem; min-height: 2.75rem; } }
+@media (max-width: 600px) {
+  .agent-writing-dialog { width: 100vw !important; height: 100dvh; max-height: 100dvh !important; border: 0; border-radius: 0; }
+  .agent-writing-dialog-header { padding-top: max(1.2rem, env(safe-area-inset-top)); }
+  .agent-writing-reader { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+  .agent-writing-dialog > button { right: max(.5rem, env(safe-area-inset-right)); top: max(.5rem, env(safe-area-inset-top)); }
+  .agent-writing-editor textarea { font-size: 1rem; }
+}
+@media print {
+  .agent-writing-actions, .agent-writing-feedback, .agent-writing-notice { display: none !important; }
+  .agent-writing-card { border-color: #ddd; box-shadow: none; color: #111; background: #fff; }
+  .agent-writing-preview { overflow: visible; max-height: none; }
+}

@@ -17,7 +17,7 @@ test("math, hierarchy, figure bounds and no page overflow", async ({ page }) => 
   expect(await page.locator("p figure, a button").count()).toBe(0);
 });
 
-test("answer controls stay inert until the deferred math renderer is ready", async ({ page }) => {
+test("answer controls preserve their state while deferred math becomes ready", async ({ page }) => {
   await page.goto("about:blank");
   let deferredRequest = false;
   await page.route("**/src/components/ProjectAgentMathMarkdown.tsx*", async (route) => {
@@ -28,10 +28,13 @@ test("answer controls stay inert until the deferred math renderer is ready", asy
   await page.goto("/");
   const loading = page.getByText("Finishing math layout…");
   await expect(loading).toBeVisible();
-  expect(await page.getByRole("combobox").evaluate((element) => element.closest("[inert]") !== null)).toBe(true);
+  const control = page.getByRole("combobox");
+  expect(await control.evaluate((element) => element.closest("[inert]") !== null)).toBe(false);
+  await control.selectOption("7");
+  await expect(page.getByRole("heading", { name: "Position 8" })).toBeVisible();
   await expect(loading).toHaveCount(0);
   expect(deferredRequest).toBe(true);
-  await page.getByRole("combobox").selectOption("7");
+  await expect(control).toHaveValue("7");
   await expect(page.getByRole("heading", { name: "Position 8" })).toBeVisible();
 });
 

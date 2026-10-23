@@ -1,30 +1,107 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { ExternalLink, Globe2, X } from "lucide-react";
-import { safePresentationUrl } from "./ProjectAgentFigure";
+import { presentationSourceDate, presentationSourceUrl } from "./presentation-source-utils";
+import { usePresentationPortal } from "./presentation-portal";
+import "./presentation-visuals.css";
 
-type ProjectAgentSourceLinkProps = { href: string; host: string; label: string; title: string; excerpt?: string; publishedAt?: string };
+export type ProjectAgentSourceLinkProps = { href: string; host: string; label: string; title: string; excerpt?: string; publishedAt?: string };
 
-export function ProjectAgentSourceLink({ href, host, label, title, excerpt, publishedAt }: ProjectAgentSourceLinkProps) {
+export function ProjectAgentSourceLink({ href, label, title, excerpt, publishedAt }: ProjectAgentSourceLinkProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
-  if (!safePresentationUrl(href) || !/^https?:\/\//i.test(href)) return <span>{label}</span>;
-  return <Popover.Root>
-    <Popover.Trigger asChild><button type="button" aria-label={`Show source: ${title} (${host})`}
-      className="not-prose mx-0.5 inline-flex min-h-6 max-w-[14rem] items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 align-baseline text-xs leading-5 text-slate-600 focus-visible:ring-2 focus-visible:ring-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-      <Globe2 aria-hidden className="h-3 w-3 shrink-0" /><span className="truncate">{label}</span>
+  const [open, setOpen] = useState(false);
+  const mode = useRef<"hover" | "pinned" | null>(null);
+  const restoreFocus = useRef(false);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearTimers = useCallback(() => {
+    if (openTimer.current !== null) clearTimeout(openTimer.current);
+    if (closeTimer.current !== null) clearTimeout(closeTimer.current);
+    openTimer.current = null;
+    closeTimer.current = null;
+  }, []);
+  useEffect(() => {
+    clearTimers();
+    mode.current = null;
+    restoreFocus.current = false;
+    setOpen(false);
+    return clearTimers;
+  }, [href, clearTimers]);
+  const portal = usePresentationPortal();
+  function changeOpen(next: boolean) {
+    clearTimers();
+    if (next) {
+      mode.current = "pinned";
+      restoreFocus.current = true;
+    } else {
+      restoreFocus.current = mode.current === "pinned";
+      mode.current = null;
+    }
+    setOpen(next);
+  }
+  function enterTrigger(pointerType: string) {
+    if (pointerType !== "mouse") return;
+    clearTimers();
+    if (mode.current !== null) return;
+    openTimer.current = setTimeout(() => {
+      openTimer.current = null;
+      mode.current = "hover";
+      restoreFocus.current = false;
+      setOpen(true);
+    }, 250);
+  }
+  function leave(pointerType: string) {
+    if (pointerType !== "mouse") return;
+    clearTimers();
+    if (mode.current !== "hover") return;
+    // The grace period lets the pointer cross the small trigger/popover gap.
+    closeTimer.current = setTimeout(() => {
+      closeTimer.current = null;
+      if (mode.current === "hover") changeOpen(false);
+    }, 180);
+  }
+  const url = presentationSourceUrl(href);
+  if (!url) return <span>{label}</span>;
+  const host = url.hostname.replace(/^www\./, "");
+  const sourceTitle = title?.trim() || host;
+  const date = presentationSourceDate(publishedAt);
+  return <Popover.Root open={open} onOpenChange={changeOpen}>
+    <Popover.Trigger asChild><button type="button" aria-label={`Show source: ${sourceTitle} (${host})`}
+      className="agent-source-chip not-prose"
+      onPointerEnter={(event) => enterTrigger(event.pointerType)}
+      onPointerLeave={(event) => leave(event.pointerType)}
+      onClick={(event) => {
+        clearTimers();
+        if (mode.current !== "hover") return;
+        // Radix normally toggles an open trigger closed; a preview click pins it instead.
+        event.preventDefault();
+        changeOpen(true);
+        linkRef.current?.focus();
+      }}>
+      <Globe2 aria-hidden className="h-3 w-3 shrink-0" /><span className="truncate">{label || host}</span>
     </button></Popover.Trigger>
-    <Popover.Portal><Popover.Content sideOffset={6} collisionPadding={12} onOpenAutoFocus={(event) => { event.preventDefault(); linkRef.current?.focus(); }} aria-label={`Source details: ${title}`}
-      className="z-[100] w-72 max-w-[calc(100vw-1.5rem)] overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-900"
-      style={{ maxHeight: "var(--radix-popover-content-available-height)", overflowWrap: "anywhere" }}>
-      <p className="pr-7 text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
-      <p className="mt-1 truncate text-xs text-slate-500">{host}{publishedAt ? ` · Published: ${publishedAt.slice(0, 10)}` : ""}</p>
-      {excerpt && <blockquote className="mt-2 max-h-28 overflow-auto border-l-2 border-slate-300 pl-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{excerpt.slice(0, 400)}</blockquote>}
-      <a ref={linkRef} href={href} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-10 items-center gap-2 rounded px-2 text-sm text-orange-700 underline dark:text-orange-300">
+    <Popover.Portal container={portal}>
+      <Popover.Content side="top" align="start" sideOffset={8} collisionPadding={12}
+      onOpenAutoFocus={(event) => { event.preventDefault(); if (mode.current === "pinned") linkRef.current?.focus(); }}
+      onCloseAutoFocus={(event) => { if (!restoreFocus.current) event.preventDefault(); }}
+      onPointerEnter={(event) => { if (event.pointerType === "mouse") clearTimers(); }}
+      onPointerLeave={(event) => leave(event.pointerType)}
+      onFocusCapture={() => {
+        // Once a reader tabs/clicks into the preview, keep it available for interaction.
+        clearTimers();
+        mode.current = "pinned";
+        restoreFocus.current = true;
+      }}
+      aria-label={`Source details: ${sourceTitle}`} className="agent-source-popover not-prose">
+      <p className="agent-source-popover-title">{sourceTitle}</p>
+      <p className="agent-source-meta">{host}{date && <> · Published: <time dateTime={date}>{date}</time></>}</p>
+      {excerpt && <blockquote className="agent-source-popover-excerpt" tabIndex={0} aria-label="Source excerpt">{excerpt}</blockquote>}
+      <a ref={linkRef} href={href} target="_blank" rel="noopener noreferrer" className="agent-source-open">
         Open source <ExternalLink aria-hidden className="h-3 w-3" />
       </a>
-      <Popover.Close aria-label="Close source details" className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded focus-visible:ring-2"><X aria-hidden className="h-4 w-4" /></Popover.Close>
+      <Popover.Close aria-label="Close source details" className="agent-source-close"><X aria-hidden className="h-4 w-4" /></Popover.Close>
     </Popover.Content></Popover.Portal>
   </Popover.Root>;
 }

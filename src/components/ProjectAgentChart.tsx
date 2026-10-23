@@ -1,99 +1,118 @@
 "use client";
 
-import { memo, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, Share2, Table2 } from "lucide-react";
+import { Copy, Download, Loader2, Table2 } from "lucide-react";
 import type { RichUiBlock } from "@/lib/project-agent/rich-ui";
+import { chartImageBlob, downloadChartImage } from "./chart-image-export";
+import { ProjectAgentTable } from "./ProjectAgentTable";
 
 const AXIS_TICK = { fontSize: 11 } as const;
 const PALETTE = ["#4e79a7", "#f28e2b", "#59a14f", "#e15759", "#76b7b2", "#b07aa1", "#edc948", "#9c755f"];
+const CONTROL = "inline-flex min-h-10 items-center gap-1.5 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800";
 
 function Card({ title, caption, children }: { title?: string; caption?: string; children: ReactNode }) {
-	return (
-		<figure className="not-prose my-5 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-			{title ? <figcaption className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</figcaption> : null}
-			{children}
-			{caption ? <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{caption}</p> : null}
-		</figure>
-	);
+  return <figure className="not-prose my-5 min-w-0 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+    {title && <figcaption className="mb-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</figcaption>}
+    {children}
+    {caption && <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">{caption}</p>}
+  </figure>;
 }
 
-// Memoized with stable data and props: recharts re-dispatches axis ticks whenever these change identity, which loops on re-render.
+// Stable internal data keys keep user-facing series names from overwriting categories or becoming object paths.
 const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBlock, { type: "chart" }> }) {
-	const chartRef = useRef<HTMLDivElement>(null);
-	const [showTable, setShowTable] = useState(false);
-	const [shareError, setShareError] = useState("");
-	const data = useMemo(() => block.categories.map((name, index) => Object.fromEntries([["name", name], ...block.series.map((series) => [series.name, series.values[index]])])), [block]);
-	const unit = block.unit ? ` ${block.unit}` : "";
-	const formatter = useMemo(() => (value: unknown) => `${typeof value === "number" ? value.toLocaleString() : String(value)}${unit}`, [unit]);
-	const tooltip = <Tooltip formatter={formatter} />;
-	async function exportChart(share: boolean) {
-		const svg = chartRef.current?.querySelector("svg");
-		if (!svg) return setShareError("The chart is still loading.");
-		try {
-			const clone = svg.cloneNode(true) as SVGSVGElement;
-			const box = svg.getBoundingClientRect();
-			clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-			clone.setAttribute("width", String(Math.max(1, Math.ceil(box.width))));
-			clone.setAttribute("height", String(Math.max(1, Math.ceil(box.height))));
-			const image = new Image();
-			const source = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml;charset=utf-8" }));
-			try {
-				const png = await new Promise<Blob>((resolve, reject) => {
-					image.onload = () => { const canvas = document.createElement("canvas"); canvas.width = Math.ceil(box.width * 2); canvas.height = Math.ceil(box.height * 2); const context = canvas.getContext("2d"); if (!context) return reject(new Error("Canvas unavailable")); context.scale(2, 2); context.fillStyle = "white"; context.fillRect(0, 0, box.width, box.height); context.drawImage(image, 0, 0, box.width, box.height); canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not export chart")), "image/png"); };
-					image.onerror = () => reject(new Error("Could not render chart image")); image.src = source;
-				});
-				if (share && navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
-					await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-				} else {
-					const link = document.createElement("a"); link.href = URL.createObjectURL(png); link.download = `${(block.title || "chart").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "chart"}.png`; link.click(); URL.revokeObjectURL(link.href);
-				}
-				setShareError(share ? "Chart image copied." : "");
-			} finally { URL.revokeObjectURL(source); }
-		} catch { setShareError(share ? "Could not copy chart image." : "Could not download chart image."); }
-	}
-	return (
-		<Card title={block.title} caption={block.caption}>
-			<div className="mb-2 flex flex-wrap justify-end gap-1">
-				<button type="button" onClick={() => void exportChart(true)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="Share chart as image"><Share2 className="h-3.5 w-3.5" />Share</button>
-				<button type="button" onClick={() => void exportChart(false)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="Download chart as image"><Download className="h-3.5 w-3.5" />Download</button>
-				<button type="button" onClick={() => setShowTable((value) => !value)} aria-pressed={showTable} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Table2 className="h-3.5 w-3.5" />{showTable ? "Chart" : "Table"}</button>
-			</div>
-			{shareError && <p role="status" className="mb-2 text-right text-xs text-slate-500">{shareError}</p>}
-			{showTable ? <div className="max-h-64 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700"><table className="min-w-full text-left text-xs"><thead className="bg-slate-50 dark:bg-slate-800"><tr><th className="px-3 py-2">Category</th>{block.series.map((series) => <th key={series.name} className="px-3 py-2">{series.name}{unit}</th>)}</tr></thead><tbody>{block.categories.map((category, index) => <tr key={`${category}-${index}`} className="border-t border-slate-100 dark:border-slate-800"><th className="px-3 py-2 font-medium">{category}</th>{block.series.map((series) => <td key={series.name} className="px-3 py-2 tabular-nums">{(series.values[index]).toLocaleString()}{unit}</td>)}</tr>)}</tbody></table></div> : <div ref={chartRef} className="h-64 w-full" role="img" aria-label={block.title ?? "Chart"}>
-				<ResponsiveContainer width="100%" height="100%">
-					{block.kind === "pie" ? (
-						<PieChart>
-							<Pie data={data} dataKey={block.series[0].name} nameKey="name" outerRadius="80%" label>
-								{data.map((_, index) => <Cell key={index} fill={PALETTE[index % PALETTE.length]} />)}
-							</Pie>
-							{tooltip}
-							<Legend />
-						</PieChart>
-					) : block.kind === "line" ? (
-						<LineChart data={data}>
-							<CartesianGrid strokeDasharray="3 3" vertical={false} />
-							<XAxis dataKey="name" tick={AXIS_TICK} />
-							<YAxis tick={AXIS_TICK} />
-							{tooltip}
-							{block.series.length > 1 && <Legend />}
-							{block.series.map((series, index) => <Line key={series.name} type="monotone" dataKey={series.name} stroke={PALETTE[index % PALETTE.length]} strokeWidth={2} dot={{ r: 3 }} />)}
-						</LineChart>
-					) : (
-						<BarChart data={data}>
-							<CartesianGrid strokeDasharray="3 3" vertical={false} />
-							<XAxis dataKey="name" tick={AXIS_TICK} />
-							<YAxis tick={AXIS_TICK} />
-							{tooltip}
-							{block.series.length > 1 && <Legend />}
-							{block.series.map((series, index) => <Bar key={series.name} dataKey={series.name} fill={PALETTE[index % PALETTE.length]} stackId={block.kind === "stacked" ? "stack" : undefined} radius={block.kind === "stacked" ? 0 : [4, 4, 0, 0]} />)}
-						</BarChart>
-					)}
-				</ResponsiveContainer>
-			</div>}
-		</Card>
-	);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const exportRequest = useRef(0);
+  const [showTable, setShowTable] = useState(false);
+  const [status, setStatus] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [canCopy, setCanCopy] = useState(false);
+  const series = useMemo(() => block.series.map((item, index) => ({ ...item, key: `series_${index}` })), [block.series]);
+  const data = useMemo(() => block.categories.map((category, index) => ({
+    categoryLabel: category, ...Object.fromEntries(series.map((item) => [item.key, item.values[index]])),
+  })), [block.categories, series]);
+  const unit = block.unit ? ` ${block.unit}` : "";
+  const formatter = useMemo(() => (value: unknown) => `${typeof value === "number" ? value.toLocaleString() : String(value)}${unit}`, [unit]);
+  const tooltip = <Tooltip formatter={formatter} />;
+  const values = block.series.flatMap((item) => item.values);
+  const extent = block.kind === "stacked" ? block.categories.flatMap((_, index) => [
+    series.reduce((sum, item) => sum + Math.max(0, item.values[index]), 0),
+    series.reduce((sum, item) => sum + Math.min(0, item.values[index]), 0),
+  ]) : values;
+  const finiteRange = values.every(Number.isFinite) && extent.every(Number.isFinite) &&
+    Number.isFinite(Math.max(0, ...extent) - Math.min(0, ...extent));
+  const total = block.series[0]?.values.reduce((sum, value) => sum + value, 0) ?? 0;
+  const chartIssue = !finiteRange ? "This value range cannot be plotted reliably. The supplied data is shown below." :
+    block.kind === "pie" && (series.length !== 1 || values.some((value) => value < 0) || !Number.isFinite(total) || total <= 0)
+      ? "A pie chart needs one non-negative series with a positive total. The supplied data is shown below." : "";
+  const tableVisible = showTable || !!chartIssue;
+  useEffect(() => {
+    setCanCopy(!!navigator.clipboard?.write && typeof ClipboardItem !== "undefined");
+  }, []);
+  useEffect(() => {
+    exportRequest.current += 1;
+    setStatus(""); setExporting(false);
+    return () => { exportRequest.current += 1; };
+  }, [block]);
+  async function exportChart(action: "copy" | "download") {
+    const svg = chartRef.current?.querySelector<SVGSVGElement>("svg.recharts-surface");
+    if (!svg) { setStatus("Switch to the chart view before exporting an image."); return; }
+    if (action === "copy" && !canCopy) { setStatus("Image copying is unavailable in this browser. Use Download instead."); return; }
+    const request = ++exportRequest.current;
+    setStatus(""); setExporting(true);
+    try {
+      const legend = block.kind === "pie"
+        ? block.categories.map((label, index) => ({ label: `${label}: ${formatter(series[0].values[index])}`, color: PALETTE[index % PALETTE.length] }))
+        : series.map((item, index) => ({ label: `${item.name}${unit}`, color: PALETTE[index % PALETTE.length] }));
+      const png = await chartImageBlob(svg, block.title || "Chart", legend);
+      if (request !== exportRequest.current) return;
+      if (action === "copy") await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+      else downloadChartImage(png, block.title || "chart");
+      if (request === exportRequest.current) setStatus(action === "copy" ? "Chart image copied." : "Chart download requested.");
+    } catch {
+      if (request === exportRequest.current) setStatus(action === "copy" ? "Could not copy chart image. You can download it instead." : "Could not download chart image.");
+    } finally { if (request === exportRequest.current) setExporting(false); }
+  }
+  return <Card title={block.title} caption={block.caption}>
+    <div className="mb-2 flex flex-wrap justify-end gap-1">
+      <button type="button" onClick={() => void exportChart("copy")} className={CONTROL}
+        disabled={tableVisible || exporting || !canCopy} title={!canCopy ? "Image copying is unavailable; use Download" : "Copy chart image"} aria-label="Copy chart as image">
+        <Copy aria-hidden className="h-3.5 w-3.5" />Copy image
+      </button>
+      <button type="button" onClick={() => void exportChart("download")} className={CONTROL}
+        disabled={tableVisible || exporting} aria-label="Download chart as image">
+        {exporting ? <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" /> : <Download aria-hidden className="h-3.5 w-3.5" />}Download
+      </button>
+      <button type="button" onClick={() => { setShowTable((value) => !value); setStatus(""); }} aria-pressed={tableVisible}
+        disabled={!!chartIssue || exporting} className={CONTROL}><Table2 aria-hidden className="h-3.5 w-3.5" />{tableVisible ? "Show chart" : "Table"}</button>
+    </div>
+    {status && <p role="status" className="mb-2 text-right text-xs text-slate-500">{status}</p>}
+    {chartIssue && <p role="status" className="mb-2 text-sm text-slate-500">{chartIssue}</p>}
+    {tableVisible ? <ProjectAgentTable label={`${block.title || "Chart"} data`}>
+      <thead><tr><th scope="col">Category</th>{series.map((item) => <th scope="col" key={item.key}>{item.name}{unit}</th>)}</tr></thead>
+      <tbody>{block.categories.map((category, index) => <tr key={`${category}-${index}`}>
+        <th scope="row">{category}</th>{series.map((item) => <td key={item.key}>{formatter(item.values[index])}</td>)}
+      </tr>)}</tbody>
+    </ProjectAgentTable> : <div ref={chartRef} className="h-64 min-w-0 w-full" role="img" aria-label={block.title ?? "Chart"}>
+      <ResponsiveContainer width="100%" height="100%">
+        {block.kind === "pie" ? <PieChart>
+          <Pie data={data} dataKey="series_0" nameKey="categoryLabel" outerRadius="80%" label isAnimationActive={false}>
+            {data.map((_, index) => <Cell key={index} fill={PALETTE[index % PALETTE.length]} />)}
+          </Pie>{tooltip}<Legend />
+        </PieChart> : block.kind === "line" ? <LineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="categoryLabel" tick={AXIS_TICK} /><YAxis tick={AXIS_TICK} />
+          {tooltip}{series.length > 1 && <Legend />}
+          {series.map((item, index) => <Line key={item.key} type="monotone" dataKey={item.key} name={item.name}
+            stroke={PALETTE[index % PALETTE.length]} strokeWidth={2} dot={{ r: 3 }} isAnimationActive={false} />)}
+        </LineChart> : <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="categoryLabel" tick={AXIS_TICK} /><YAxis tick={AXIS_TICK} />
+          {tooltip}{series.length > 1 && <Legend />}
+          {series.map((item, index) => <Bar key={item.key} dataKey={item.key} name={item.name}
+            fill={PALETTE[index % PALETTE.length]} stackId={block.kind === "stacked" ? "stack" : undefined} radius={block.kind === "stacked" ? 0 : [4, 4, 0, 0]} isAnimationActive={false} />)}
+        </BarChart>}
+      </ResponsiveContainer>
+    </div>}
+  </Card>;
 });
-
 
 export default ChartBlock;

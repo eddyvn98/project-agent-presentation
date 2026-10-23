@@ -1,4 +1,4 @@
-export { projectAgentMarkdownComponents, createProjectAgentMarkdownComponents, normalizeProjectAgentMarkdown } from "./components/ProjectAgentMarkdown";
+export { ProjectAgentMarkdownProvider, projectAgentMarkdownComponents, createProjectAgentMarkdownComponents, normalizeProjectAgentMarkdown } from "./components/ProjectAgentMarkdown";
 export { ProjectAgentRichBlock } from "./components/ProjectAgentRichBlocks";
 export { ProjectAgentSourceLink } from "./components/ProjectAgentSourceLink";
 export { ProjectAgentZoomImage } from "./components/ProjectAgentZoomImage";
@@ -7,7 +7,35 @@ export { inlinedImageNames, resolveInlineImage } from "./components/projectAgent
 export type { ProjectAgentTaskFile, ProjectAgentTaskSource } from "./lib/project-agent/types";
 
 export { ProjectAgentAnswer } from "./components/ProjectAgentAnswer";
+export type { ProjectAgentAnswerProps } from "./components/ProjectAgentAnswer";
 export type { ImagePresentation } from "./components/ProjectAgentFigure";
+export { ProjectAgentMessage } from "./components/ProjectAgentMessage";
+export type { ProjectAgentMessageProps, MessageVariants } from "./components/ProjectAgentMessage";
+export { ProjectAgentTranscript } from "./components/ProjectAgentTranscript";
+export type { ProjectAgentTranscriptProps } from "./components/ProjectAgentTranscript";
+export { ProjectAgentAnswerActions } from "./components/ProjectAgentAnswerActions";
+export type { AnswerActionHandlers, AnswerFeedback } from "./components/ProjectAgentAnswerActions";
+export { ProjectAgentProgress } from "./components/ProjectAgentProgress";
+export type { PresentationProgressStep } from "./components/ProjectAgentProgress";
+export { ProjectAgentSources } from "./components/ProjectAgentSources";
+export type { ProjectAgentSourcesProps } from "./components/ProjectAgentSources";
+export { ProjectAgentCodeBlock } from "./components/ProjectAgentCodeBlocks";
+export type { ProjectAgentCodeBlockProps, ProjectAgentCodeSaveChange, ProjectAgentCodeSaveHandler,
+  ProjectAgentCodePreviewInput, ProjectAgentCodePreviewRenderer } from "./components/ProjectAgentCodeBlocks";
+export { ProjectAgentTable } from "./components/ProjectAgentTable";
+export type { ProjectAgentTableProps } from "./components/ProjectAgentTable";
+export { ProjectAgentDocumentCard, parseDocumentCard } from "./components/ProjectAgentDocumentCard";
+export type { ProjectAgentDocumentCardProps, WritingDocumentChange } from "./components/ProjectAgentDocumentCard";
+export { ProjectAgentReplyProvider } from "./components/ProjectAgentReply";
+export type { ReplyHandler } from "./components/ProjectAgentReply";
+export type { MarkdownPresentationOptions, ProjectAgentMarkdownProviderProps } from "./components/ProjectAgentMarkdown";
+export type { AnswerQuote } from "./components/ProjectAgentSelectionAction";
+export type { ResponseState } from "./components/ProjectAgentResponseStatus";
+export { ProjectAgentResponseContext } from "./components/ProjectAgentResponseContext";
+export { prepareStreamingPresentation } from "./lib/project-agent/streaming-presentation";
+export type { StreamingPresentation } from "./lib/project-agent/streaming-presentation";
+export { replacePresentationFence } from "./lib/project-agent/replace-presentation-fence";
+export { getAnswerOutline } from "./lib/project-agent/answer-outline";
 
 export { planAgentAnswer } from "./lib/project-agent/answer-plan";
 export type { AnswerPlan, AnswerIntent, AnswerVisual, AnswerAudience } from "./lib/project-agent/answer-plan";

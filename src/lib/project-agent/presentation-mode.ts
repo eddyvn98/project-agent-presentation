@@ -1,32 +1,26 @@
-/** Break a complete Markdown answer into slides at H2 headings, never inside fences. */
+import { scanMarkdownCode } from "./markdown-code-ranges";
+
+/** Break a complete Markdown answer into slides at H2 headings, never inside literal blocks. */
 export function splitPresentationSections(markdown: string): string[] {
   const sections: string[] = [];
-  let current: string[] = [];
-  let fence: { kind: string; size: number } | null = null;
-  for (const line of markdown.split(/\r?\n/)) {
-    const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
-    if (marker) {
-      if (!fence) fence = { kind: marker[0], size: marker.length };
-      else if (marker[0] === fence.kind && marker.length >= fence.size && /^\s*(`{3,}|~{3,})\s*$/.test(line)) fence = null;
+  const literals = scanMarkdownCode(markdown, false).blocks;
+  let start = 0, literalIndex = 0;
+  for (const line of markdown.matchAll(/([^\r\n]*)(\r\n|\r|\n|$)/g)) {
+    if (!line[0]) continue;
+    while (literals[literalIndex] && literals[literalIndex].end <= line.index) literalIndex += 1;
+    if (literals[literalIndex] && literals[literalIndex].start <= line.index) continue;
+    if (/^ {0,3}##[\t ]+\S/.test(line[1]) && markdown.slice(start, line.index).trim()) {
+      sections.push(markdown.slice(start, line.index).trim());
+      start = line.index;
     }
-    if (!fence && /^##\s+\S/.test(line) && current.join("\n").trim()) {
-      sections.push(current.join("\n").trim());
-      current = [];
-    }
-    current.push(line);
   }
-  if (current.join("\n").trim()) sections.push(current.join("\n").trim());
+  if (markdown.slice(start).trim()) sections.push(markdown.slice(start).trim());
   return sections.length ? sections : [markdown];
 }
-/** Keep incomplete fences out of ReactMarkdown until streaming closes them. */
+
+/** Legacy conservative policy: withhold every open fence, including ordinary code. */
 export function completedStreamingMarkdown(markdown: string): { text: string; pending: boolean } {
-  const lines = markdown.split(/\r?\n/);
-  let open: { index: number; kind: string; size: number } | null = null;
-  for (const [index, line] of lines.entries()) {
-    const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
-    if (!marker) continue;
-    if (!open) open = { index, kind: marker[0], size: marker.length };
-    else if (marker[0] === open.kind && marker.length >= open.size && /^\s*(`{3,}|~{3,})\s*$/.test(line)) open = null;
-  }
-  return open ? { text: lines.slice(0, open.index).join("\n"), pending: true } : { text: markdown, pending: false };
+  const fence = scanMarkdownCode(markdown, false).openFence;
+  return fence ? { text: markdown.slice(0, fence.start).replace(/(?:\r\n|\r|\n)$/, ""), pending: true }
+    : { text: markdown, pending: false };
 }
