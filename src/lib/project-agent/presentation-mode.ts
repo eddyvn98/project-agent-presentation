@@ -22,11 +22,11 @@ export function splitPresentationSections(markdown: string): string[] {
 export function completedStreamingMarkdown(markdown: string): { text: string; pending: boolean } {
   const lines = markdown.split(/\r?\n/);
   let open: { index: number; kind: string; size: number } | null = null;
-  lines.forEach((line, index) => {
+  for (const [index, line] of lines.entries()) {
     const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
-    if (!marker) return;
+    if (!marker) continue;
     if (!open) open = { index, kind: marker[0], size: marker.length };
     else if (marker[0] === open.kind && marker.length >= open.size && /^\s*(`{3,}|~{3,})\s*$/.test(line)) open = null;
-  });
+  }
   return open ? { text: lines.slice(0, open.index).join("\n"), pending: true } : { text: markdown, pending: false };
 }
