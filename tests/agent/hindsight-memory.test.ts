@@ -40,6 +40,7 @@ it("separates project banks and makes retrying a completed task idempotent", asy
   }));
   expect(await retainProjectHindsight(sample)).toBe(true);
   expect(received[0].url).toContain("/v1/default/banks/" + hindsightBankId(sample.projectId) + "/memories");
+  expect(new URL(received[0].url).pathname).toBe("/v1/default/banks/" + hindsightBankId(sample.projectId) + "/memories");
   const item = (received[0].body.items as Array<Record<string, unknown>>)[0];
   expect(item.document_id).toBe(hindsightDocumentId(sample.id));
   expect(item.tags).toContain("source:project-agent-task");

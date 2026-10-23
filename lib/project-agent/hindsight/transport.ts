@@ -38,7 +38,8 @@ export async function hindsightRequest(
   if (!config) throw new Error("Hindsight not enabled/configured");
   const bank = encodeURIComponent(hindsightBankId(projectId));
   const url = new URL(config.url);
-  url.pathname = url.pathname + "/v1/default/banks/" + bank + route;
+  const basePath = config.url.pathname.replace(/\/+$/, "");
+  url.pathname = basePath + "/v1/default/banks/" + bank + route;
   const timer = AbortSignal.timeout(timeoutMs);
   const combined = signal ? AbortSignal.any([timer, signal]) : timer;
   const response = await fetch(url, {
