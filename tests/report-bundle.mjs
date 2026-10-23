@@ -14,8 +14,11 @@ const sizes = jsFiles.map((name) => {
 }).sort((a, b) => b.bytes - a.bytes);
 const initial = sizes.filter((file) => entryPaths.some((src) => src.endsWith("/" + file.name)));
 const deferred = sizes.filter((file) => file.name.startsWith("ProjectAgentChart-"));
+const deferredMath = sizes.filter((file) => file.name.startsWith("ProjectAgentMathMarkdown-"));
 if (!deferred.length) throw new Error("Expected a separate, asynchronously loaded chart chunk.");
+if (!deferredMath.length) throw new Error("Expected a separate, asynchronously loaded math renderer.");
 const format = (value) => (value / 1024).toFixed(1) + " KiB";
 console.log("Initial JS: " + initial.map((f) => f.name + " " + format(f.bytes) + " / " + format(f.gzip) + " gzip").join("; "));
 console.log("Deferred chart: " + deferred.map((f) => f.name + " " + format(f.bytes) + " / " + format(f.gzip) + " gzip").join("; "));
+console.log("Deferred math: " + deferredMath.map((f) => f.name + " " + format(f.bytes) + " / " + format(f.gzip) + " gzip").join("; "));
 console.log("Largest JS chunks: " + sizes.slice(0, 6).map((f) => f.name + " " + format(f.bytes)).join("; "));
