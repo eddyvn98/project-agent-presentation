@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, FileText, Globe, Loader2, MessageSquareText,
 import type { ProjectAgentTaskSource } from "@/lib/project-agent/types";
 import type { ProjectAgentActivityStep } from "@/lib/project-agent/public-task";
 import { activityText, type ActivityLanguage } from "@/lib/project-agent/activity-language";
+import { agentToolReturnedText } from "@/lib/project-agent/activity-stage";
 import { ProjectAgentSourceLink } from "./ProjectAgentSourceLink";
 import { ProjectAgentZoomImage } from "./ProjectAgentZoomImage";
 
@@ -93,7 +94,7 @@ export function ProjectAgentActivity({ activity, running, sources, progress, ima
 						const Icon = ICONS[step.kind];
 						return (
 							<li key={`${step.label}-${index}`}>
-								<p className={`flex items-start gap-2 text-sm leading-5 ${step.kind === "update" ? "font-medium text-slate-800 dark:text-slate-100" : "text-slate-600 dark:text-slate-300"}`}><Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="min-w-0 break-words">{step.label}{step.count > 1 ? <span className="ml-1 text-xs font-normal text-slate-400">×{step.count}</span> : null}</span></p>
+								<p className={`flex items-start gap-2 text-sm leading-5 ${step.kind === "update" ? "font-medium text-slate-800 dark:text-slate-100" : "text-slate-600 dark:text-slate-300"}`}><Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" /><span className="min-w-0 break-words">{step.label}{step.count > 1 ? <span className="ml-1 text-xs font-normal text-slate-400">×{step.count}</span> : null}{step.returnedCount ? <span className="ml-1 text-xs font-normal text-slate-400">· {agentToolReturnedText(language)}{step.returnedCount < step.count ? ` (${step.returnedCount}/${step.count})` : ""}</span> : null}</span></p>
 								{technical && step.details.length ? <ul className="mt-1 space-y-0.5 pl-5 text-xs text-slate-500 dark:text-slate-400">{step.details.slice(0, 8).map((detail, i) => <li key={`${detail}-${i}`} className="break-all">{detail}</li>)}</ul> : null}
 							</li>
 						);

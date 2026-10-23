@@ -1,5 +1,5 @@
 import type { DifyChatFile } from "./dify-input-files";
-import { readDifyAgentMessage, type DifyAgentMessage } from "./dify-stream";
+import { readDifyAgentMessage, type DifyAgentMessage, type DifyProgressCallback } from "./dify-stream";
 import { applyEditSpec, type EditSpec } from "./edit-files";
 import { buildRichFiles, extractRichFileSpecs, stripUnverifiedDisclaimers } from "./rich-files";
 import { downloadOfficeToolFiles } from "./office-tools";
@@ -15,7 +15,7 @@ export async function callDifyAgent(input: {
 	files: DifyChatFile[];
 	conversationId?: string;
 	signal?: AbortSignal;
-	onPartial?: (answerSoFar: string, toolName?: string) => void;
+	onPartial?: DifyProgressCallback;
 	editSources?: { taskId: string; files: Array<{ id: string; name: string }> };
 }): Promise<DifyAgentMessage> {
 	const response = await fetch(input.endpoint, {

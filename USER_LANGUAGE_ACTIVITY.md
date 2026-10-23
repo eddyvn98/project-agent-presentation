@@ -21,3 +21,23 @@ Branch: gpt/full-project-agent. This patch improves the **presentation** of actu
 ## QA deferred
 
 New test source `tests/agent/user-language-progress.test.ts` covers Vietnamese, English, Spanish, French, Japanese, explicit language requests, raw command avoidance, narrative ordering, existing English tool grouping and action validation. **Tests/build/CI/browser QA were not run in this pass**, as requested. Before production, check logged-in Dify SSE, runtime, slow actions, mobile timeline expansion/collapse, accessibility announcements, stale task reload and each supported language.
+
+## Upgrade: app-hosted ordinary-Dify live progress
+
+The ordinary-Dify SSE parser now preserves two **evidence-backed** phases for each agent_thought id: "started" (a tool call was announced) and "returned" (Dify supplied an observation). Observations can arrive separately from their tool inputs; the parser merges those events so rich Office bytes and metadata remain available. Returned is **not** interpreted as a successful verification.
+
+The calculator continuation forwards these phases to Project Agent instead of dropping step metadata. Server-side task logs record a matching "using tool" and "tool returned" event for the same id. The public activity selector deduplicates by id and shows the tool's localized description, with a returned indicator only after the observation arrives. Normal message-type SSE text continues to update partial responses without changing its final-answer semantics.
+
+App-owned phases are emitted only at real execution boundaries: loading authorized Project context, preparing uploaded files, starting the model request, checking outputs and saving results. The timeline translates those phase identifiers for the current turn's language; it does not fabricate model thoughts or discoveries. Explicit output-language instructions take priority over heuristic language detection, and recognition no longer relies on ASCII word boundaries for Vietnamese diacritics.
+
+The timeline is expanded initially while a task is running; raw commands and parameters remain collapsed under technical details. When the remote Dify workflow does not expose agent_thought, the UI can show app-owned phases but cannot invent step-by-step model reasoning or unseen tool outcomes.
+
+### Regression source, not executed
+
+- tests/agent/dify-sse-progress.test.ts: split SSE tool observations, duplicate events, retained Office bytes, regular SSE and per-turn language
+- tests/agent/dify-calculator-bridge.test.ts: end-to-end forwarding of SSE phases through the calculator bridge
+- tests/agent/user-language-progress.test.ts: narrative action protocol remains bounded and language-sensitive
+
+No tests, build, CI or logged-in browser QA were executed during this change (user-requested hold).
+
+SSE partial/log writes are now sequenced before completing or failing a task, so a late tool-return event cannot appear after the final task status. Exposed Dify tool-input details are secret-redacted before task-log persistence; ordinary response bodies and Office file bytes retain their existing handling.

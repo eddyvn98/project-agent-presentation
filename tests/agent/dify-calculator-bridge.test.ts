@@ -92,3 +92,17 @@ it("rejects malformed actions and an already-aborted task without running a calc
   await expect(callDifyWithCalculator({ ...base, signal: controller.signal })).rejects.toBeDefined();
   expect(f).toHaveBeenCalledTimes(1);
 });
+
+it("forwards actual tool start and return status through the ordinary-Dify calculator bridge", async () => {
+  const phases: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async () => response(
+    { event: "agent_thought", id: "s1", tool: "web_search", tool_input: '{"query":"official documentation"}' },
+    { event: "agent_thought", id: "s1", observation: "Results returned" },
+    { event: "message", answer: "Here is the summary." },
+  )));
+  const result = await callDifyWithCalculator({ ...base, onPartial: (_answer, _tool, step) => {
+    if (step) phases.push(step.phase);
+  } });
+  expect(result.answer).toBe("Here is the summary.");
+  expect(phases).toEqual(["started", "returned"]);
+});

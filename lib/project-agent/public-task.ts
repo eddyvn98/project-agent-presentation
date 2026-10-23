@@ -3,10 +3,11 @@ import { inferProjectAgentFileMetadata } from "./files";
 import { readProjectAgentFile } from "./task-store";
 import { planFromLog, type PlanItem } from "./plan";
 import { activityLabel, activityText, projectAgentLanguage, type ActivityLanguage } from "./activity-language";
+import { agentStageText, agentToolReturnedText } from "./activity-stage";
 
 export type PublicProjectAgentTask = Omit<ProjectAgentTask, "ownerEmail" | "projectOwnerEmail" | "difyConversationId" | "bootId" | "log" | "inputFiles"> & { attachments?: ProjectAgentTaskInputFile[]; progress?: string; steps?: string[]; activity?: ProjectAgentActivityStep[]; activityLanguage?: ActivityLanguage; plan?: PlanItem[]; canContinue: boolean };
 
-export interface ProjectAgentActivityStep { label: string; kind: "search" | "read" | "other" | "update"; count: number; details: string[]; images?: string[] }
+export interface ProjectAgentActivityStep { label: string; kind: "search" | "read" | "other" | "update"; count: number; details: string[]; images?: string[]; returnedCount?: number }
 
 const TOOL_LABELS: Record<string, string> = {
 	calculate: "Calculated an expression",
@@ -63,10 +64,15 @@ const TOOL_LABELS: Record<string, string> = {
 function taskProgress(task: ProjectAgentTask, language: ActivityLanguage): string {
 	const t = activityText(language);
 	if (task.status === "queued") return t.working;
-	if (task.status === "done") return language === "en" ? "Finished reviewing the deliverables" : t.completed;
+	if (task.status === "done") return t.completed;
 	if (task.status === "failed") return t.failed;
-	const latest = task.log.at(-1)?.replace(/^\S+\s+/, "") ?? "";
+	const latest = task.log.slice(-35).map((line) => line.replace(/^\S+\s+/, "")).reverse()
+		.find((line) => /^(?:progress_message ::|app_stage ::|using tool |tool returned |thinking ::|reviewing saved deliverables|starting saved-file read-back|checking saved files)/i.test(line))
+		?? task.log.at(-1)?.replace(/^\S+\s+/, "") ?? "";
 	if (latest.includes("auto-compacting conversation")) return t.working;
+	const stage = latest.match(/^app_stage :: ([a-z_]+)$/);
+	if (stage) return agentStageText(stage[1], language) ?? t.working;
+	if (/^tool returned \S+ #/.test(latest)) return agentToolReturnedText(language);
 	const narrated = latest.match(/^progress_message :: (.{1,240})$/);
 	if (narrated) return narrated[1];
 	const reviewPass = latest.match(/reviewing saved deliverables \(pass (\d+\/\d+)\)/i);
@@ -93,27 +99,31 @@ const READ_TOOLS = /scraper|fetch|markitdown|read_file|reader/i;
 
 /** Tool steps grouped by label with their queries/pages, deduplicated by the Dify thought id so repeated stream events count once. */
 export function taskActivity(log: string[], language: ActivityLanguage = "en"): ProjectAgentActivityStep[] {
-	const byId = new Map<string, { tool: string; detail: string }>();
+	const byId = new Map<string, { tool: string; detail: string; returned?: boolean }>();
 	const order: string[] = [];
 	log.forEach((line, index) => {
 		const entry = line.replace(/^\S+\s+/, "");
+		const stage = entry.match(/^app_stage :: ([a-z_]+)$/);
+		if (stage) { const id = `stage-${index}`; order.push(id); byId.set(id, { tool: "app_stage", detail: stage[1] }); return; }
+		const returned = entry.match(/^tool returned (\S+) #(\S+)$/);
+		if (returned) { const id = returned[2]; const earlier = byId.get(id); if (!earlier) order.push(id); byId.set(id, { tool: earlier?.tool ?? returned[1], detail: earlier?.detail ?? "", returned: true }); return; }
 		const narration = entry.match(/^progress_message :: (.{1,240})$/);
 		if (narration) { const id = `comment-${index}`; order.push(id); byId.set(id, { tool: "progress_message", detail: narration[1] }); return; }
 		const match = entry.match(/^using tool (\S+)(?: #(\S+))?(?: :: (.*))?$/i);
 		if (!match) return;
 		const id = match[2] ?? `line-${index}`;
 		if (!byId.has(id)) order.push(id);
-		byId.set(id, { tool: match[1], detail: match[3]?.trim() || byId.get(id)?.detail || "" });
+		byId.set(id, { tool: match[1], detail: match[3]?.trim() || byId.get(id)?.detail || "", returned: byId.get(id)?.returned });
 	});
 	const steps: ProjectAgentActivityStep[] = [];
 	for (const id of order) {
-		const { tool, detail } = byId.get(id)!;
-		const label = tool === "progress_message" ? detail : language === "en" ? TOOL_LABELS[tool.toLowerCase()] ?? activityText(language).tool : activityLabel(tool, language);
-		const kind = tool === "progress_message" ? "update" : SEARCH_TOOLS.test(tool) ? "search" : READ_TOOLS.test(tool) ? "read" : "other";
+		const { tool, detail, returned } = byId.get(id)!;
+		const label = tool === "app_stage" ? agentStageText(detail, language) ?? activityText(language).working : tool === "progress_message" ? detail : language === "en" ? TOOL_LABELS[tool.toLowerCase()] ?? activityText(language).tool : activityLabel(tool, language);
+		const kind = tool === "progress_message" || tool === "app_stage" ? "update" : SEARCH_TOOLS.test(tool) ? "search" : READ_TOOLS.test(tool) ? "read" : "other";
 		const image = id.startsWith("render-") ? id : undefined;
 		const last = steps.at(-1);
-		if (last && last.label === label && kind !== "update") { last.count += 1; if (detail) last.details.push(detail); if (image) (last.images ??= []).push(image); }
-		else steps.push({ label, kind, count: 1, details: kind === "update" ? [] : detail ? [detail] : [], ...(image ? { images: [image] } : {}) });
+		if (last && last.label === label && kind !== "update") { last.count += 1; if (returned) last.returnedCount = (last.returnedCount ?? 0) + 1; if (detail) last.details.push(detail); if (image) (last.images ??= []).push(image); }
+		else steps.push({ label, kind, count: 1, details: kind === "update" ? [] : detail ? [detail] : [], ...(returned ? { returnedCount: 1 } : {}), ...(image ? { images: [image] } : {}) });
 	}
 	return steps.slice(-20);
 }

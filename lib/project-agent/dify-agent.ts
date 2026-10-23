@@ -17,13 +17,10 @@ import { autoCompactIfNeeded } from "./auto-compact";
 import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
 import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
 import { buildChatRecap } from "./chat-recap";
-
 const MAX_VISUAL_REVIEW_PASSES = 4;
-
 export function projectAgentDifyUser(ownerEmail: string, projectId: string): string {
 	return `project_${createHash("sha256").update(`${ownerEmail.trim().toLowerCase()}:${projectId}`).digest("hex").slice(0, 24)}`;
 }
-
 export function getEndpoint(): string {
 	const configured = process.env.PROJECT_AGENT_DIFY_API_URL?.trim();
 	if (!configured) throw new Error("PROJECT_AGENT_DIFY_API_URL is not configured");
@@ -34,12 +31,12 @@ export function getEndpoint(): string {
 		: `${path.endsWith("/v1") ? path : `${path}/v1`}/chat-messages`;
 	return url.toString();
 }
-
 import { extractAgentSideEffects, hideAgentTags, describeTaskWork, loadRunbookPrompt, removeAgentWebSources, saveAgentWebSources, saveRunbookNotes, saveTaskWorkLog, type AgentWebSource } from "./agent-sources";
 import { PROJECT_AGENT_BOOT_ID } from "./boot";
 import { loadProjectSkillSet, stripProjectSkillReadRequests } from "./project-skills";
 import { buildReferenceReview } from "./reference-review";
 import { isRuntimeEnabled, runRuntimeAgent } from "./runtime/run-agent";
+import { redactSecrets } from "./runtime/policy";
 import { newDirectState } from "./runtime/workspace-direct-apply";
 import { cancelTaskWorkspaceTurns } from "./runtime/workspace-direct";
 import { workspaceSaveReporter } from "./runtime/workspace-task-progress";
@@ -50,15 +47,12 @@ import { hideRichFileBlocks, stripUnverifiedDisclaimers } from "./rich-files";
 import { lessonsForTask, lessonsPrompt, recordLessonCandidates } from "./learning/global-lessons";
 import { reflectOnTask } from "./learning/reflect";
 import { recallProjectHindsight, retainProjectHindsight } from "./hindsight/memory";
-
 const DIFY_MAX_FILES_PER_MESSAGE = Math.max(1, Number(process.env.PROJECT_AGENT_DIFY_MAX_FILES) || 3);
 export { buildProjectAgentQuery, PROJECT_AGENT_DELIVERABLE_QUALITY_GATE } from "./dify-query";
 export { readDifyAgentAnswer, readDifyAgentMessage } from "./dify-stream";
-
 export function isProjectAgentDifyConfigured(): boolean {
 	return Boolean(process.env.PROJECT_AGENT_DIFY_API_URL?.trim() && process.env.PROJECT_AGENT_DIFY_API_KEY?.trim());
 }
-
 const isBrokenConversationError = (cause: unknown) => /maximum output retries|conversation.*(not exist|invalid)/i.test(cause instanceof Error ? cause.message : String(cause));
 
 export async function runProjectAgentTask(taskId: string, signal?: AbortSignal): Promise<ProjectAgentTask> {
@@ -69,6 +63,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 	let wroteLesson = false; // reflect: fire-and-forget cheap-model lesson after the final status
 	const reflect = (finalTask: ProjectAgentTask) => { void reflectOnTask({ task: finalTask, user: projectAgentDifyUser(task.ownerEmail, task.projectId), wroteLesson, log: (logLine) => updateProjectAgentTask(task.id, { logLine }) }).catch(() => {}); return finalTask; };
 	let runtimeSources: ProjectAgentTaskSource[] = [];
+	let partialQueue: Promise<void> = Promise.resolve();
 	const threadId = task.conversationId;
 	const runtime = isRuntimeEnabled();
 	let conversationId = (runtime ? undefined : await autoCompactIfNeeded(task)) ?? await resolveDifyConversationId(task);
@@ -82,7 +77,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		if (!projectAccess) throw new Error("Project access was removed before the task could run");
 		const projectOwnerEmail = projectAccess.ownerEmail;
 
-		await updateProjectAgentTask(task.id, { status: "running", bootId: PROJECT_AGENT_BOOT_ID, startedAt: new Date().toISOString(), logLine: "sent to Dify Project Agent" });
+		await updateProjectAgentTask(task.id, { status: "running", bootId: PROJECT_AGENT_BOOT_ID, startedAt: new Date().toISOString(), logLine: "app_stage :: loading_context" });
 		const [knowledge, projectChats, projectAgentHistory, personalChats] = await Promise.all([
 			getProjectAgentKnowledgeText(task.projectId, projectOwnerEmail, task.prompt, runtime),
 			loadProjectChatContext(task.projectId, task.ownerEmail, task.userPrompt ?? task.prompt),
@@ -91,6 +86,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		]);
 		const hindsightMemory = await recallProjectHindsight({ projectId: task.projectId, query: task.userPrompt ?? task.prompt, signal, log: (detail) => { void updateProjectAgentTask(task.id, { logLine: detail }).catch(() => {}); } });
 		const user = projectAgentDifyUser(task.ownerEmail, task.projectId);
+		await updateProjectAgentTask(task.id, { logLine: "app_stage :: preparing_inputs" });
 		const taskInputs = await uploadProjectAgentTaskInputFiles(task.inputFiles ?? [], task.id, user, endpoint, apiKey);
 		const inputReadback = await buildProjectAgentInputReadback(task.inputFiles ?? [], task.id, runtime ? 12_000 : undefined, { email: task.ownerEmail, projectId: task.projectId }, signal);
 		const projectFiles = await uploadProjectKnowledgeFiles(projectAccess.project.knowledgeFiles, user, endpoint, apiKey, {
@@ -103,14 +99,14 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			names: [...taskInputs.names, ...projectFiles.names].slice(0, DIFY_MAX_FILES_PER_MESSAGE),
 		};
 		let lastPartialAt = 0;
-		const onPartial = (answerSoFar: string, toolName?: string, step?: { id: string; detail: string }) => {
+		const onPartial = (answerSoFar: string, toolName?: string, step?: { id: string; detail: string; phase?: "started" | "returned" }) => {
 			const now = Date.now();
 			if (!toolName && now - lastPartialAt < 1_000) return;
 			if (!toolName) lastPartialAt = now;
-			void updateProjectAgentTask(task.id, {
+			partialQueue = partialQueue.then(() => updateProjectAgentTask(task.id, {
 				...(answerSoFar && !toolName ? { partialText: stripProjectSkillReadRequests(stripProjectSourceReadRequests(hideAgentTags(hideRichFileBlocks(answerSoFar)))).slice(-20_000) } : {}),
-				...(toolName ? { logLine: `using tool ${toolName}${step ? ` #${step.id.slice(0, 12)}${step.detail ? ` :: ${step.detail.replace(/\s+/g, " ")}` : ""}` : ""}` } : {}),
-			}).catch(() => {});
+				...(toolName ? { logLine: step?.phase === "returned" ? `tool returned ${toolName} #${step.id.slice(0, 12)}` : `using tool ${toolName}${step ? ` #${step.id.slice(0, 12)}${step.detail ? ` :: ${redactSecrets(step.detail).replace(/\s+/g, " ").slice(0, 120)}` : ""}` : ""}` } : {}),
+			})).then(() => {}).catch(() => {});
 		};
 		const classicTurn = (request: DifyCalculatorCall) => callDifyWithCalculator({ ...request, originalRequest: task.userPrompt ?? task.prompt, calculatorEnabled: !projectAccess.project.disabledToolGroups?.includes("code"), onBridgeEvent: (tool, detail) => updateProjectAgentTask(task.id, { logLine: `using tool ${tool} :: ${detail.replace(/\s+/g, " ").slice(0, 200)}` }) });
 		const skillSet = await loadProjectSkillSet(projectAccess.project.skillIds, projectAccess.ownerEmail);
@@ -141,6 +137,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory.slice(0, 3_000), personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true, hindsightMemory)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
 			void updateProjectAgentTask(task.id, { logLine: `context :: query_chars=${firstCall.query.length} knowledge=${knowledge.length} project_chats=${projectChats.length} default_memory=${personalChats.length} agent_history=${projectAgentHistory.length} readback=${inputReadback.length} skills=${skillSet.context.length} runbook=${String(runbookText ?? "").length}` }).catch(() => {});
 		}
+		await updateProjectAgentTask(task.id, { logLine: "app_stage :: processing_request" });
 		let message = await (runtime ? runtimeTurn(firstCall.query) : classicTurn({ ...firstCall, conversationId })).catch(async (cause) => {
 			// A Dify conversation left in a broken state (e.g. after an aborted tool round) fails every later turn;
 			// the query already carries the chat history, so start a fresh conversation instead of failing the chat.
@@ -168,6 +165,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		savedSources = sideEffects.sources; wroteLesson = sideEffects.notes.some((note) => note.op === "add" && /^lesson:/i.test(note.text.trim()));
 		await Promise.allSettled([saveAgentWebSources(task.projectId, projectOwnerEmail, sideEffects.sources), saveRunbookNotes(task.projectId, projectOwnerEmail, sideEffects.notes), removeAgentWebSources(task.projectId, projectOwnerEmail, sideEffects.removedUrls), recordLessonCandidates(sideEffects.notes.flatMap((note) => note.op === "add" ? [note.text] : []), task.projectId)]);
 		if (conversationId) await updateProjectAgentTask(task.id, conversationPatch(conversationId));
+		await partialQueue; await updateProjectAgentTask(task.id, { logLine: "app_stage :: checking_output" });
 		let cached = await cacheDifyGeneratedFiles(message.answer, task.id, task.projectId, endpoint, apiKey, message.inlineFiles);
 		// Content saved to the Workspace board in this task is the deliverable; the file rule only applies when nothing reached the board.
 		if (requiresProjectAgentFileOutput(task.prompt) && cached.files.length === 0 && workspaceState.saved === 0) {
@@ -260,6 +258,8 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		} else if (latestFiles.length > 0 && !officeVerified && reviewMode === "dify") {
 			throw new Error("Dify did not return a conversation id; the latest file is available as an unverified draft because visual review could not continue");
 		}
+		await partialQueue;
+		await updateProjectAgentTask(task.id, { logLine: "app_stage :: saving_results" });
 		const finished = await readProjectAgentTask(task.id).catch(() => null);
 		await saveTaskWorkLog(task.projectId, projectOwnerEmail, describeTaskWork(finished ?? task, latestFiles.map((file) => file.name), savedSources)).catch(() => {});
 		return updateProjectAgentTask(task.id, {
@@ -274,6 +274,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			logLine: "Dify Project Agent completed",
 		}).then(async (completed) => { const saved = await retainProjectHindsight(completed); if (saved) void updateProjectAgentTask(task.id, { logLine: "hindsight :: retained completed task" }).catch(() => {}); return reflect(completed); });
 	} catch (cause) {
+		await partialQueue;
 		const cancelled = Boolean(signal?.aborted);
 		const message = cancelled ? "Stopped by you." : cause instanceof Error ? cause.message : String(cause);
 		return updateProjectAgentTask(task.id, {

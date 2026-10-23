@@ -49,8 +49,8 @@ export async function callDifyWithCalculator(input: CalculatorBridgeInput): Prom
     if (input.signal?.aborted) throw input.signal.reason ?? new Error("Project Agent task was cancelled");
     const message = await callDifyAgent({
       ...input, query, conversationId, files: round === 0 ? input.files : [],
-      onPartial: (text, tool) => {
-        if (tool || !isProtocolPartial(text)) input.onPartial?.(text, tool);
+      onPartial: (text, tool, step) => {
+        if (tool || !isProtocolPartial(text)) input.onPartial?.(text, tool, step);
       },
     });
     conversationId = message.conversationId ?? conversationId;

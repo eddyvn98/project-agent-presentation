@@ -47,7 +47,10 @@ export function toolDetail(input: unknown): string {
 	return "";
 }
 
-export async function readDifyAgentMessage(response: Response, onPartial?: (answerSoFar: string, toolName?: string, step?: { id: string; detail: string }) => void): Promise<DifyAgentMessage> {
+export interface DifyToolProgress { id: string; detail: string; phase: "started" | "returned" }
+export type DifyProgressCallback = (answerSoFar: string, toolName?: string, step?: DifyToolProgress) => void;
+
+export async function readDifyAgentMessage(response: Response, onPartial?: DifyProgressCallback): Promise<DifyAgentMessage> {
 	if (!response.body) throw new Error("Dify Project Agent returned an empty stream");
 	const reader = response.body.getReader();
 	const decoder = new TextDecoder();
@@ -57,7 +60,8 @@ export async function readDifyAgentMessage(response: Response, onPartial?: (answ
 	let conversationId: string | undefined;
 	let promptTokens: number | undefined;
 	const toolThoughts = new Map<string, DifyAgentToolThought>();
-	const announcedSteps = new Set<string>();
+	const announcedSteps = new Map<string, string>();
+	const returnedSteps = new Set<string>();
 	const consume = (block: string) => {
 		const payload = getEventPayload(block);
 		if (!payload) return;
@@ -66,19 +70,28 @@ export async function readDifyAgentMessage(response: Response, onPartial?: (answ
 			return;
 		}
 		if (payload.event === "agent_message" && typeof payload.answer === "string") { answer += payload.answer; onPartial?.(answer); }
-		if (payload.event === "message" && typeof payload.answer === "string") answer = payload.answer;
+		if (payload.event === "message" && typeof payload.answer === "string") { answer = payload.answer; onPartial?.(answer); }
 		if (payload.event === "message_end") {
 			const usage = (payload.metadata as { usage?: { prompt_tokens?: unknown } } | undefined)?.usage;
 			if (typeof usage?.prompt_tokens === "number" && usage.prompt_tokens > 0) promptTokens = usage.prompt_tokens;
 		}
 		if (payload.event === "agent_thought") {
-			const thought = payload as DifyAgentToolThought;
-			const key = typeof thought.id === "string" ? thought.id : `${thought.position ?? ""}:${thought.tool ?? ""}`;
+			const fresh = payload as DifyAgentToolThought;
+			const key = typeof fresh.id === "string" && fresh.id ? fresh.id : `${fresh.position ?? ""}:${fresh.tool ?? ""}`;
+			// Dify may stream tool_input and observation in separate events. Retain both for Office file extraction.
+			const thought = { ...toolThoughts.get(key), ...fresh };
 			toolThoughts.set(key, thought);
 			if (typeof thought.tool === "string" && thought.tool) {
 				const detail = toolDetail(thought.tool_input);
-				const announced = `${key}|${detail}`;
-				if (!announcedSteps.has(announced)) { announcedSteps.add(announced); onPartial?.(answer, thought.tool, { id: key, detail }); }
+				if (!announcedSteps.has(key) || (!announcedSteps.get(key) && detail)) {
+					announcedSteps.set(key, detail);
+					onPartial?.(answer, thought.tool, { id: key, detail, phase: "started" });
+				}
+				// "returned" means Dify supplied an observation, NOT that the tool output was verified correct.
+				if (thought.observation !== undefined && thought.observation !== null && !returnedSteps.has(key)) {
+					returnedSteps.add(key);
+					onPartial?.(answer, thought.tool, { id: key, detail, phase: "returned" });
+				}
 			}
 		}
 		if (typeof payload.conversation_id === "string" && payload.conversation_id) conversationId = payload.conversation_id;

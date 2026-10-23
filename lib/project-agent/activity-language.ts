@@ -1,34 +1,49 @@
 /** A per-turn UI language hint. The model can write progress in any language;
  * deterministic fallback labels cover frequent locales without assuming Vietnamese. */
 export type ActivityLanguage = "en" | "vi" | "es" | "fr" | "de" | "pt" | "ja" | "ko" | "zh" | "ru" | "ar" | "hi";
-const patterns: Array<[ActivityLanguage, RegExp]> = [
-  ["vi", /\b(?:tiếng việt|bằng tiếng việt|trả lời|hãy|giúp|mình|tôi|của|được|không|những|cho|với|đang|kiểm tra|tài liệu)\b/i],
-  ["es", /\b(?:español|responde|quiero|necesito|por favor|gracias|puedes|archivo|proyecto)\b/i],
-  ["fr", /\b(?:français|réponds|bonjour|merci|fichier|projet|pourquoi|comment|veuillez|besoin)\b/i],
-  ["de", /\b(?:deutsch|bitte|danke|warum|ich|kannst|projekt|datei|erstelle)\b/i],
-  ["pt", /\b(?:português|obrigado|preciso|você|arquivo|projeto|por favor|faça)\b/i],
+const LANGUAGE_WORDS: Partial<Record<ActivityLanguage, string[]>> = {
+  vi: ["tôi", "hãy", "giúp", "mình", "bạn", "của", "được", "không", "những", "cho", "với", "đang", "kiểm", "tra", "tài", "liệu", "nâng", "cấp"],
+  es: ["hola", "español", "gracias", "quiero", "necesito", "puedes", "archivo", "proyecto", "revisar", "favor"],
+  fr: ["bonjour", "français", "merci", "comment", "pourquoi", "fichier", "projet", "veuillez", "besoin", "réponds"],
+  de: ["deutsch", "bitte", "danke", "warum", "kannst", "projekt", "datei", "erstelle", "überprüfen"],
+  pt: ["português", "obrigado", "preciso", "você", "arquivo", "projeto", "faça", "ajuda", "verifique"],
+};
+const OUTPUT_LANGUAGE: Array<[ActivityLanguage, RegExp]> = [
+  ["vi", /(?:tiếng việt|vietnamese)/iu],
+  ["en", /(?:tiếng anh|english|anglais|inglés|englisch)/iu],
+  ["es", /(?:español|spanish)/iu],
+  ["fr", /(?:français|french)/iu],
+  ["de", /(?:deutsch|german)/iu],
+  ["pt", /(?:português|portuguese)/iu],
+  ["ja", /(?:japanese|tiếng nhật|日本語)/iu],
+  ["ko", /(?:korean|tiếng hàn|한국어)/iu],
+  ["zh", /(?:chinese|tiếng trung|中文)/iu],
+  ["ru", /(?:russian|русский)/iu],
+  ["ar", /(?:arabic|العربية)/iu],
+  ["hi", /(?:hindi|हिन्दी|हिंदी)/iu],
 ];
+/** Uses only the current user turn. No Project-global or hard-coded Vietnamese setting. */
 export function projectAgentLanguage(prompt: string): ActivityLanguage {
-  const text = prompt.slice(0, 3_000).toLowerCase();
-  const explicit = [
-    ["vi", /(?:trả lời|viết|respond|answer).{0,24}(?:tiếng việt|vietnamese)/],
-    ["en", /(?:trả lời|viết|respond|answer).{0,24}(?:tiếng anh|english)/],
-    ["ja", /(?:respond|answer|trả lời).{0,24}(?:japanese|tiếng nhật)/],
-    ["fr", /(?:respond|answer|trả lời).{0,24}(?:french|français)/],
-    ["es", /(?:respond|answer|trả lời).{0,24}(?:spanish|español)/],
-    ["zh", /(?:respond|answer|trả lời).{0,24}(?:chinese|tiếng trung)/],
-    ["ko", /(?:respond|answer|trả lời).{0,24}(?:korean|tiếng hàn)/],
-  ] as const;
-  for (const [language, regex] of explicit) if (regex.test(text)) return language;
+  const text = prompt.slice(0, 3_000).toLocaleLowerCase().normalize("NFC");
+  // An explicit *response* language beats the language of the surrounding request.
+  const directives = text.match(/(?:respond|answer|reply|write|output|trả lời|phản hồi|viết|bằng tiếng|sang tiếng|réponds|responde|antwort|回答|回复)[^\n.!?]{0,65}/giu) ?? [];
+  for (const directive of directives) for (const [language, pattern] of OUTPUT_LANGUAGE) if (pattern.test(directive)) return language;
   if (/[\u3040-\u30ff]/u.test(text)) return "ja";
   if (/[\uac00-\ud7af]/u.test(text)) return "ko";
   if (/[\u4e00-\u9fff]/u.test(text)) return "zh";
   if (/[\u0400-\u04ff]/u.test(text)) return "ru";
   if (/[\u0600-\u06ff]/u.test(text)) return "ar";
   if (/[\u0900-\u097f]/u.test(text)) return "hi";
-  const scores = patterns.map(([lang, regex]) => [lang, (text.match(new RegExp(regex.source, "gi")) ?? []).length] as const);
-  scores.sort((a, b) => b[1] - a[1]);
-  return scores[0]?.[1] ? scores[0][0] : "en";
+  const tokens = text.match(/[\p{L}\p{N}]+/gu) ?? [];
+  const score = (language: ActivityLanguage) => tokens.reduce((sum, token) => sum + (LANGUAGE_WORDS[language]?.includes(token) ? 1 : 0), 0);
+  const candidates: ActivityLanguage[] = ["vi", "es", "fr", "de", "pt"];
+  const ranked = candidates.map((language) => ({ language, value: score(language) }))
+    .sort((a, b) => b.value - a.value);
+  if (ranked[0]?.value) return ranked[0].language;
+  // Distinctive Vietnamese letters distinguish short turns such as "đổi nền".
+  if (/[ăâđêôơư]/u.test(text)) return "vi";
+  if (/[¿¡]/u.test(text)) return "es";
+  return "en";
 }
 
 const translations: Record<ActivityLanguage, {

@@ -39,3 +39,7 @@ See `CONTEXT_MANAGER_INTEGRATION.md` for the new bounded host-side tool-output s
 ## Optional long-term Hindsight memory
 
 See HINDSIGHT_PROJECT_MEMORY_INTEGRATION.md for the opt-in app-hosted Retain/Recall/Reflect REST adapter, per-Project bank isolation, chat and Project deletion, security/latency limits, deferred QA and real-server setup.
+
+## Dify SSE activity transport
+
+See USER_LANGUAGE_ACTIVITY.md for the app-hosted started/returned tool lifecycle, server stage events, per-request locale conversion and the distinction between an observed tool response and verified output.
