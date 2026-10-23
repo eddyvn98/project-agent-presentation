@@ -75,6 +75,7 @@ function parseScene(value: unknown): RichScene | undefined {
 }
 
 export function parseRichUiBlock(source: string): RichUiBlock | null {
+	if (source.length > 40000) return null;
 	let raw: Record<string, unknown>;
 	try { raw = record(JSON.parse(source)); } catch { return null; }
 	switch (raw.type) {
@@ -192,7 +193,7 @@ export const RICH_UI_INSTRUCTIONS = [
 	'mermaid: {"type":"mermaid","title":"Process","code":"flowchart LR\\n A-->B"} (flowcharts, sequence, gantt, org charts)',
 	'ask: {"type":"ask","title":"To tailor this","questions":[{"question":"What is the total budget?","options":["Under 2 billion","2 to 3 billion","Over 3 billion"],"multi":false}]} (1 to 4 questions, 2 to 5 short concrete options each; the user taps options and the chat sends the answers)',
 	'form: {"type":"form","title":"Planning survey","intro":"Rough numbers are fine","fields":[{"label":"Primary need","hint":"Brief context","kind":"text","placeholder":"e.g. improve team workflow"},{"label":"Main challenge","kind":"choice","options":["Speed","Clarity","Quality","Cost"]},{"label":"Channels","kind":"multi","options":["Zalo","Facebook","Shopee"]}]} (a fillable survey card in the chat for 5 to 10 questions; kind text = free typing, choice = tap one, multi = tap several; every field also has an "Other" box; the user fills what they can and sends once)',
-	'followups: {"type":"followups","items":[{"label":"Go deeper: foundation options","prompt":"Compare foundation options in detail"}]} (exactly 3 items)',
+	'followups: {"type":"followups","items":[{"label":"Go deeper: foundation options","prompt":"Compare foundation options in detail"}]} (0 to 3 optional items when useful)',
 	'writing: a fenced ```agent-doc block, first line "title: Weekly minutes", then the finished text as Markdown (headings, lists, tables). Use it when the user asks you to draft something to copy or send: a letter, email, memo, minutes, proposal, policy, speech, post. Put one short sentence before it and nothing inside it except the text itself; if the text contains code fences, open and close the block with four backticks. Do not use it for ordinary answers or explanations.',
 	"Keep the surrounding prose complete when a visual is absent or fails. Start with a short answer, then use sections only when they help scanning. Keep each image beside the paragraph it explains, use concise captions and supplied source attribution, and avoid image walls or duplicate representations. Never invent data or sources. Use $...$ for inline math and $$ on separate lines for display math; escape literal currency dollar signs. Structured visuals are optional.",
 	"Structure long answers with Markdown headings (## Section) and short paragraphs. Use blocks sparingly: a short answer needs none. For a linear explanation, prefer a readable ordered list; choose an explorer when stepping through states or changing a value teaches something, and avoid wide flowcharts that hide most steps beyond horizontal scrolling. Tables stay as normal Markdown tables.",
