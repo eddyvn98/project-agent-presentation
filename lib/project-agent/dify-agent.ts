@@ -84,8 +84,8 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		await updateProjectAgentTask(task.id, { status: "running", bootId: PROJECT_AGENT_BOOT_ID, startedAt: new Date().toISOString(), logLine: "sent to Dify Project Agent" });
 		const [knowledge, projectChats, projectAgentHistory, personalChats] = await Promise.all([
 			getProjectAgentKnowledgeText(task.projectId, projectOwnerEmail, task.prompt, runtime),
-			loadProjectChatContext(task.projectId, task.ownerEmail),
-			loadProjectAgentTaskContext(task.projectId, task.ownerEmail, task.id),
+			loadProjectChatContext(task.projectId, task.ownerEmail, task.userPrompt ?? task.prompt),
+			loadProjectAgentTaskContext(task.projectId, task.ownerEmail, task.id, task.userPrompt ?? task.prompt),
 			loadDefaultMemoryContext(task.projectId, task.ownerEmail),
 		]);
 		const user = projectAgentDifyUser(task.ownerEmail, task.projectId);

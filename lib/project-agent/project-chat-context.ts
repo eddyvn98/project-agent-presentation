@@ -1,4 +1,5 @@
 import { resolveCategoryProvider } from "@/app/config/categoryProviderResolver";
+import { clipHistoryExcerpt, rankRelevantHistory } from "./context-relevance";
 import { listProjectConversationsForUser, listVisibleProjectConversations, type VisibleProjectConversation } from "@/lib/projects/shared-conversations";
 import { getProjectAccess, listProjectsSharedWith, listOwnedProjects, projectHasSharing } from "@/lib/capabilities/project-sharing";
 import { listChatSessions } from "@/services/mongodb/chatSessions.repo";
@@ -50,12 +51,12 @@ async function readChat(
 	return turns.length ? `### Shared Project chat ${conversationId.slice(-8)}\n${turns.join("\n")}` : "";
 }
 
-export async function loadProjectChatContext(projectId: string, callerEmail: string): Promise<string> {
+export async function loadProjectChatContext(projectId: string, callerEmail: string, query = ""): Promise<string> {
 	const links = await listProjectConversationsForUser(projectId, callerEmail);
 	if (!links?.length) return "";
 	const { apiKey } = resolveCategoryProvider("CHAT_KEY");
 	if (!apiKey) return "";
-	const chats = links.slice(0, MAX_CHATS);
+	const chats = [...links].sort((a, b) => b.linkedAt - a.linkedAt).slice(0, MAX_CHATS);
 	const contexts: string[] = [];
 	for (let offset = 0; offset < chats.length; offset += MAX_CONCURRENT) {
 		const batch = chats.slice(offset, offset + MAX_CONCURRENT);
@@ -63,10 +64,10 @@ export async function loadProjectChatContext(projectId: string, callerEmail: str
 			readChat(link.conversationId, link.createdByEmail, apiKey).catch(() => ""),
 		)));
 	}
-	const available = contexts.filter(Boolean);
+	const available = rankRelevantHistory(contexts.filter(Boolean), query, (context) => context, 8);
 	if (!available.length) return "";
 	const allowance = Math.floor(MAX_CONTEXT_CHARS / available.length);
-	return available.map((context) => context.length <= allowance ? context : context.slice(-allowance))
+	return available.map((context) => clipHistoryExcerpt(context, allowance))
 		.join("\n\n").slice(0, MAX_CONTEXT_CHARS);
 }
 

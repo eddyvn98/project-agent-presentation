@@ -107,7 +107,7 @@ export function ProjectAgentConversationPane() {
 		return subscribeToProjectAgentView(projectId, sync);
 	}, [projectId]);
 
-	useProjectAgentConversationSync(projectId, viewId, setTasks, setLoadedViewId, setLoadError);
+	const { hasOlder, loadingOlder, loadOlder } = useProjectAgentConversationSync(projectId, viewId, setTasks, setLoadedViewId, setLoadError);
 
 	useEffect(() => {
 		if (!projectId || viewId !== NEW_PROJECT_AGENT_VIEW_ID) return;
@@ -190,6 +190,7 @@ export function ProjectAgentConversationPane() {
 			</div>
 		</header>
 		<div ref={conversationRef} data-selectable-chat onScroll={(event) => { const element = event.currentTarget; shouldFollowRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 120; }} className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-8">
+			{hasOlder && viewId !== NEW_PROJECT_AGENT_VIEW_ID && <div className="mx-auto mb-5 flex max-w-3xl justify-center"><button type="button" disabled={loadingOlder} onClick={() => { shouldFollowRef.current = false; void loadOlder(); }} className="rounded-full border border-slate-200 px-4 py-2 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">{loadingOlder ? "Loading earlier messages…" : "Load earlier messages"}</button></div>}
 			{orderedTasks.length === 0 && viewId !== NEW_PROJECT_AGENT_VIEW_ID && loadedViewId !== viewId && !error && !loadError && <div className="flex justify-center py-24"><Loader2 className="h-5 w-5 animate-spin text-slate-400" aria-label="Loading chat" /></div>}
 			{orderedTasks.length === 0 && !outgoing && (viewId === NEW_PROJECT_AGENT_VIEW_ID || loadedViewId === viewId || Boolean(error || loadError)) && <div className="mx-auto flex min-h-[min(52vh,520px)] max-w-2xl flex-col items-center justify-center py-10 text-center"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-300"><Sparkles className="h-6 w-6" /></div><p className="mt-5 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">What would you like to work on?</p><p className="mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">Your Project Agent can use the files and instructions saved in {projectName || "this project"}.</p><div className="mt-6 flex max-w-xl flex-wrap justify-center gap-2">{["Summarize project files", "Analyze a document", "Create a report"].map((suggestion) => <button key={suggestion} type="button" onClick={() => { setDraft(suggestion); requestAnimationFrame(() => formRef.current?.querySelector("textarea")?.focus()); }} className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">{suggestion}</button>)}</div></div>}
 			{orderedTasks.filter((task) => task.userPrompt !== "/compact").map((task, index, visibleTasks) => <div key={task.id}>

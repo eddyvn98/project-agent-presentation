@@ -28,4 +28,6 @@ See `FULL_AGENT_UPGRADE.md` for the reviewed defects, implemented changes, exact
 
 For the arithmetic and optional model-selector compatibility follow-up, see `CALCULATION_RELIABILITY.md`. Exact arithmetic is a runtime action; ordinary Dify receives guidance for tools that actually exist, and no UI reasoning verifier is introduced.
 
-See `ACTION_TRANSPORT_REVIEW.md` for the standard-Dify/runtime distinction, explicit runtime action/result transport, result activity, negative-control regression and the ordinary-Dify calculator registration blocker.
+See `ACTION_TRANSPORT_REVIEW.md` for the historical standard-Dify/runtime distinction and runtime transport review. `DIFY_CALCULATOR_BRIDGE.md` describes the later app-hosted ordinary Dify calculator bridge and its remote workflow requirement.
+
+See `PROJECT_AGENT_PARITY_AUDIT.md` for the newer ChatGPT Projects feature audit, relevant-history retrieval, cursor-based older chat loading, intent-adaptive answer guidance and remaining host QA.
