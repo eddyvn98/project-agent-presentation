@@ -4,8 +4,7 @@ on:
   push:
     branches:
       - gpt/presentation-upgrade
-    paths:
-      - .github/workflows/upgrade-deps-once.yml
+  workflow_dispatch:
 
 permissions:
   contents: write
