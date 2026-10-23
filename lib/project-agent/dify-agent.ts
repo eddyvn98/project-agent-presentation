@@ -15,7 +15,7 @@ import type { ProjectAgentTask, ProjectAgentTaskSource } from "./types";
 import { resolveDifyConversationId } from "./conversation";
 import { autoCompactIfNeeded } from "./auto-compact";
 import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
-import { callDifyAgent } from "./dify-call";
+import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
 import { buildChatRecap } from "./chat-recap";
 
 const MAX_VISUAL_REVIEW_PASSES = 4;
@@ -110,6 +110,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 				...(toolName ? { logLine: `using tool ${toolName}${step ? ` #${step.id.slice(0, 12)}${step.detail ? ` :: ${step.detail.replace(/\s+/g, " ")}` : ""}` : ""}` } : {}),
 			}).catch(() => {});
 		};
+		const classicTurn = (request: DifyCalculatorCall) => callDifyWithCalculator({ ...request, originalRequest: task.userPrompt ?? task.prompt, calculatorEnabled: !projectAccess.project.disabledToolGroups?.includes("code"), onBridgeEvent: (tool, detail) => updateProjectAgentTask(task.id, { logLine: `using tool ${tool} :: ${detail.replace(/\s+/g, " ").slice(0, 200)}` }) });
 		const skillSet = await loadProjectSkillSet(projectAccess.project.skillIds, projectAccess.ownerEmail);
 		let savedSources: AgentWebSource[] = [];
 		const firstCall = {
@@ -138,16 +139,16 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory.slice(0, 3_000), personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
 			void updateProjectAgentTask(task.id, { logLine: `context :: query_chars=${firstCall.query.length} knowledge=${knowledge.length} project_chats=${projectChats.length} default_memory=${personalChats.length} agent_history=${projectAgentHistory.length} readback=${inputReadback.length} skills=${skillSet.context.length} runbook=${String(runbookText ?? "").length}` }).catch(() => {});
 		}
-		let message = await (runtime ? runtimeTurn(firstCall.query) : callDifyAgent({ ...firstCall, conversationId })).catch(async (cause) => {
+		let message = await (runtime ? runtimeTurn(firstCall.query) : classicTurn({ ...firstCall, conversationId })).catch(async (cause) => {
 			// A Dify conversation left in a broken state (e.g. after an aborted tool round) fails every later turn;
 			// the query already carries the chat history, so start a fresh conversation instead of failing the chat.
 			if (runtime || !conversationId || signal?.aborted || !isBrokenConversationError(cause)) throw cause;
 			await updateProjectAgentTask(task.id, { logLine: "continuing in a fresh Dify conversation (the previous one failed)" }).catch(() => {});
 			conversationId = undefined;
-			return callDifyAgent({ ...firstCall, conversationId: undefined });
+			return classicTurn({ ...firstCall, conversationId: undefined });
 		});
 		message = await fulfillLargeProjectSourceRequests({
-			message,
+			message, originalTask: task.userPrompt ?? task.prompt,
 			files: projectAccess.project.knowledgeFiles,
 			user,
 			ownerEmail: task.ownerEmail,
@@ -157,7 +158,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			apiKey,
 			readSkill: skillSet.read,
 			onRead: (fileName) => { void updateProjectAgentTask(task.id, { logLine: `reading Project source ${fileName}` }).catch(() => {}); },
-			continueDify: (next) => callDifyAgent({ endpoint, apiKey, user, signal, onPartial, ...next }),
+			continueDify: (next) => classicTurn({ endpoint, apiKey, user, signal, onPartial, ...next }),
 		});
 		conversationId = message.conversationId ?? conversationId;
 		const sideEffects = extractAgentSideEffects(message.answer);
@@ -191,7 +192,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 				compared = true;
 				if (!review) return null;
 				await updateProjectAgentTask(task.id, { logLine: "comparing the output with the template" });
-				const answer = await callDifyAgent({ endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] }, query: review.query, files: review.files, conversationId });
+				const answer = await classicTurn({ endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] }, query: review.query, files: review.files, conversationId });
 				conversationId = answer.conversationId ?? conversationId;
 				if (getReviewDecision(answer.answer, answer.inlineFiles.length > 0) !== "revised") return null;
 				const replaced = await cacheDifyGeneratedFiles(answer.answer, task.id, task.projectId, endpoint, apiKey, answer.inlineFiles);
@@ -211,7 +212,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 					break;
 				}
 				await updateProjectAgentTask(task.id, { logLine: `fixing automated-check problems (round ${round + 1}/${MAX_LOCAL_FIX_ROUNDS}): ${summary.slice(0, 200)}` });
-				message = await (runtime ? runtimeTurn(buildLintFixQuery(task, lints, round + 1)) : callDifyAgent({
+				message = await (runtime ? runtimeTurn(buildLintFixQuery(task, lints, round + 1)) : classicTurn({
 					endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] },
 					query: buildLintFixQuery(task, lints, round + 1),
 					files: await uploadLintSheets(problems, user, endpoint, apiKey),
@@ -231,7 +232,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			for (let pass = 1; pass <= MAX_VISUAL_REVIEW_PASSES; pass += 1) {
 				await updateProjectAgentTask(task.id, { logLine: `reviewing saved deliverables (pass ${pass}/${MAX_VISUAL_REVIEW_PASSES})` });
 				const review = await buildVisualReviewFiles(latestFiles, task.id, user, endpoint, apiKey);
-				message = await callDifyAgent({
+				message = await classicTurn({
 					endpoint, apiKey, user, signal,
 					query: buildVisualReviewQuery(task, projectAccess.project, knowledge, review.reviews, pass),
 					files: review.files,

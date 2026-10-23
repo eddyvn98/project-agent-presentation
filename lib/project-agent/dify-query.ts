@@ -51,7 +51,7 @@ export function buildProjectAgentQuery(task: ProjectAgentTask, project: projectC
 	return [
 		runtime ? runtimeTaskInstructions() : "Complete the user's project task and return the finished response in this conversation. Use any tools available to you when they are needed.",
 		...(runtime ? [] : [PROJECT_AGENT_DELIVERABLE_QUALITY_GATE, officeToolsContext(task.ownerEmail, task.projectId), RICH_FILE_INSTRUCTIONS, EDIT_FILE_INSTRUCTIONS]),
-		runtime ? "" : calculationGuidance(false),
+		runtime ? "" : calculationGuidance(false, !project.disabledToolGroups?.includes("code")),
 		RICH_UI_INSTRUCTIONS,
 		runtime ? PROJECT_AGENT_ANSWER_STYLE_INSTRUCTIONS.split("\n").slice(0, 2).join("\n") : PROJECT_AGENT_ANSWER_STYLE_INSTRUCTIONS,
 		runtime ? "" : AGENT_SOURCE_INSTRUCTIONS,
