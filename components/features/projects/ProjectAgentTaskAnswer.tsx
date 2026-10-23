@@ -8,6 +8,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import type { ProjectAgentTaskSource } from "@/lib/project-agent/types";
+import { activityText, type ActivityLanguage } from "@/lib/project-agent/activity-language";
 import { completedStreamingMarkdown, splitPresentationSections } from "@/lib/project-agent/presentation-mode";
 import { createProjectAgentMarkdownComponents, normalizeProjectAgentMarkdown } from "./ProjectAgentMarkdown";
 import type { ImagePresentation } from "./ProjectAgentFigure";
@@ -19,10 +20,11 @@ type Props = {
 	images?: Record<string, ImagePresentation>;
 	presentation?: boolean;
 	running?: boolean;
+	language?: ActivityLanguage;
 	onStop?: () => void;
 };
 
-export function ProjectAgentTaskAnswer({ markdown, sources, resolveImage, images = {}, presentation = false, running = false, onStop }: Props) {
+export function ProjectAgentTaskAnswer({ markdown, sources, resolveImage, images = {}, presentation = false, running = false, onStop, language = "en" }: Props) {
 	const [presenting, setPresenting] = useState(false);
 	const [slide, setSlide] = useState(0);
 	const stream = useMemo(() => running ? completedStreamingMarkdown(markdown) : { text: markdown, pending: false }, [markdown, running]);
@@ -51,7 +53,7 @@ export function ProjectAgentTaskAnswer({ markdown, sources, resolveImage, images
 			</> : <button type="button" onClick={() => { setPresenting(true); setSlide(0); }} className="rounded-lg border px-3 py-2 text-sm">Present as slides</button>}
 		</nav>}
 		<ReactMarkdown skipHtml remarkPlugins={[remarkGfm, [remarkMath, { singleDollarTextMath: true }]]} rehypePlugins={[[rehypeKatex, { throwOnError: false, trust: false, strict: "error", maxExpand: 200, maxSize: 20 }]]} components={components}>{visible}</ReactMarkdown>
-		{stream.pending && <p role="status" className="not-prose mt-3 text-xs text-slate-500">Preparing the rest of the answer…</p>}
-		{running && <p className="not-prose flex items-center gap-2 text-xs text-slate-400"><Loader2 className="h-3 w-3 animate-spin" />Writing…{onStop && <button type="button" onClick={onStop} className="ml-2 inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><Square className="h-3 w-3" />Stop</button>}</p>}
+		{stream.pending && <p role="status" className="not-prose mt-3 text-xs text-slate-500">{activityText(language).working}…</p>}
+		{running && <p className="not-prose flex items-center gap-2 text-xs text-slate-400"><Loader2 className="h-3 w-3 animate-spin" />{activityText(language).working}…{onStop && <button type="button" onClick={onStop} className="ml-2 inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><Square className="h-3 w-3" />Stop</button>}</p>}
 	</div>;
 }

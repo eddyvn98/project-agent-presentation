@@ -19,6 +19,7 @@ function parseRenderRegion(value: unknown): RenderRegion | undefined {
 }
 
 export type RuntimeAction =
+	| { action: "progress"; message: string; note?: string }
 	| { action: "calculate"; expression: string; note?: string }
 	| { action: "shell"; command: string; timeout?: number; note?: string }
 	| { action: "search_output"; id: string; query: string; limit?: number; note?: string }
@@ -88,6 +89,8 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
 	if (raw.action === "render" && raw.pages !== undefined && raw.pages !== "sample" && (!Array.isArray(raw.pages) || !raw.pages.length || raw.pages.some((page) => !Number.isSafeInteger(page) || page < 1))) return { error: "render pages must be sample or positive integer page numbers" };
 	const note = typeof raw.note === "string" ? raw.note.slice(0, 200) : undefined;
 	switch (raw.action) {
+		case "progress":
+			return typeof raw.message === "string" && raw.message.trim().length >= 8 && raw.message.length <= 240 ? { action: "progress", message: raw.message.trim() } : { error: "progress needs a short user-facing message (8-240 characters)" };
 		case "calculate":
 			return typeof raw.expression === "string" && raw.expression.trim() && raw.expression.length <= MAX_CALCULATION_CHARS ? { action: "calculate", expression: raw.expression, note } : { error: "calculate needs an expression of 1-512 characters" };
 		case "search_output": {

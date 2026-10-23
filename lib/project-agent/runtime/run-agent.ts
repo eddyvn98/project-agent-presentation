@@ -15,7 +15,7 @@ import { generateImages } from "./image-module";
 import { VerificationGate } from "./verify";
 import { DeliverableEvaluator } from "./evaluator";
 import { analyzeTrajectory, spanKey, trajectoryLine, writeTrace, type Span } from "./trace";
-import { withPolicy } from "./policy";
+import { redactSecrets, withPolicy } from "./policy";
 import { webFetch } from "./web-fetch";
 import { renderFileId } from "../render-ids";
 import { writeProjectAgentFile } from "../task-store";
@@ -53,6 +53,8 @@ export const isRuntimeEnabled = () => process.env.PROJECT_AGENT_RUNTIME === "san
 async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { action: "final" }>, loopStep: number, imageCalls: { value: number }, budget: { delegates: number }): Promise<{ text: string; rawOutput?: string; image?: DifyChatFile; images?: DifyChatFile[]; failed?: boolean; sources?: ProjectAgentTaskSource[] }> {
 	// Sub-agents count their render images from 100 so they never overwrite the lead agent's thumbnails.
 	const step = loopStep + (input.depth ? 100 * ((input.slot ?? 0) + 1) : 0);
+	if (!input.depth && action.note && action.action !== "progress") input.onStep?.({ tool: "progress_message", detail: redactSecrets(action.note).replace(/\s+/g, " ").trim().slice(0, 200) });
+	if (action.action === "progress") { if (!input.depth) input.onStep?.({ tool: "progress_message", detail: redactSecrets(action.message) }); return { text: "Progress note shown to user; continue with the actions needed for the request." }; }
 	if (action.action === "calculate") return runCalculationStep(action.expression, input.onStep);
 	if (action.action === "search_output" || action.action === "read_output") return contextOutputAction(input, action);
 	if (action.action === "shell") {

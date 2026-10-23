@@ -2,10 +2,11 @@ import type { ProjectAgentTask, ProjectAgentTaskInputFile } from "./types";
 import { inferProjectAgentFileMetadata } from "./files";
 import { readProjectAgentFile } from "./task-store";
 import { planFromLog, type PlanItem } from "./plan";
+import { activityLabel, activityText, projectAgentLanguage, type ActivityLanguage } from "./activity-language";
 
-export type PublicProjectAgentTask = Omit<ProjectAgentTask, "ownerEmail" | "projectOwnerEmail" | "difyConversationId" | "bootId" | "log" | "inputFiles"> & { attachments?: ProjectAgentTaskInputFile[]; progress?: string; steps?: string[]; activity?: ProjectAgentActivityStep[]; plan?: PlanItem[]; canContinue: boolean };
+export type PublicProjectAgentTask = Omit<ProjectAgentTask, "ownerEmail" | "projectOwnerEmail" | "difyConversationId" | "bootId" | "log" | "inputFiles"> & { attachments?: ProjectAgentTaskInputFile[]; progress?: string; steps?: string[]; activity?: ProjectAgentActivityStep[]; activityLanguage?: ActivityLanguage; plan?: PlanItem[]; canContinue: boolean };
 
-export interface ProjectAgentActivityStep { label: string; kind: "search" | "read" | "other"; count: number; details: string[]; images?: string[] }
+export interface ProjectAgentActivityStep { label: string; kind: "search" | "read" | "other" | "update"; count: number; details: string[]; images?: string[] }
 
 const TOOL_LABELS: Record<string, string> = {
 	calculate: "Calculated an expression",
@@ -59,40 +60,46 @@ const TOOL_LABELS: Record<string, string> = {
 	browser_close: "Closing the browser session",
 };
 
-function taskProgress(task: ProjectAgentTask): string {
-	if (task.status === "queued") return "Waiting for the Project Agent to start";
-	if (task.status === "done") return "Finished reviewing the deliverables";
-	if (task.status === "failed") return "The task could not be completed";
+function taskProgress(task: ProjectAgentTask, language: ActivityLanguage): string {
+	const t = activityText(language);
+	if (task.status === "queued") return t.working;
+	if (task.status === "done") return language === "en" ? "Finished reviewing the deliverables" : t.completed;
+	if (task.status === "failed") return t.failed;
 	const latest = task.log.at(-1)?.replace(/^\S+\s+/, "") ?? "";
-	if (latest.includes("auto-compacting conversation")) return "Working on your request";
+	if (latest.includes("auto-compacting conversation")) return t.working;
+	const narrated = latest.match(/^progress_message :: (.{1,240})$/);
+	if (narrated) return narrated[1];
 	const reviewPass = latest.match(/reviewing saved deliverables \(pass (\d+\/\d+)\)/i);
-	if (reviewPass) return `Reviewing saved files (pass ${reviewPass[1]})`;
-	if (latest.includes("saved-file read-back and visual review")) return "Inspecting the saved files and previews";
+	if (reviewPass) return language === "en" ? `Reviewing saved files (pass ${reviewPass[1]})` : `${t.review} (${reviewPass[1]})`;
+	if (latest.includes("saved-file read-back and visual review")) return t.review;
 	const thinking = latest.match(/^thinking :: step (\d+)/i)?.[1];
-	if (thinking) return `Thinking about the next step (step ${thinking})`;
+	if (thinking) return language === "en" ? `Thinking about the next step (step ${thinking})` : `${t.thinking} (${thinking})`;
 	const used = latest.match(/^using tool (\S+)(?: #\S+)?(?: :: (.*))?$/i);
 	if (used) {
-		const label = TOOL_LABELS[used[1].toLowerCase()] ?? `Using tool ${used[1]}`;
+		const label = language === "en" ? TOOL_LABELS[used[1].toLowerCase()] ?? t.tool : activityLabel(used[1], language);
 		const detail = used[1].startsWith("sandbox_") || used[1] === "render_pages" || used[1] === "web_fetch" || used[1] === "web_search" || used[1] === "workspace" || used[1] === "delegate" || used[1] === "generate_image" || used[1] === "calculate" ? used[2]?.replace(/\s+/g, " ").trim().slice(0, 90) : "";
-		return detail ? `${label}: ${detail}` : label;
+		return detail && !/(shell|code|write|workspace_apply|sandbox|execute)/i.test(used[1]) && !/[{}\n;]/.test(detail) ? `${label}: ${detail}` : label;
 	}
-	return "Working with the Project Agent";
+	return t.working;
 }
 
 /** The agent's recent tool steps as readable labels ("Searching the web ×2"), oldest first, for the live status line. */
-export function taskSteps(log: string[]): string[] {
-	return taskActivity(log).slice(-8).map((step) => step.count > 1 ? `${step.label} ×${step.count}` : step.label);
+export function taskSteps(log: string[], language: ActivityLanguage = "en"): string[] {
+	return taskActivity(log, language).slice(-8).map((step) => step.count > 1 ? `${step.label} ×${step.count}` : step.label);
 }
 
 const SEARCH_TOOLS = /search|arxiv|pubmed|wikipedia|yahoo/i;
 const READ_TOOLS = /scraper|fetch|markitdown|read_file|reader/i;
 
 /** Tool steps grouped by label with their queries/pages, deduplicated by the Dify thought id so repeated stream events count once. */
-export function taskActivity(log: string[]): ProjectAgentActivityStep[] {
+export function taskActivity(log: string[], language: ActivityLanguage = "en"): ProjectAgentActivityStep[] {
 	const byId = new Map<string, { tool: string; detail: string }>();
 	const order: string[] = [];
 	log.forEach((line, index) => {
-		const match = line.replace(/^\S+\s+/, "").match(/^using tool (\S+)(?: #(\S+))?(?: :: (.*))?$/i);
+		const entry = line.replace(/^\S+\s+/, "");
+		const narration = entry.match(/^progress_message :: (.{1,240})$/);
+		if (narration) { const id = `comment-${index}`; order.push(id); byId.set(id, { tool: "progress_message", detail: narration[1] }); return; }
+		const match = entry.match(/^using tool (\S+)(?: #(\S+))?(?: :: (.*))?$/i);
 		if (!match) return;
 		const id = match[2] ?? `line-${index}`;
 		if (!byId.has(id)) order.push(id);
@@ -101,12 +108,12 @@ export function taskActivity(log: string[]): ProjectAgentActivityStep[] {
 	const steps: ProjectAgentActivityStep[] = [];
 	for (const id of order) {
 		const { tool, detail } = byId.get(id)!;
-		const label = TOOL_LABELS[tool.toLowerCase()] ?? tool;
-		const kind = SEARCH_TOOLS.test(tool) ? "search" : READ_TOOLS.test(tool) ? "read" : "other";
+		const label = tool === "progress_message" ? detail : language === "en" ? TOOL_LABELS[tool.toLowerCase()] ?? activityText(language).tool : activityLabel(tool, language);
+		const kind = tool === "progress_message" ? "update" : SEARCH_TOOLS.test(tool) ? "search" : READ_TOOLS.test(tool) ? "read" : "other";
 		const image = id.startsWith("render-") ? id : undefined;
 		const last = steps.at(-1);
-		if (last && last.label === label) { last.count += 1; if (detail) last.details.push(detail); if (image) (last.images ??= []).push(image); }
-		else steps.push({ label, kind, count: 1, details: detail ? [detail] : [], ...(image ? { images: [image] } : {}) });
+		if (last && last.label === label && kind !== "update") { last.count += 1; if (detail) last.details.push(detail); if (image) (last.images ??= []).push(image); }
+		else steps.push({ label, kind, count: 1, details: kind === "update" ? [] : detail ? [detail] : [], ...(image ? { images: [image] } : {}) });
 	}
 	return steps.slice(-20);
 }
@@ -115,15 +122,17 @@ export function toPublicProjectAgentTask(task: ProjectAgentTask, viewerEmail = t
 	const { ownerEmail: _ownerEmail, projectOwnerEmail: _projectOwnerEmail, difyConversationId: _difyConversationId,
 		bootId: _bootId, log: _log, inputFiles: _inputFiles, ...publicTask } = task;
 	const filesAvailable = !task.filesExpireAt || Date.parse(task.filesExpireAt) > Date.now();
+	const activityLanguage = projectAgentLanguage(task.userPrompt ?? task.prompt);
 	const canContinue = task.ownerEmail.trim().toLowerCase() === viewerEmail.trim().toLowerCase();
 	return {
 		...publicTask,
 		canContinue,
 		attachments: task.inputFiles?.map(({ id, name, mimeType, size }) => ({ id, name, mimeType, size })),
 		conversationId: canContinue ? task.conversationId : undefined,
-		progress: taskProgress(task),
-		steps: taskSteps(task.log),
-		activity: taskActivity(task.log),
+		progress: taskProgress(task, activityLanguage),
+		steps: taskSteps(task.log, activityLanguage),
+		activity: taskActivity(task.log, activityLanguage),
+		activityLanguage,
 		plan: planFromLog(task.log),
 		files: task.files?.filter((file) => filesAvailable || Boolean(file.savedToProjectFileId) || Boolean(file.resource)) ?? [],
 	};
