@@ -5,9 +5,9 @@ import * as Popover from "@radix-ui/react-popover";
 import { ExternalLink, Globe2, X } from "lucide-react";
 import { safePresentationUrl } from "./ProjectAgentFigure";
 
-type ProjectAgentSourceLinkProps = { href: string; host: string; label: string; title: string };
+type ProjectAgentSourceLinkProps = { href: string; host: string; label: string; title: string; excerpt?: string; publishedAt?: string };
 
-export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgentSourceLinkProps) {
+export function ProjectAgentSourceLink({ href, host, label, title, excerpt, publishedAt }: ProjectAgentSourceLinkProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
   if (!safePresentationUrl(href) || !/^https?:\/\//i.test(href)) return <span>{label}</span>;
   return <Popover.Root>
@@ -19,7 +19,8 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
       className="z-[100] w-72 max-w-[calc(100vw-1.5rem)] overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-900"
       style={{ maxHeight: "var(--radix-popover-content-available-height)", overflowWrap: "anywhere" }}>
       <p className="pr-7 text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
-      <p className="mt-1 truncate text-xs text-slate-500">{host}</p>
+      <p className="mt-1 truncate text-xs text-slate-500">{host}{publishedAt ? ` · Published: ${publishedAt.slice(0, 10)}` : ""}</p>
+      {excerpt && <blockquote className="mt-2 max-h-28 overflow-auto border-l-2 border-slate-300 pl-2 text-xs leading-5 text-slate-600 dark:text-slate-300">{excerpt.slice(0, 400)}</blockquote>}
       <a ref={linkRef} href={href} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-10 items-center gap-2 rounded px-2 text-sm text-orange-700 underline dark:text-orange-300">
         Open source <ExternalLink aria-hidden className="h-3 w-3" />
       </a>
