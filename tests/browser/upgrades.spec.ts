@@ -22,3 +22,10 @@ test("bounded interactive calculator works on responsive viewport", async ({ pag
   await page.getByRole("button", { name: "Show data" }).click();
   await expect(page.getByRole("table")).toBeVisible();
 });
+
+test("learning check offers accessible feedback", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("What is 2 + 2?")).toBeVisible();
+  await page.getByRole("button", { name: "2. 4" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Correct" })).toBeVisible();
+});
