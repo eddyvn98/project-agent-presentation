@@ -9,6 +9,7 @@
     "test": "vitest run",
     "demo": "vite --host 127.0.0.1",
     "build:demo": "vite build",
+    "report:bundle": "node tests/report-bundle.mjs",
     "test:e2e": "playwright test",
     "check:lines": "node tests/check-lines.mjs"
   },
