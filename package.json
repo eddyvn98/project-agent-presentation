@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Portable React presentation components for agent chat responses",
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.calculator.json",
+    "typecheck:calculator": "tsc --project tsconfig.calculator.json",
     "test": "vitest run",
     "demo": "vite --host 127.0.0.1",
     "build:demo": "vite build",

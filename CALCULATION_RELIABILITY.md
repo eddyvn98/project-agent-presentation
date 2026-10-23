@@ -66,3 +66,25 @@ The single skipped existing test requires the unavailable Docker sandbox image/r
 ## Suggested host retest
 
 In the original host, verify a numeric selector still produces a 202 task with the default model. Repeat the synthetic calculation prompt and inspect the actual tool log and final answer. In sandbox-runtime mode, a calculate receipt should show 59 bills/day, 1534 bills and 98000 VND using the corresponding expressions. In ordinary Dify mode, inspect which calculator/code tool is actually available; query guidance alone does not create one. Check both result consistency and the chosen units/period/assumptions before accepting the answer.
+
+## ES2018 target syntax follow-up
+
+The host QA report for `f853093` identified TS2737 under the real host's ES2018 compiler target. The user reported that constructor syntax passed the full host typecheck, that host tests passed 588 tests with 3 skipped, and that a live signed-in replay produced the correct 98000 VND surplus. Those are user-reported host results, not checks rerun in this neutral workspace.
+
+Replaced every calculator BigInt literal with the corresponding `BigInt(...)` constructor, preserving exact BigInt arithmetic, operations and limits. No Number conversion or floating-point substitute was introduced. Added `tsconfig.calculator.json` with target ES2018, ES2020 library declarations for BigInt, strict checking and no emit. This is compiler-target compatibility, not a BigInt runtime polyfill. The default `npm run typecheck` now also runs this focused check; `npm run typecheck:calculator` runs it independently.
+
+Exact neutral verification for this follow-up:
+
+| Command | Result |
+| --- | --- |
+| `npm run typecheck:calculator` before the syntax fix | Exit 2, reproducing 10 TS2737 diagnostics on BigInt literals |
+| `npm run typecheck:calculator` after the syntax fix | Exit 0; ES2018 target check of calculator, calculation guidance and request validator |
+| `npm run test:agent` | 20 files passed; **175 tests passed, 1 Docker-dependent test skipped** |
+| `npm test` | 1 file passed; **25 tests passed** |
+| `npm run typecheck` | Exit 0; existing neutral presentation scope plus the ES2018-targeted module check |
+| `npm run check:lines` | Exit 0 |
+| `node tests/check-agent-source.mjs f853093` | Exit 0; changed source `runtime/calculate.ts` is **64 lines**, with syntax check passed |
+| `npm run build:demo` | Exit 0; existing chunks-over-500-kB warning remains |
+| `git diff --check` | Exit 0 |
+
+Full host `pnpm exec tsc --noEmit --pretty false`, host `pnpm exec vitest run tests/project-agent`, and live Dify replay remain for the user's exact-commit QA. No host target/configuration, authentication, storage, sandbox or provider boundary was changed. No Work task, main merge or staging push is part of this fix.

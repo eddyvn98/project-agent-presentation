@@ -2,12 +2,12 @@
 export const MAX_CALCULATION_CHARS = 512;
 const MAX_TOKENS = 128, MAX_DEPTH = 24, MAX_DIGITS = 512;
 type Fraction = { n: bigint; d: bigint };
-const abs = (n: bigint) => n < 0n ? -n : n;
+const abs = (n: bigint) => n < BigInt(0) ? -n : n;
 
-function fraction(n: bigint, d = 1n): Fraction {
+function fraction(n: bigint, d = BigInt(1)): Fraction {
   if (!d) throw new Error("Division by zero");
   if (abs(n).toString().length > MAX_DIGITS || abs(d).toString().length > MAX_DIGITS) throw new Error("Calculation exceeds numeric limit");
-  if (d < 0n) { n = -n; d = -d; }
+  if (d < BigInt(0)) { n = -n; d = -d; }
   let a = abs(n), b = d;
   while (b) { const remainder = a % b; a = b; b = remainder; }
   return { n: n / a, d: d / a };
@@ -30,12 +30,12 @@ export function calculateExact(expression: string): string {
     if (token === "ceil" || token === "floor") {
       expect("("); const v = sum(depth + 1); expect(")");
       const whole = v.n / v.d, remainder = v.n % v.d;
-      return fraction(whole + (token === "ceil" && remainder > 0n ? 1n : token === "floor" && remainder < 0n ? -1n : 0n));
+      return fraction(whole + (token === "ceil" && remainder > BigInt(0) ? BigInt(1) : token === "floor" && remainder < BigInt(0) ? -BigInt(1) : BigInt(0)));
     }
     if (!token || !/^\d+(?:\.\d+)?$/.test(token)) throw new Error("Expected a number, parentheses, ceil or floor");
     if (token.length > 80) throw new Error("Number literal exceeds 80 characters");
     const [integer, decimal = ""] = token.split(".");
-    return fraction(BigInt(integer + decimal), 10n ** BigInt(decimal.length));
+    return fraction(BigInt(integer + decimal), BigInt(10) ** BigInt(decimal.length));
   }
   function product(depth: number): Fraction {
     let left = primary(depth);
@@ -55,7 +55,7 @@ export function calculateExact(expression: string): string {
   }
   const result = sum(0);
   if (at !== tokens.length) throw new Error("Unsupported or trailing expression syntax");
-  return result.d === 1n ? String(result.n) : `${result.n}/${result.d}`;
+  return result.d === BigInt(1) ? String(result.n) : `${result.n}/${result.d}`;
 }
 
 export function runCalculation(expression: string): { text: string; failed?: boolean } {
