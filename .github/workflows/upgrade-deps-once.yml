@@ -32,7 +32,8 @@ jobs:
             'dependencies.katex=0.18.2' \
             'dependencies.mermaid=12.2.0' \
             'dependencies.react-syntax-highlighter=16.1.1' \
-            'overrides.rehype-katex.katex=$katex'
+            'overrides.rehype-katex.katex=$katex' \
+            'overrides.micromark-extension-math.katex=$katex'
           npm install --package-lock-only --ignore-scripts
           npm ci
 
