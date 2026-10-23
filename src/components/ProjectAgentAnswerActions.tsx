@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Bookmark, Check, Copy, GitBranch, Loader2, RotateCcw, Share2, ThumbsDown, ThumbsUp, Volume2 } from "lucide-react";
 import { usePresentationCopy } from "./presentation-copy";
+import { ProjectAgentMoreActions } from "./ProjectAgentMoreActions";
 
 type Action = () => void | Promise<void>;
 export type AnswerFeedback = "up" | "down" | null;
@@ -21,11 +22,11 @@ export type AnswerActionHandlers = {
 export function ProjectAgentActionButton({ label, children, onClick, disabled, pressed }: {
   label: string; children: ReactNode; onClick: () => void; disabled?: boolean; pressed?: boolean;
 }) {
-  return <button type="button" className="agent-action-button" aria-label={label} title={label}
+  return <button type="button" className="agent-action-button" aria-label={label} data-tooltip={label}
     disabled={disabled} aria-pressed={pressed} onClick={onClick}>{children}</button>;
 }
 
-/** Only the copy action is built in. Every external effect needs a host callback. */
+/** Only copy is built in. Keep secondary host actions out of the reading flow. */
 export function ProjectAgentAnswerActions({ markdown, handlers = {}, disabled = false }: {
   markdown: string; handlers?: AnswerActionHandlers; disabled?: boolean;
 }) {
@@ -68,14 +69,18 @@ export function ProjectAgentAnswerActions({ markdown, handlers = {}, disabled = 
     const next = feedback === value ? null : value;
     if (handlers.onFeedback) void run("Feedback", () => handlers.onFeedback!(next), () => setFeedback(next));
   };
-  const optional = [
+  const primary = [
     { label: "Read aloud", action: handlers.onReadAloud, Icon: Volume2 },
     { label: "Regenerate response", action: handlers.onRetry, Icon: RotateCcw },
+  ];
+  const secondary = [
     { label: "Branch from this response", action: handlers.onBranch, Icon: GitBranch },
     { label: "Save response", action: handlers.onSave, Icon: Bookmark },
     { label: "Share response", action: handlers.onShare, Icon: Share2 },
-  ];
-  return <div className="agent-answer-actions not-prose" role="group" aria-label="Response actions" data-agent-control>
+  ].flatMap(({ label, action, Icon }) => action ? [{
+    id: label, label, icon: <Icon aria-hidden />, onSelect: () => { void run(label, action); },
+  }] : []);
+  return <div className="agent-answer-actions not-prose" role="group" aria-label="Response actions" aria-busy={pending !== null} data-agent-control>
     <ProjectAgentActionButton label={status === "copied" ? "Copied" : "Copy response"}
       disabled={disabled || !copyText.trim()} onClick={() => { setMessage(""); void copy(copyText); }}>
       {status === "copied" ? <Check aria-hidden /> : <Copy aria-hidden />}
@@ -84,11 +89,12 @@ export function ProjectAgentAnswerActions({ markdown, handlers = {}, disabled = 
       <ProjectAgentActionButton label="Good response" pressed={feedback === "up"} disabled={busy} onClick={() => vote("up")}><ThumbsUp aria-hidden /></ProjectAgentActionButton>
       <ProjectAgentActionButton label="Bad response" pressed={feedback === "down"} disabled={busy} onClick={() => vote("down")}><ThumbsDown aria-hidden /></ProjectAgentActionButton>
     </>}
-    {optional.map(({ label, action, Icon }) => action && <ProjectAgentActionButton key={label}
+    {primary.map(({ label, action, Icon }) => action && <ProjectAgentActionButton key={label}
       label={label} disabled={busy} onClick={() => void run(label, action)}>
       {pending === label ? <Loader2 aria-hidden className="agent-status-spinner" /> : <Icon aria-hidden />}
     </ProjectAgentActionButton>)}
-    <span className="agent-action-feedback" role="status" aria-live="polite">{message ||
-      (status === "copied" ? "Copied" : status === "error" ? "Copy failed. Select the text and copy it manually." : "")}</span>
+    <ProjectAgentMoreActions key={revision} label="More response actions" items={secondary} disabled={busy} />
+    <span className="agent-action-feedback" role="status" aria-live="polite">{message || (pending ? `${pending}...` :
+      status === "copied" ? "Copied" : status === "error" ? "Copy failed. Select the text and copy it manually." : "")}</span>
   </div>;
 }
