@@ -8,3 +8,11 @@ export type { ProjectAgentTaskFile, ProjectAgentTaskSource } from "./lib/project
 
 export { ProjectAgentAnswer } from "./components/ProjectAgentAnswer";
 export type { ImagePresentation } from "./components/ProjectAgentFigure";
+
+export { planAgentAnswer } from "./lib/project-agent/answer-plan";
+export type { AnswerPlan, AnswerIntent, AnswerVisual, AnswerAudience } from "./lib/project-agent/answer-plan";
+export { validateAgentAnswer } from "./lib/project-agent/answer-validation";
+export type { ValidationReport, ValidationIssue } from "./lib/project-agent/answer-validation";
+export { parseInteractiveModel, evaluateExpression } from "./lib/project-agent/interactive-model";
+export type { InteractiveModel, NumericExpression } from "./lib/project-agent/interactive-model";
+export { splitPresentationSections, completedStreamingMarkdown } from "./lib/project-agent/presentation-mode";
