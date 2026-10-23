@@ -50,3 +50,29 @@ This [synthetic source](https://example.com/reference) demonstrates a keyboard-a
 The explanation remains visible when optional visual data is malformed:
 
 ` + '```agent-ui\n{"type":"chart","categories":["A","B"],"series":[{"name":"Demo","values":[1]}]}\n```';
+
+export const interactiveFixture = {
+  type: "interactive",
+  title: "Synthetic compounding explorer",
+  description: "Illustrative numbers only: annual compounding, no fees or tax.",
+  parameters: [
+    { id: "principal", label: "Starting amount", min: 1000, max: 10000, step: 1000, initial: 1000, unit: "units" },
+    { id: "rate", label: "Annual rate", min: 1, max: 15, step: 1, initial: 5, unit: "%" },
+    { id: "years", label: "Duration", min: 1, max: 10, step: 1, initial: 3, unit: "years" },
+  ],
+  outputs: [{
+    label: "Final amount",
+    unit: "units",
+    expression: { op: "mul", args: [{ var: "principal" }, {
+      op: "pow", args: [{ op: "add", args: [1, { op: "div", args: [{ var: "rate" }, 100] }] }, { var: "years" }],
+    }] },
+  }],
+  plot: {
+    variable: "years", label: "Growth over time",
+    expression: { op: "mul", args: [{ var: "principal" }, {
+      op: "pow", args: [{ op: "add", args: [1, { op: "div", args: [{ var: "rate" }, 100] }] }, { var: "years" }],
+    }] },
+  },
+};
+export const enhancedMarkdown = markdown + "\n\n## Interactive model\n\nAdjust a parameter to understand how the fictional balance changes.\n\n" +
+  "```agent-ui\n" + JSON.stringify(interactiveFixture) + "\n```\n";
