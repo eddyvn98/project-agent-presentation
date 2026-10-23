@@ -7,6 +7,7 @@ import { ProjectAgentCodeContent } from "./ProjectAgentCodeContent";
 import { ProjectAgentCodeEditor, matchesSavedCodeSource } from "./ProjectAgentCodeEditor";
 import { ProjectAgentCodePreview, ProjectAgentCodeViewTabs, type ProjectAgentCodeView } from "./ProjectAgentCodePreview";
 import { ProjectAgentResponseContext } from "./ProjectAgentResponseContext";
+import { ProjectAgentMoreActions } from "./ProjectAgentMoreActions";
 import { downloadPresentationText, usePresentationCopy } from "./presentation-copy";
 import type { ProjectAgentCodeBlockProps, ProjectAgentCodeSaveChange } from "./project-agent-code-types";
 import "./code-table.css";
@@ -63,12 +64,16 @@ export function ProjectAgentCodeBlock({ language, code, streaming = false, onSav
   };
   const actions = <>
     {save && <ProjectAgentCodeEditor key={scope ?? "unscoped"} code={text} language={lang} streaming={streaming} onSave={save} />}
-    <button type="button" className="agent-data-action" aria-label="Wrap code lines" aria-pressed={wrap} title="Wrap lines" onClick={() => setWrap((value) => !value)}><WrapText aria-hidden="true" size={16} /></button>
-    <button type="button" className="agent-data-action" aria-label="Show line numbers" aria-pressed={lineNumbers} title="Line numbers" onClick={() => setLineNumbers((value) => !value)}><Hash aria-hidden="true" size={16} /></button>
-    <button type="button" className="agent-data-action" aria-label="Download code" title="Download code" disabled={streaming} onClick={download}><Download aria-hidden="true" size={16} /></button>
     <button type="button" className="agent-data-action" aria-label="Copy code" disabled={streaming} onClick={() => void copy(text)}>
       {status === "copied" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}<span>{status === "copied" ? "Copied" : "Copy"}</span>
     </button>
+    <ProjectAgentMoreActions label="More code actions" className="agent-data-action" items={[
+      { id: "wrap", label: "Wrap code lines", icon: <WrapText aria-hidden size={16} />, pressed: wrap,
+        keepOpen: true, onSelect: () => setWrap((value) => !value) },
+      { id: "lines", label: "Show line numbers", icon: <Hash aria-hidden size={16} />, pressed: lineNumbers,
+        keepOpen: true, onSelect: () => setLineNumbers((value) => !value) },
+      { id: "download", label: "Download code", icon: <Download aria-hidden size={16} />, disabled: streaming, onSelect: download },
+    ]} />
   </>;
   const feedback = <div className="agent-data-feedback" role="status" aria-live="polite" aria-atomic="true">
     {status === "copied" && <span className="sr-only">Code copied to clipboard.</span>}
