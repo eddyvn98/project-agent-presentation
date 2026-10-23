@@ -24,6 +24,7 @@ export type RichUiBlock =
 	| { type: "ask"; title?: string; questions: Array<{ question: string; options: string[]; multi: boolean }> }
 	| { type: "form"; title?: string; intro?: string; submit?: string; fields: Array<{ label: string; hint?: string; kind: "choice" | "multi" | "text"; options: string[]; placeholder?: string }> }
 	| InteractiveModel
+	| { type: "quiz"; title?: string; question: string; options: string[]; answerIndex: number; explanation?: string }
 	| { type: "followups"; items: Array<{ label: string; prompt: string }> };
 
 const MAX_ITEMS = 12;
@@ -124,6 +125,13 @@ export function parseRichUiBlock(source: string): RichUiBlock | null {
 			if (!title || steps.length < 2) return null;
 			return { type: "explorer", title, intro: text(raw.intro, 240) || undefined, previousLabel: text(raw.previousLabel, 32) || undefined, nextLabel: text(raw.nextLabel, 32) || undefined, controlLabel: text(raw.controlLabel, 60) || undefined, steps };
 		}
+		case "quiz": {
+			const question = text(raw.question, 250);
+			const options = Array.isArray(raw.options) ? raw.options.slice(0, 5).map((option) => text(option, 100)) : [];
+			const index = raw.answerIndex;
+			if (!question || options.length < 2 || options.some((option) => !option) || typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= options.length) return null;
+			return { type: "quiz", title: text(raw.title, 100) || undefined, question, options, answerIndex: index, explanation: text(raw.explanation, 300) || undefined };
+		}
 		case "interactive": return parseInteractiveModel(raw);
 		case "mermaid": {
 			const code = typeof raw.code === "string" ? raw.code.trim().slice(0, 4000) : "";
@@ -180,6 +188,7 @@ export const RICH_UI_INSTRUCTIONS = [
 	'steps: {"type":"steps","items":[{"title":"Foundation","text":"...","meta":"Month 1"}]}',
 	'explorer: {"type":"explorer","title":"How it changes","intro":"...","previousLabel":"Previous","nextLabel":"Next","controlLabel":"Step","steps":[{"label":"Step 1","title":"Starting state","text":"What happens and why.","scene":{"description":"A simple labeled scene","elements":[{"type":"circle","x":50,"y":30,"r":10,"fill":"blue","label":"Main object"},{"type":"line","x1":15,"y1":30,"x2":35,"y2":30,"stroke":"orange","arrow":true},{"type":"text","x":50,"y":55,"text":"Short note","fill":"slate","size":5,"anchor":"middle"}]}},{"label":"Step 2","title":"Next state","text":"How the state changes and what to notice."}]} (2 to 12 ordered states; the user can move a slider or use Previous/Next, and each selection updates its explanation and optional safe vector scene. Scene elements are data only: circle, ellipse, rectangle, line or text; coordinates use a 100 by 60 canvas. Never put HTML, SVG markup or scripts in scene fields. Use only when exploring states adds understanding; do not repeat a separate table or diagram with the same information.)',
 	'interactive: {"type":"interactive","title":"Compound interest","description":"Illustrative annual compounding, with no tax or fees.","parameters":[{"id":"principal","label":"Principal","min":1000000,"max":10000000,"step":500000,"initial":1000000,"unit":"VND"},{"id":"rate","label":"Annual interest %","min":1,"max":15,"step":1,"initial":5,"unit":"%"},{"id":"years","label":"Years","min":1,"max":20,"step":1,"initial":3}],"outputs":[{"label":"Final balance","unit":"VND","expression":{"op":"mul","args":[{"var":"principal"},{"op":"pow","args":[{"op":"add","args":[1,{"op":"div","args":[{"var":"rate"},100]}]},{"var":"years"}]}]}}]} (optional bounded interactive calculator, 1 to 4 sliders and numeric outputs, with optional plot. Use only when changing parameters teaches a relationship; never make up financial rates, measurements or data. Expressions are numeric literals, {"var":"id"}, or {"op":"add|sub|mul|div|pow|min|max","args":[...]}, never JS.)',
+	'quiz: {"type":"quiz","title":"Check your understanding","question":"What is 2 + 2?","options":["3","4","5"],"answerIndex":1,"explanation":"Two plus two is four."} (optional short knowledge check in educational answers; 2 to 5 choices and zero-based answerIndex; only when the correct answer is known, never invent facts.)',
 	'mermaid: {"type":"mermaid","title":"Process","code":"flowchart LR\\n A-->B"} (flowcharts, sequence, gantt, org charts)',
 	'ask: {"type":"ask","title":"To tailor this","questions":[{"question":"What is the total budget?","options":["Under 2 billion","2 to 3 billion","Over 3 billion"],"multi":false}]} (1 to 4 questions, 2 to 5 short concrete options each; the user taps options and the chat sends the answers)',
 	'form: {"type":"form","title":"Planning survey","intro":"Rough numbers are fine","fields":[{"label":"Primary need","hint":"Brief context","kind":"text","placeholder":"e.g. improve team workflow"},{"label":"Main challenge","kind":"choice","options":["Speed","Clarity","Quality","Cost"]},{"label":"Channels","kind":"multi","options":["Zalo","Facebook","Shopee"]}]} (a fillable survey card in the chat for 5 to 10 questions; kind text = free typing, choice = tap one, multi = tap several; every field also has an "Other" box; the user fills what they can and sends once)',
