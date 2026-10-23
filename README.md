@@ -77,7 +77,7 @@ const report = validateAgentAnswer(answerMarkdown, sources);
 
 ## Security and quality gates
 
-The exact runtime dependency upgrades are held in `.github/workflows/upgrade-deps-once.yml`, which should regenerate `package-lock.json` with npm on a networked Node 24 runner and commit the lockfile **only if** production audit, typecheck, unit tests, demo build, and Chromium browser tests pass. This workflow is one-time infrastructure, not proof the security upgrade has completed. Do not merge until the branch includes a verified lockfile and the CI results are green.
+The production dependency remediation was verified on a Node 24 GitHub Actions runner and committed as `65275ff`: `katex@0.18.2`, `mermaid@12.2.0`, `react-syntax-highlighter@16.1.1`, `refractor@5.0.0`, and `prismjs@1.30.0`. Two narrowly scoped KaTeX overrides cover `rehype-katex` and `micromark-extension-math`; the latter still declares an older upstream semver range. The one-time security workflow removed itself once `npm audit --omit=dev` reported **0 vulnerabilities**, 39 unit tests passed and 18 Chromium browser tests passed. The permanent workflow `.github/workflows/presentation-ci.yml` remains as a regression gate. Review any upstream support changes before replacing the overrides.
 
 Run `npm audit --omit=dev`, `npm run typecheck`, `npm run check:lines`, `npm test`, `npm run build:demo` and `npm run test:e2e` after dependency changes. Test equations, Mermaid diagrams, Prism highlighting, responsive visual sizing and stream fallback on mobile and desktop.
 
