@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import * as cap from "@/lib/capabilities/project";
 import { deleteProjectIndex } from "@/lib/vector-store";
+import { deleteProjectHindsightBank } from "@/lib/project-agent/hindsight/memory";
 
 export const runtime = "nodejs";
 
@@ -97,6 +98,8 @@ export async function DELETE(req: NextRequest) {
   const existing = await cap.getProject(id, email);
   if (!existing.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  try { await deleteProjectHindsightBank(id); }
+  catch { return NextResponse.json({ error: "Could not erase long-term Project memory; Project was not deleted" }, { status: 503 }); }
   await cap.deleteProject(id, email);
   await cap.deleteProjectShares(id, email);
   deleteProjectIndex(id).catch(() => {});

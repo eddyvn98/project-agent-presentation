@@ -35,3 +35,7 @@ See `PROJECT_AGENT_PARITY_AUDIT.md` for the newer ChatGPT Projects feature audit
 ## Context-output management
 
 See `CONTEXT_MANAGER_INTEGRATION.md` for the new bounded host-side tool-output store, scoped search/read actions, checkpoint-based continuation, retention and security boundaries, pending QA, and why ordinary remote Dify tool output still cannot be intercepted automatically.
+
+## Optional long-term Hindsight memory
+
+See HINDSIGHT_PROJECT_MEMORY_INTEGRATION.md for the opt-in app-hosted Retain/Recall/Reflect REST adapter, per-Project bank isolation, chat and Project deletion, security/latency limits, deferred QA and real-server setup.

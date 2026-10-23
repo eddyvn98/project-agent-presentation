@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { deleteProjectAgentConversation } from "@/lib/project-agent/task-store";
+import { clearHindsightChatMemory } from "@/lib/project-agent/hindsight/cleanup";
 import {
 	listProjectAgentConversationStatuses,
 	patchProjectAgentConversation,
@@ -35,6 +36,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { projectId:
 	}
 	if (typeof body.pinned === "boolean") fields.chatPinned = body.pinned;
 	if (Object.keys(fields).length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+	if (fields.projectId) {
+		const statuses = await listProjectAgentConversationStatuses(params.projectId, auth.callerEmail!, key);
+		if (statuses.some((status) => status !== "done" && status !== "failed")) return NextResponse.json({ error: "Finish the running chat before moving it to another Project" }, { status: 409 });
+		try { await clearHindsightChatMemory(params.projectId, auth.callerEmail!, key); }
+		catch { return NextResponse.json({ error: "Could not clear long-term memory before moving the chat; no changes made" }, { status: 503 }); }
+	}
 	const matched = await patchProjectAgentConversation(params.projectId, auth.callerEmail!, key, fields);
 	if (!matched) return NextResponse.json({ error: "Chat not found" }, { status: 404 });
 	return NextResponse.json({ ok: true, ...fields });
@@ -54,6 +61,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { projectId
 	if (statuses.some((status) => status !== "done" && status !== "failed")) {
 		return NextResponse.json({ error: "This chat is still running. Try again when it finishes." }, { status: 409 });
 	}
+	try { await clearHindsightChatMemory(params.projectId, auth.callerEmail!, key); }
+	catch { return NextResponse.json({ error: "Could not clear long-term memory before deleting the chat; no changes made" }, { status: 503 }); }
 	await deleteProjectAgentConversation(params.projectId, auth.callerEmail!, key);
 	return NextResponse.json({ ok: true });
 }

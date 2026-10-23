@@ -49,6 +49,7 @@ import { buildLintFixQuery, lintDeliverables, uploadLintSheets, MAX_LOCAL_FIX_RO
 import { hideRichFileBlocks, stripUnverifiedDisclaimers } from "./rich-files";
 import { lessonsForTask, lessonsPrompt, recordLessonCandidates } from "./learning/global-lessons";
 import { reflectOnTask } from "./learning/reflect";
+import { recallProjectHindsight, retainProjectHindsight } from "./hindsight/memory";
 
 const DIFY_MAX_FILES_PER_MESSAGE = Math.max(1, Number(process.env.PROJECT_AGENT_DIFY_MAX_FILES) || 3);
 export { buildProjectAgentQuery, PROJECT_AGENT_DELIVERABLE_QUALITY_GATE } from "./dify-query";
@@ -88,6 +89,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			loadProjectAgentTaskContext(task.projectId, task.ownerEmail, task.id, task.userPrompt ?? task.prompt),
 			loadDefaultMemoryContext(task.projectId, task.ownerEmail),
 		]);
+		const hindsightMemory = await recallProjectHindsight({ projectId: task.projectId, query: task.userPrompt ?? task.prompt, signal, log: (detail) => { void updateProjectAgentTask(task.id, { logLine: detail }).catch(() => {}); } });
 		const user = projectAgentDifyUser(task.ownerEmail, task.projectId);
 		const taskInputs = await uploadProjectAgentTaskInputFiles(task.inputFiles ?? [], task.id, user, endpoint, apiKey);
 		const inputReadback = await buildProjectAgentInputReadback(task.inputFiles ?? [], task.id, runtime ? 12_000 : undefined, { email: task.ownerEmail, projectId: task.projectId }, signal);
@@ -115,7 +117,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		let savedSources: AgentWebSource[] = [];
 		const firstCall = {
 			endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] },
-			query: buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory, personalChats, inputReadback, skillSet.context, await loadRunbookPrompt(task.projectId, projectOwnerEmail)),
+			query: buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory, personalChats, inputReadback, skillSet.context, await loadRunbookPrompt(task.projectId, projectOwnerEmail), false, hindsightMemory),
 			files: attached.files,
 		};
 		// PROJECT_AGENT_RUNTIME=sandbox: the app runs the agent loop in a Docker sandbox; Dify only supplies the model step.
@@ -136,7 +138,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			const runbookText = await loadRunbookPrompt(task.projectId, projectOwnerEmail);
 			const learned = await lessonsForTask(task.id).catch(() => []);
 			if (learned.length) void updateProjectAgentTask(task.id, { logLine: `learned :: ${learned.map((lesson) => lesson.id).join(",")}` }).catch(() => {});
-			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory.slice(0, 3_000), personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
+			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory.slice(0, 3_000), personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true, hindsightMemory)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
 			void updateProjectAgentTask(task.id, { logLine: `context :: query_chars=${firstCall.query.length} knowledge=${knowledge.length} project_chats=${projectChats.length} default_memory=${personalChats.length} agent_history=${projectAgentHistory.length} readback=${inputReadback.length} skills=${skillSet.context.length} runbook=${String(runbookText ?? "").length}` }).catch(() => {});
 		}
 		let message = await (runtime ? runtimeTurn(firstCall.query) : classicTurn({ ...firstCall, conversationId })).catch(async (cause) => {
@@ -270,7 +272,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			files: latestFiles,
 			...(latestFiles.length > 0 ? { filesExpireAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() } : {}),
 			logLine: "Dify Project Agent completed",
-		}).then(reflect);
+		}).then(async (completed) => { const saved = await retainProjectHindsight(completed); if (saved) void updateProjectAgentTask(task.id, { logLine: "hindsight :: retained completed task" }).catch(() => {}); return reflect(completed); });
 	} catch (cause) {
 		const cancelled = Boolean(signal?.aborted);
 		const message = cancelled ? "Stopped by you." : cause instanceof Error ? cause.message : String(cause);
