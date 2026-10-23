@@ -18,6 +18,7 @@ export function DemoApp() {
   const chat = search.has("chat");
   const showChart = search.has("chart");
   const plain = search.has("plain");
+  const presentation = search.has("presentation");
   const [theme, setTheme] = useState<"light" | "dark">("light");
   useEffect(() => { document.documentElement.classList.toggle("dark", theme === "dark"); }, [theme]);
   const answer = plain ? "A short synthetic answer with no formulas, diagrams or charts." :
@@ -37,7 +38,7 @@ export function DemoApp() {
     </header>
     {chat ? <ConversationDemo /> : <main className="demo-answer">
       <p className="demo-kicker">Synthetic content · response presentation</p>
-      <ProjectAgentAnswer markdown={answer} presentation actions showSources sources={plain ? undefined : sources} images={{
+      <ProjectAgentAnswer markdown={answer} presentation={presentation} actions showSources sources={plain ? undefined : sources} images={{
         "/demo/marker.svg": { size: "inline", caption: "A single marker, shown at illustration scale.", source: { url: "https://example.com/illustration", label: "Synthetic artwork" } },
         "/demo/reference.svg": { size: "reference", caption: "A larger synthetic reference figure with three labeled regions." },
       }} />
