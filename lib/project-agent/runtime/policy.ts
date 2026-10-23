@@ -52,5 +52,5 @@ export async function withPolicy(context: PolicyContext & { onStep?(step: { tool
 		return { text: reason, failed: true };
 	}
 	const outcome = await run();
-	return { ...outcome, text: redactSecrets(outcome.text) };
+	return { ...outcome, text: redactSecrets(outcome.text), ...(typeof outcome.rawOutput === "string" ? { rawOutput: redactSecrets(outcome.rawOutput) } : {}) };
 }

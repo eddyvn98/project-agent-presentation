@@ -1,4 +1,6 @@
 import { runCalculationStep } from "./calculate";
+import { contextOutputAction, externalizeActionOutput } from "./context-output-manager";
+import { recordContextCheckpoint } from "./context-checkpoint";
 import { RuntimeTurnContext } from "./turn-context";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -44,21 +46,19 @@ import { transcribeTables } from "./table-transcribe";
 import type { ProjectAgentTaskSource } from "../types";
 import type { RuntimeInput } from "./run-agent-types";
 export type { RuntimeInput, RuntimeStep } from "./run-agent-types";
-
 const MAX_STEPS = 60, MAX_INVALID_REPLIES = 3;
 const DEADLINE_MS = 25 * 60_000, MAX_IMAGE_CALLS = 5;
 const MAX_DELEGATES = 3, SUB_AGENT_STEPS = 25, MAX_FILE_BYTES = 40 * 1024 * 1024;
-
 export const isRuntimeEnabled = () => process.env.PROJECT_AGENT_RUNTIME === "sandbox";
-
-async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { action: "final" }>, loopStep: number, imageCalls: { value: number }, budget: { delegates: number }): Promise<{ text: string; image?: DifyChatFile; images?: DifyChatFile[]; failed?: boolean; sources?: ProjectAgentTaskSource[] }> {
+async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { action: "final" }>, loopStep: number, imageCalls: { value: number }, budget: { delegates: number }): Promise<{ text: string; rawOutput?: string; image?: DifyChatFile; images?: DifyChatFile[]; failed?: boolean; sources?: ProjectAgentTaskSource[] }> {
 	// Sub-agents count their render images from 100 so they never overwrite the lead agent's thumbnails.
 	const step = loopStep + (input.depth ? 100 * ((input.slot ?? 0) + 1) : 0);
 	if (action.action === "calculate") return runCalculationStep(action.expression, input.onStep);
+	if (action.action === "search_output" || action.action === "read_output") return contextOutputAction(input, action);
 	if (action.action === "shell") {
 		input.onStep?.({ tool: "sandbox_shell", detail: action.note || action.command });
 		const result = await execInSandbox(input.chatId, action.command, action.timeout, input.readOnly);
-		return { text: `shell result (exit ${result.exitCode}${result.timedOut ? ", timed out" : ""}):\n${result.output}`, failed: result.exitCode !== 0 };
+		return { text: `shell result (exit ${result.exitCode}${result.timedOut ? ", timed out" : ""}):\n${result.output}`, rawOutput: `shell result (exit ${result.exitCode}${result.timedOut ? ", timed out" : ""}):\n${result.fullOutput ?? result.output}`, failed: result.exitCode !== 0 };
 	}
 	if (action.action === "write_file") {
 		input.onStep?.({ tool: "sandbox_write", detail: action.note || action.path });
@@ -111,15 +111,14 @@ async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { a
 		return { text: rendered.text, image: rendered.image, failed: !rendered.image };
 	} catch (cause) { return { text: `render failed: ${cause instanceof Error ? cause.message : "error"}`, failed: true }; }
 }
-
 interface RunMetrics { failed: number; modelMs: number; actionMs: number; referenceMs: number; rounds: number; promptTokens: number; stepTokens: number[]; stepOut: number[]; compactions: number; invalid: number; actions: Map<string, number> }
-
 /** The app-hosted agent loop: the model proposes actions, the app runs them in the chat's sandbox and replies with the results. Logs one metrics line per run, even when it fails. */
 export async function runRuntimeAgent(input: RuntimeInput): Promise<DifyAgentMessage> {
 	const started = Date.now();
 	input.workspaceState ??= newDirectState();
 	input.sources ??= [];
 	input.trace ??= [];
+	input.contextStats ??= { captures: 0, storedBytes: 0, returnedBytes: 0 };
 	const metrics: RunMetrics = { failed: 0, modelMs: 0, actionMs: 0, referenceMs: 0, rounds: 0, promptTokens: 0, stepTokens: [], stepOut: [], compactions: 0, invalid: 0, actions: new Map() };
 	try { return await loop(input, metrics); } finally {
 		if (!input.depth) {
@@ -128,10 +127,9 @@ export async function runRuntimeAgent(input: RuntimeInput): Promise<DifyAgentMes
 			await closeBrowserSession(input.taskId ?? input.chatId).catch(() => {});
 		}
 		const seconds = (ms: number) => Math.round(ms / 1000);
-		input.onStep?.({ tool: "metrics", detail: `total_s=${seconds(Date.now() - started)} model_s=${seconds(metrics.modelMs)} action_s=${seconds(metrics.actionMs)} reference_ms=${metrics.referenceMs} steps=${metrics.rounds} prompt_tokens=${metrics.promptTokens} step_tokens=${metrics.stepTokens.slice(0, 30).join("/")} out_max=${Math.max(0, ...metrics.stepOut)} out_total=${metrics.stepOut.reduce((a, b) => a + b, 0)} step_out=${metrics.stepOut.slice(0, 30).join("/")} compactions=${metrics.compactions} invalid=${metrics.invalid} failed=${metrics.failed} model=${input.modelSelector || "default"} tools=${[...metrics.actions].map(([name, count]) => `${name}:${count}`).join(",") || "none"}${input.subUsage ? ` sub_runs=${input.subUsage.runs} sub_steps=${input.subUsage.steps} sub_tokens=${input.subUsage.tokens} sub_models=${[...input.subUsage.models].join(",")}` : ""}` });
+		input.onStep?.({ tool: "metrics", detail: `total_s=${seconds(Date.now() - started)} model_s=${seconds(metrics.modelMs)} action_s=${seconds(metrics.actionMs)} reference_ms=${metrics.referenceMs} steps=${metrics.rounds} prompt_tokens=${metrics.promptTokens} step_tokens=${metrics.stepTokens.slice(0, 30).join("/")} out_max=${Math.max(0, ...metrics.stepOut)} out_total=${metrics.stepOut.reduce((a, b) => a + b, 0)} step_out=${metrics.stepOut.slice(0, 30).join("/")} compactions=${metrics.compactions} invalid=${metrics.invalid} failed=${metrics.failed} context_captures=${input.contextStats?.captures ?? 0} context_kept_bytes=${input.contextStats?.storedBytes ?? 0} context_returned_bytes=${input.contextStats?.returnedBytes ?? 0} model=${input.modelSelector || "default"} tools=${[...metrics.actions].map(([name, count]) => `${name}:${count}`).join(",") || "none"}${input.subUsage ? ` sub_runs=${input.subUsage.runs} sub_steps=${input.subUsage.steps} sub_tokens=${input.subUsage.tokens} sub_models=${[...input.subUsage.models].join(",")}` : ""}` });
 	}
 }
-
 async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgentMessage> {
 	const started = Date.now();
 	let conversationId = input.conversationId;
@@ -175,7 +173,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 		if (conversationId && lastPrompt > COMPACT_AT_PROMPT_TOKENS) {
 			metrics.compactions += 1;
 			input.onStep?.({ tool: "compact_context", detail: `${Math.round(lastPrompt / 1000)}k tokens` });
-			query = await compactConversation({ firstQuery: input.query, user: input.user, conversationId, signal: input.signal, modelSelector: input.modelSelector }).catch(async (cause) => {
+			query = await compactConversation({ firstQuery: input.query, user: input.user, conversationId, signal: input.signal, modelSelector: input.modelSelector, chatId: input.chatId, projectId: input.projectId, taskId: input.taskId }).catch(async (cause) => {
 				if (input.signal?.aborted || !isConversationLostError(cause)) throw cause;
 				return restartAfterLoss(input, query);
 			});
@@ -236,7 +234,8 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 				const budget = input.budget ?? (input.budget = { delegates: 0 });
 				const outcomes = await Promise.all(group.map((candidate) => delegateToSubAgent(runRuntimeAgent, input, candidate, budget, MAX_DELEGATES, SUB_AGENT_STEPS)));
 				metrics.actionMs += Date.now() - started;
-				outcomes.forEach((outcome, offset) => { turnContext.record(group[offset], outcome); results.push(`[${index + offset + 1}/${actions.length}] ${outcome.text}`); });
+				const prepared = await Promise.all(outcomes.map((outcome) => externalizeActionOutput(input, "delegate", outcome)));
+				for (const [offset, outcome] of prepared.entries()) { turnContext.record(group[offset], outcome); results.push(`[${index + offset + 1}/${actions.length}] ${outcome.text}`); }
 				continue;
 			}
 			if (action.action === "final" && index > 0) { results.push(`[${index + 1}/${actions.length}] final was not used: it came in the same reply as other actions whose results you had not seen. Check the results above, then send final on its own.`); break; }
@@ -274,7 +273,9 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 			}
 			metrics.actions.set(action.action, (metrics.actions.get(action.action) ?? 0) + 1);
 			const actionStarted = Date.now();
-			const outcome = await withPolicy(input, action, () => runAction(input, action, step, imageCalls, input.budget ?? (input.budget = { delegates: 0 }))) as Awaited<ReturnType<typeof runAction>>;
+			const raw = await withPolicy(input, action, () => runAction(input, action, step, imageCalls, input.budget ?? (input.budget = { delegates: 0 }))) as Awaited<ReturnType<typeof runAction>>;
+			const outcome = action.action === "search_output" || action.action === "read_output" ? raw : await externalizeActionOutput(input, action.action, raw);
+			if (!input.depth && input.taskId) await recordContextCheckpoint(input, { taskId: input.taskId, step, action: action.action, failed: Boolean(outcome.failed), observation: outcome.text }).catch(() => {});
 			turnContext.record(action, outcome);
 			metrics.actionMs += Date.now() - actionStarted;
 			if (action.action !== "wait" && action.action !== "plan") guard.noteAction(spanKey(action.action, JSON.stringify({ ...action, note: undefined })), Boolean(outcome.failed));

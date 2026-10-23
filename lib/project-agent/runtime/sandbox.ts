@@ -40,11 +40,11 @@ async function makeRoom(keep: string) {
 	}
 }
 
-export interface SandboxResult { output: string; exitCode: number; timedOut: boolean }
+export interface SandboxResult { output: string; fullOutput: string; exitCode: number; timedOut: boolean }
 
-const docker = (args: string[], timeoutMs = 60_000) => new Promise<{ stdout: string; stderr: string; code: number }>((resolve) => {
+const docker = (args: string[], timeoutMs = 60_000) => new Promise<{ stdout: string; stderr: string; code: number; captureTruncated: boolean }>((resolve) => {
 	execFile("docker", args, { timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
-		resolve({ stdout: String(stdout), stderr: String(stderr), code: error ? (typeof (error as { code?: unknown }).code === "number" ? (error as { code: number }).code : 1) : 0 });
+		resolve({ stdout: String(stdout), stderr: String(stderr), code: error ? (typeof (error as { code?: unknown }).code === "number" ? (error as { code: number }).code : 1) : 0, captureTruncated: Boolean(error && (String((error as Error).message).includes("maxBuffer") || (error as { code?: unknown }).code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER")) });
 	});
 });
 
@@ -150,7 +150,8 @@ export async function execInSandbox(chatId: string, command: string, timeoutSec 
 		: ["exec", "-w", "/work", name, "timeout", "-k", "5", String(seconds), "bash", "-c", command];
 	const result = await withExecSlot(() => docker(args, (seconds + 20) * 1000));
 	scheduleStop(name);
-	return { output: clip(`${result.stdout}${result.stderr ? `${result.stdout ? "\n" : ""}[stderr]\n${result.stderr}` : ""}`.trim()) || "(no output)", exitCode: result.code, timedOut: result.code === 124 || result.code === 137 };
+	const fullOutput = (`${result.stdout}${result.stderr ? `${result.stdout ? "\n" : ""}[stderr]\n${result.stderr}` : ""}`.trim() || "(no output)") + (result.captureTruncated ? "\n[DOCKER 16 MiB OUTPUT BUFFER LIMIT: some output was not captured]" : "");
+	return { output: clip(fullOutput), fullOutput, exitCode: result.code, timedOut: result.code === 124 || result.code === 137 };
 }
 
 export async function stopSandbox(chatId: string): Promise<void> {

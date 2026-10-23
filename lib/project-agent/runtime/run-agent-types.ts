@@ -32,4 +32,5 @@ export interface RuntimeInput {
 	workspaceState?: DirectWorkspaceState;
 	sources?: ProjectAgentTaskSource[];
 	trace?: Span[];
+	contextStats?: { captures: number; storedBytes: number; returnedBytes: number };
 }

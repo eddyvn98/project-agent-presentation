@@ -21,6 +21,8 @@ function parseRenderRegion(value: unknown): RenderRegion | undefined {
 export type RuntimeAction =
 	| { action: "calculate"; expression: string; note?: string }
 	| { action: "shell"; command: string; timeout?: number; note?: string }
+	| { action: "search_output"; id: string; query: string; limit?: number; note?: string }
+	| { action: "read_output"; id: string; offset?: number; length?: number; note?: string }
 	| { action: "write_file"; path: string; content: string; note?: string }
 	| { action: "render"; path: string; pages?: "sample" | number[]; region?: RenderRegion; note?: string }
 	| { action: "delegate"; task: string; role?: "worker" | "reviewer"; model?: SubAgentTier; note?: string }
@@ -88,6 +90,18 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
 	switch (raw.action) {
 		case "calculate":
 			return typeof raw.expression === "string" && raw.expression.trim() && raw.expression.length <= MAX_CALCULATION_CHARS ? { action: "calculate", expression: raw.expression, note } : { error: "calculate needs an expression of 1-512 characters" };
+		case "search_output": {
+			if (typeof raw.id !== "string" || !/^out_[a-f0-9]{20}$/.test(raw.id)) return { error: "search_output needs a saved output id" };
+			if (typeof raw.query !== "string" || raw.query.trim().length < 2 || raw.query.trim().length > 160) return { error: "search_output query must be 2-160 characters" };
+			if (raw.limit !== undefined && (typeof raw.limit !== "number" || !Number.isSafeInteger(raw.limit) || raw.limit < 1 || raw.limit > 8)) return { error: "search_output limit must be 1-8" };
+			return { action: "search_output", id: raw.id, query: raw.query.trim(), limit: typeof raw.limit === "number" ? raw.limit : undefined, note };
+		}
+		case "read_output": {
+			if (typeof raw.id !== "string" || !/^out_[a-f0-9]{20}$/.test(raw.id)) return { error: "read_output needs a saved output id" };
+			if (raw.offset !== undefined && (typeof raw.offset !== "number" || !Number.isSafeInteger(raw.offset) || raw.offset < 0 || raw.offset > 8_500_000)) return { error: "read_output offset must be a nonnegative integer within the output limit" };
+			if (raw.length !== undefined && (typeof raw.length !== "number" || !Number.isSafeInteger(raw.length) || raw.length < 1 || raw.length > 7_000)) return { error: "read_output length must be an integer from 1 to 7000" };
+			return { action: "read_output", id: raw.id, offset: typeof raw.offset === "number" ? raw.offset : undefined, length: typeof raw.length === "number" ? raw.length : undefined, note };
+		}
 		case "shell":
 			return typeof raw.command === "string" && raw.command.trim() ? { action: "shell", command: raw.command, timeout: typeof raw.timeout === "number" ? raw.timeout : undefined, note } : { error: "shell needs a command" };
 		case "write_file":

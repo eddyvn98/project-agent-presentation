@@ -3,6 +3,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 import type { CreateProjectAgentTaskInput, ProjectAgentTask } from "./types";
 import { isProjectAgentTaskStale } from "./task-stale";
+import { deleteContextScope } from "./runtime/context-output-store";
 import { encodeProjectAgentTaskCursor, type ProjectAgentTaskCursor } from "./task-pagination";
 import {
 	findProjectAgentTask,
@@ -250,11 +251,13 @@ export async function deleteProjectAgentConversation(
 	ownerEmail: string,
 	key: { conversationId?: string; taskId?: string },
 ): Promise<number> {
+	const task = key.taskId ? await readProjectAgentTask(key.taskId).catch(() => null) : null;
 	const ids = await deleteStoredProjectAgentConversation(projectId, ownerEmail, key);
 	await Promise.all(ids.flatMap((id) => [
 		fs.unlink(taskPath(id)).catch(() => {}),
 		fs.rm(path.join(FILES_DIR, id), { recursive: true, force: true }).catch(() => {}),
 		fs.rm(path.join(INPUTS_DIR, id), { recursive: true, force: true }).catch(() => {}),
 	]));
+	if (ids.length) await Promise.allSettled([...new Set([key.conversationId, task?.conversationId, key.taskId].filter((id): id is string => Boolean(id)))].map((chatId) => deleteContextScope({ projectId, chatId })));
 	return ids.length;
 }

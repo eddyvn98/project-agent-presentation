@@ -31,3 +31,7 @@ For the arithmetic and optional model-selector compatibility follow-up, see `CAL
 See `ACTION_TRANSPORT_REVIEW.md` for the historical standard-Dify/runtime distinction and runtime transport review. `DIFY_CALCULATOR_BRIDGE.md` describes the later app-hosted ordinary Dify calculator bridge and its remote workflow requirement.
 
 See `PROJECT_AGENT_PARITY_AUDIT.md` for the newer ChatGPT Projects feature audit, relevant-history retrieval, cursor-based older chat loading, intent-adaptive answer guidance and remaining host QA.
+
+## Context-output management
+
+See `CONTEXT_MANAGER_INTEGRATION.md` for the new bounded host-side tool-output store, scoped search/read actions, checkpoint-based continuation, retention and security boundaries, pending QA, and why ordinary remote Dify tool output still cannot be intercepted automatically.
