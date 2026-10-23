@@ -27,6 +27,7 @@ export function ProjectAgentAnswer({
 }: ProjectAgentAnswerProps) {
   const [presenting, setPresenting] = useState(false);
   const [slide, setSlide] = useState(0);
+  const [copied, setCopied] = useState(false);
   const deckRef = useRef<HTMLDivElement>(null);
   const stream = useMemo(() => streaming ? completedStreamingMarkdown(markdown) :
     { text: markdown, pending: false }, [markdown, streaming]);
@@ -66,6 +67,11 @@ export function ProjectAgentAnswer({
           if (deckRef.current?.requestFullscreen) void deckRef.current.requestFullscreen().catch(() => {});
         }}>Fullscreen</button>
       </>}
+      <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={async () => {
+        try { await navigator.clipboard.writeText(markdown); setCopied(true); }
+        catch { setCopied(false); }
+      }}>Copy Markdown</button>
+      {copied && <span role="status" className="text-xs text-slate-500">Markdown copied</span>}
       <button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={() => {
         setPresenting(false);
         requestAnimationFrame(() => window.print());
