@@ -60,3 +60,7 @@ Bring the changed `components/`, `app/api/`, and `lib/` files into the original 
 ## Remaining inspected limitations
 
 Conversation refresh still uses the existing newest-20-task endpoint; older-chat pagination needs the host repository's storage/query support and a separate history design. The neutral tests do not establish visual parity for the full signed-in app, service restart correctness, or end-to-end backend behavior. The presentation demo's bundle-size warning is unchanged.
+
+## Arithmetic/compatibility follow-up
+
+`CALCULATION_RELIABILITY.md` supersedes the optional `modelSelector` validation behavior above: non-string hints are ignored by the existing route, and string hints use the existing host normalizer. It documents the bounded exact runtime calculator, its limited verification scope, and the newer focused test results.

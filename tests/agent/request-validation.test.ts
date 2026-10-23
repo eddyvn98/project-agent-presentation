@@ -9,3 +9,6 @@ it("bounds provider and displayed prompts independently", () => {
   expect(validateProjectAgentRequest({ prompt: "ok", userPrompt: "a".repeat(12001) })?.status).toBe(413);
   expect(validateProjectAgentRequest({ prompt: "ok", goal: { objective: "a".repeat(12001) } })?.status).toBe(413);
 });
+it.each([123, null, false, {}, [], "", " ", "unknown-model", "x".repeat(257)].map((modelSelector) => ({ modelSelector })))("leaves optional modelSelector normalization to the host: $modelSelector", ({ modelSelector }) => {
+  expect(validateProjectAgentRequest({ prompt: "Synthetic", modelSelector })).toBeNull();
+});

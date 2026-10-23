@@ -8,6 +8,7 @@ export type PublicProjectAgentTask = Omit<ProjectAgentTask, "ownerEmail" | "proj
 export interface ProjectAgentActivityStep { label: string; kind: "search" | "read" | "other"; count: number; details: string[]; images?: string[] }
 
 const TOOL_LABELS: Record<string, string> = {
+	calculate: "Calculating an expression",
 	shell_run: "Running commands in the sandbox",
 	sandbox_shell: "Running a command in the sandbox",
 	sandbox_write: "Writing a file in the sandbox",

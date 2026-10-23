@@ -50,3 +50,14 @@ it("does not reuse another user's attachments and retains module guards", async 
   expect(allowedModulesForRequest).toHaveBeenCalledTimes(2);
   expect(startProjectAgentTask).toHaveBeenCalledWith("task-1");
 });
+it.each([123, null, false, {}, []].map((modelSelector) => ({ modelSelector })))("ignores non-string modelSelector $modelSelector under the existing host contract", async ({ modelSelector }) => {
+  vi.mocked(createProjectAgentTask).mockResolvedValue({ id: "task-selector" } as never);
+  expect((await send({ prompt: "Synthetic", modelSelector })).status).toBe(202);
+  expect(vi.mocked(createProjectAgentTask).mock.calls[0][0]).not.toHaveProperty("modelSelector");
+  expect(startProjectAgentTask).toHaveBeenCalledWith("task-selector");
+});
+it("forwards string modelSelector to the existing task-store normalizer", async () => {
+  vi.mocked(createProjectAgentTask).mockResolvedValue({ id: "task-selector" } as never);
+  expect((await send({ prompt: "Synthetic", modelSelector: "synthetic/model" })).status).toBe(202);
+  expect(createProjectAgentTask).toHaveBeenCalledWith(expect.objectContaining({ modelSelector: "synthetic/model" }));
+});

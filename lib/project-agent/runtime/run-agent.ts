@@ -1,3 +1,4 @@
+import { runCalculation } from "./calculate";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { DifyAgentMessage } from "../dify-stream";
@@ -53,6 +54,7 @@ export const isRuntimeEnabled = () => process.env.PROJECT_AGENT_RUNTIME === "san
 async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { action: "final" }>, loopStep: number, imageCalls: { value: number }, budget: { delegates: number }): Promise<{ text: string; image?: DifyChatFile; images?: DifyChatFile[]; failed?: boolean; sources?: ProjectAgentTaskSource[] }> {
 	// Sub-agents count their render images from 100 so they never overwrite the lead agent's thumbnails.
 	const step = loopStep + (input.depth ? 100 * ((input.slot ?? 0) + 1) : 0);
+	if (action.action === "calculate") { input.onStep?.({ tool: "calculate", detail: action.note || action.expression }); return runCalculation(action.expression); }
 	if (action.action === "shell") {
 		input.onStep?.({ tool: "sandbox_shell", detail: action.note || action.command });
 		const result = await execInSandbox(input.chatId, action.command, action.timeout, input.readOnly);
@@ -211,7 +213,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 			metrics.invalid += 1;
 			input.onStep?.({ tool: "invalid_reply", detail: `${actions.error}: ${reply.answer.slice(0, 160).replace(/\s+/g, " ")}` });
 			if (++invalid > MAX_INVALID_REPLIES) throw new Error(`The model kept replying without a valid action (${actions.error})`);
-			query = `Your reply was not a valid action (${actions.error}). Reply with ONLY JSON, no <think> text and no prose, for example {"action":"shell","command":"ls /work/inputs"} (other actions: write_file {path,content}, render {path}, reference {query} or {id,find}, web_fetch {url}, web_search {query}, browser {op,url,ref,text,value,...}, workspace_commands {categories}, workspace_view {}, workspace_apply {actions}, workspace_read {}, plan {items}, generate_image {prompt,...}, final {answer,files}). If your last reply was cut off for being too long, split big scripts into write_file parts of under 150 lines.`;
+			query = `Your reply was not a valid action (${actions.error}). Reply with ONLY JSON, no <think> text and no prose, for example {"action":"shell","command":"ls /work/inputs"} (other actions: calculate {expression}, write_file {path,content}, render {path}, reference {query} or {id,find}, web_fetch {url}, web_search {query}, browser {op,url,ref,text,value,...}, workspace_commands {categories}, workspace_view {}, workspace_apply {actions}, workspace_read {}, plan {items}, generate_image {prompt,...}, final {answer,files}). If your last reply was cut off for being too long, split big scripts into write_file parts of under 150 lines.`;
 			continue;
 		}
 		invalid = 0;

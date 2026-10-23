@@ -3,7 +3,7 @@ export interface ProjectToolGroup { id: string; label: string; description: stri
 /** Tool groups the project owner can switch off per project (applied as an instruction to the Agent). */
 export const PROJECT_TOOL_GROUPS: ProjectToolGroup[] = [
 	{ id: "web", label: "Web research", description: "Search the web and read web pages", tools: "DuckDuckGo search and WebScraper" },
-	{ id: "code", label: "Code and data analysis", description: "Run code to calculate and analyse data", tools: "Code Interpreter and the sandbox shell" },
+	{ id: "code", label: "Code and data analysis", description: "Run code to calculate and analyse data", tools: "calculate, Code Interpreter and the sandbox shell" },
 	{ id: "charts", label: "Charts", description: "Draw charts and graphs", tools: "ECharts to Image" },
 	{ id: "office", label: "Office and PDF files", description: "Create Word, Excel, PowerPoint, PDF and HTML files", tools: "Markdown Exporter, Excel Tools and DOC" },
 ];

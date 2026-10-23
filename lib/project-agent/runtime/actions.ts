@@ -1,3 +1,4 @@
+import { MAX_CALCULATION_CHARS } from "./calculate";
 import { parseSubAgentTier, type SubAgentTier } from "./sub-agent-model";
 import { parseBrowserAction, type BrowserAction } from "./browser-agent/action-parser";
 import { parsePlanItems, type PlanItem } from "../plan";
@@ -18,6 +19,7 @@ function parseRenderRegion(value: unknown): RenderRegion | undefined {
 }
 
 export type RuntimeAction =
+	| { action: "calculate"; expression: string; note?: string }
 	| { action: "shell"; command: string; timeout?: number; note?: string }
 	| { action: "write_file"; path: string; content: string; note?: string }
 	| { action: "render"; path: string; pages?: "sample" | number[]; region?: RenderRegion; note?: string }
@@ -84,6 +86,8 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
 	if (raw.action === "render" && raw.pages !== undefined && raw.pages !== "sample" && (!Array.isArray(raw.pages) || !raw.pages.length || raw.pages.some((page) => !Number.isSafeInteger(page) || page < 1))) return { error: "render pages must be sample or positive integer page numbers" };
 	const note = typeof raw.note === "string" ? raw.note.slice(0, 200) : undefined;
 	switch (raw.action) {
+		case "calculate":
+			return typeof raw.expression === "string" && raw.expression.trim() && raw.expression.length <= MAX_CALCULATION_CHARS ? { action: "calculate", expression: raw.expression, note } : { error: "calculate needs an expression of 1-512 characters" };
 		case "shell":
 			return typeof raw.command === "string" && raw.command.trim() ? { action: "shell", command: raw.command, timeout: typeof raw.timeout === "number" ? raw.timeout : undefined, note } : { error: "shell needs a command" };
 		case "write_file":

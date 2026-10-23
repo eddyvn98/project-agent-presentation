@@ -10,9 +10,11 @@ export function validateProjectAgentRequest(value: unknown): { error: string; st
     if (body[key] !== undefined && typeof body[key] !== "string") return { error: `${key} must be a string`, status: 400 };
     if (typeof body[key] === "string" && body[key].length > limit) return { error: `${key} is too long`, status: 413 };
   }
-  for (const key of ["conversationId", "retryOfTaskId", "modelSelector"]) {
+  for (const key of ["conversationId", "retryOfTaskId"]) {
     if (body[key] !== undefined && (typeof body[key] !== "string" || !body[key].trim() || body[key].length > 256)) return { error: `Invalid ${key}`, status: 400 };
   }
+  // modelSelector is a legacy optional hint: the route ignores non-strings and
+  // task-store normalizes empty, unknown or oversized strings to the default.
   if (body.goal !== undefined) {
     if (!body.goal || typeof body.goal !== "object" || Array.isArray(body.goal)) return { error: "Invalid goal", status: 400 };
     const goal = body.goal as Record<string, unknown>;
