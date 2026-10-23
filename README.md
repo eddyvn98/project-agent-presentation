@@ -58,3 +58,25 @@ npm run test:e2e
 The synthetic demo is served at the URL printed by Vite. Browser tests run at desktop (1280×720) and Pixel 7 (393×727) viewports, covering figure sizes, actual zoom dimensions, math, eight-state navigation, Mermaid, citation positioning/focus and failure fallbacks. Component tests cover safe Markdown/TeX, image adapters and strict chart data validation. Every source/demo/test file stays under 300 lines.
 
 For environments with a preinstalled compatible Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/absolute/path/to/chromium` when running browser tests. The production demo may emit a large-chunk warning from existing rendering dependencies; it is a review fixture, not a deployment bundle. Real content accuracy, source validity and image rights remain the host author's responsibility.
+
+## Agent orchestration and interactive extensions
+
+The rendering package is still **presentation-only**: it does not make model calls, browse sources, fact-check claims, or execute arbitrary code. Host applications may call `planAgentAnswer(userPrompt, audience?)` to obtain deterministic, optional presentation hints, then give those hints to their own agent. Use `validateAgentAnswer(markdown, sources)` before publishing to detect malformed `agent-ui` blocks, unsafe source URLs and unclosed fences. This is **structural validation**, not verification of factual claims or evidence.
+
+The `interactive` block accepts 1–4 labeled numeric sliders and 1–4 outputs. Expressions are a bounded JSON tree of numbers, `{"var":"parameter_id"}`, or `{"op":"add|sub|mul|div|pow|min|max","args":[...]}`. No JavaScript, eval, HTML, URL, arbitrary callback or network access is supported. An optional `plot` declares an x-axis parameter and expression. The UI supports a responsive graph and accessible data table; invalid expressions and non-finite results fall back gracefully. Supply all model assumptions explicitly, and do not invent values.
+
+```tsx
+import { ProjectAgentAnswer, planAgentAnswer, validateAgentAnswer } from "./src";
+const hints = planAgentAnswer("Explain phases of the Moon to a sixth grader");
+const report = validateAgentAnswer(answerMarkdown, sources);
+// Only publish once your host has independently checked facts and citations.
+<ProjectAgentAnswer markdown={answerMarkdown} presentation streaming={isStreaming} />
+```
+
+`presentation` is opt-in: readers can switch between a complete answer and sections split at H2 headings, navigate with ArrowLeft/ArrowRight/PageUp/PageDown, enlarge fullscreen, and print the entire answer (browser Print → Save as PDF). The non-presentation view and existing component exports remain the default. `streaming` prevents partially received fenced visuals from corrupting the readable answer. No automatic PPTX export is provided.
+
+## Security and quality gates
+
+The exact runtime dependency upgrades are held in `.github/workflows/upgrade-deps-once.yml`, which should regenerate `package-lock.json` with npm on a networked Node 24 runner and commit the lockfile **only if** production audit, typecheck, unit tests, demo build, and Chromium browser tests pass. This workflow is one-time infrastructure, not proof the security upgrade has completed. Do not merge until the branch includes a verified lockfile and the CI results are green.
+
+Run `npm audit --omit=dev`, `npm run typecheck`, `npm run check:lines`, `npm test`, `npm run build:demo` and `npm run test:e2e` after dependency changes. Test equations, Mermaid diagrams, Prism highlighting, responsive visual sizing and stream fallback on mobile and desktop.
