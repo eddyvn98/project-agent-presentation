@@ -1,16 +1,16 @@
 "use client";
 
-import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { lazy, Suspense, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
 import type { ProjectAgentTaskSource } from "@/lib/project-agent/types";
 import { completedStreamingMarkdown, splitPresentationSections } from "@/lib/project-agent/presentation-mode";
+import { containsMathMarkdown } from "@/lib/project-agent/math-detection";
 import { createProjectAgentMarkdownComponents, normalizeProjectAgentMarkdown } from "./ProjectAgentMarkdown";
 import type { ImagePresentation } from "./ProjectAgentFigure";
-import "katex/dist/katex.min.css";
 import "./presentation.css";
+
+const MathMarkdown = lazy(() => import("./ProjectAgentMathMarkdown"));
 
 export interface ProjectAgentAnswerProps {
   markdown: string;
@@ -36,6 +36,7 @@ export function ProjectAgentAnswer({
   const canPresent = presentation && sections.length > 1;
   const index = Math.min(slide, sections.length - 1);
   const visible = presenting && canPresent ? sections[index] : normalized;
+  const hasMath = containsMathMarkdown(visible);
   const components = useMemo(() => createProjectAgentMarkdownComponents(sources, resolveImage, images),
     [sources, resolveImage, images]);
   const move = (next: number) => setSlide(Math.max(0, Math.min(sections.length - 1, next)));
@@ -78,9 +79,11 @@ export function ProjectAgentAnswer({
       }}>Print / save PDF</button>
     </nav>}
     <div className={presenting && canPresent ? "agent-slide" : undefined}>
-      <ReactMarkdown skipHtml remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[[rehypeKatex, { throwOnError: false, trust: false, strict: "error", maxExpand: 200, maxSize: 20 }]]}
-        components={components}>{visible}</ReactMarkdown>
+      {hasMath
+        ? <Suspense fallback={<ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={components}>{visible}</ReactMarkdown>}>
+            <MathMarkdown markdown={visible} components={components} />
+          </Suspense>
+        : <ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={components}>{visible}</ReactMarkdown>}
     </div>
     {stream.pending && <p role="status" className="not-prose mt-3 text-xs text-slate-500">Preparing visual…</p>}
   </div>;
