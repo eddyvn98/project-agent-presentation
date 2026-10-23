@@ -1,6 +1,6 @@
 # Project Agent Presentation Lab
 
-Portable React presentation components for agent chat responses. This is a presentation-only extraction: no model/provider integrations, runtime, credentials, private prompts, or customer data. All content in `demo/` and `public/demo/` is synthetic.
+Portable React presentation components plus a neutral source snapshot of a full Project Agent integration. This branch adds the host UI, API routes, agent runtime, and focused tests; see [the source map](PROJECT_AGENT_SOURCE_MAP.md). Host authentication, database, storage, Dify, and sandbox services remain integration boundaries. No credentials or customer data belong in this repository. All content in `demo/` and `public/demo/` is synthetic.
 
 ## Integration
 

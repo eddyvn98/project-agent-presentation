@@ -1,0 +1,1 @@
+export const PROJECT_AGENT_DIFY_CALL_TIMEOUT_MS = 10 * 60 * 1_000;
