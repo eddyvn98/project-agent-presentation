@@ -30,7 +30,7 @@ test("image enlargement, actual zoom and keyboard dismissal", async ({ page }) =
 test("eight-state explorer navigation and legible zoom", async ({ page }) => {
   await page.getByRole("combobox").selectOption("7");
   await expect(page.getByRole("heading", { name: "Position 8" })).toBeVisible();
-  await expect(page.getByRole("slider")).toHaveAttribute("aria-valuetext", "State 8");
+  await expect(page.getByRole("slider", { name: "Choose a step" })).toHaveAttribute("aria-valuetext", "State 8");
   await expect(page.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Enlarge Position 8 scene" }).click();
   const scene = page.getByRole("dialog").locator('svg[role="img"]');
@@ -40,7 +40,7 @@ test("eight-state explorer navigation and legible zoom", async ({ page }) => {
   const text = scene.locator("text");
   expect(await text.evaluate((element) => parseFloat(getComputedStyle(element).fontSize) * element.getBoundingClientRect().width / (element as SVGGraphicsElement).getBBox().width)).toBeGreaterThanOrEqual(30);
   await page.keyboard.press("Escape");
-  await page.getByRole("slider").focus();
+  await page.getByRole("slider", { name: "Choose a step" }).focus();
   await page.keyboard.press("Home");
   await expect(page.getByRole("heading", { name: "Position 1" })).toBeVisible();
 });
