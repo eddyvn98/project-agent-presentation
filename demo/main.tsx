@@ -8,8 +8,11 @@ const chartFixture = {
   type: "chart", kind: "bar", title: "Synthetic chart", caption: "Illustrative values only.",
   categories: ["A", "B"], series: [{ name: "Example", values: [2, 4] }],
 };
-const showChart = new URLSearchParams(window.location.search).has("chart");
-const answer = showChart ? enhancedMarkdown + "\n\n## Optional chart\n\n" +
+const search = new URLSearchParams(window.location.search);
+const showChart = search.has("chart");
+const plain = search.has("plain");
+const answer = plain ? "A short synthetic answer with no formulas, diagrams or charts." :
+  showChart ? enhancedMarkdown + "\n\n## Optional chart\n\n" +
   "```agent-ui\n" + JSON.stringify(chartFixture) + "\n```\n" : enhancedMarkdown;
 
 createRoot(document.getElementById("root")!).render(<main>
