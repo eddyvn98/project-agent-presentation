@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ProjectAgentAnswer } from "../src/components/ProjectAgentAnswer";
 import { ProjectAgentFigure, safePresentationUrl } from "../src/components/ProjectAgentFigure";
@@ -14,9 +14,9 @@ import { explorer } from "../demo/content";
 const chart = (values: unknown[]) => JSON.stringify({ type: "chart", categories: ["A", "B"], series: [{ name: "Synthetic", values }] });
 
 describe("safe and complete Markdown", () => {
-  it("renders inline/display math with accessible MathML, leaving code literal", () => {
+  it("renders inline/display math with accessible MathML, leaving code literal", async () => {
     const { container } = render(<ProjectAgentAnswer markdown={'Inline $x^2$.\n\n$$\na^2+b^2=c^2\n$$\n\n`$x$`'} />);
-    expect(container.querySelectorAll(".katex").length).toBe(2);
+    await waitFor(() => expect(container.querySelectorAll(".katex").length).toBe(2));
     expect(container.querySelectorAll("math").length).toBe(2);
     expect(container.querySelector(".katex-display")).not.toBeNull();
     expect(container.querySelector("code")?.textContent).toBe("$x$");
