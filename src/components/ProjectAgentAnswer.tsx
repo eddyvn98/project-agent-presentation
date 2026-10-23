@@ -80,7 +80,10 @@ export function ProjectAgentAnswer({
     </nav>}
     <div className={presenting && canPresent ? "agent-slide" : undefined}>
       {hasMath
-        ? <Suspense fallback={<ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={components}>{visible}</ReactMarkdown>}>
+        ? <Suspense fallback={<div aria-busy="true" inert className="pointer-events-none">
+            <ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={components}>{visible}</ReactMarkdown>
+            <p role="status" className="not-prose mt-2 text-xs text-slate-500">Finishing math layout…</p>
+          </div>}>
             <MathMarkdown markdown={visible} components={components} />
           </Suspense>
         : <ReactMarkdown skipHtml remarkPlugins={[remarkGfm]} components={components}>{visible}</ReactMarkdown>}

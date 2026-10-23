@@ -1,7 +1,12 @@
 import { test, expect } from "@playwright/test";
 
-test("opt-in slide mode has navigable headings and restores full answer", async ({ page }) => {
+test.beforeEach(async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Readable mathematics" })).toBeVisible();
+  await expect(page.getByText("Finishing math layout…")).toHaveCount(0);
+});
+
+test("opt-in slide mode has navigable headings and restores full answer", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Interactive model" })).toBeVisible();
   await page.getByRole("button", { name: "Present as slides" }).click();
   await expect(page.getByRole("button", { name: "Next slide" })).toBeVisible();
@@ -12,7 +17,6 @@ test("opt-in slide mode has navigable headings and restores full answer", async 
 });
 
 test("bounded interactive calculator works on responsive viewport", async ({ page }) => {
-  await page.goto("/");
   const slider = page.getByRole("slider", { name: "Starting amount" });
   await expect(slider).toHaveValue("1000");
   await slider.focus();
@@ -24,7 +28,6 @@ test("bounded interactive calculator works on responsive viewport", async ({ pag
 });
 
 test("learning check offers accessible feedback", async ({ page }) => {
-  await page.goto("/");
   await expect(page.getByText("What is 2 + 2?")).toBeVisible();
   await page.getByRole("button", { name: "2. 4" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Correct" })).toBeVisible();
@@ -41,6 +44,7 @@ test("chart renderer is loaded only when the answer contains a valid chart", asy
 
   await page.goto("/?chart=1");
   await expect(page.getByRole("img", { name: "Synthetic chart" })).toBeVisible();
+  await expect(page.getByText("Finishing math layout…")).toHaveCount(0);
   expect(chartRequests.length).toBeGreaterThan(0);
   await page.getByRole("button", { name: "Table", exact: true }).click();
   await expect(page.getByRole("table")).toBeVisible();
