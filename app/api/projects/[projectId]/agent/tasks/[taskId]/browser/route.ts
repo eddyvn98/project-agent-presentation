@@ -59,7 +59,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   setBrowserWatch(params.taskId, body.watch);
   if (body.watch) {
     // No browser launch: capture only the session which the agent has already created.
-    const existing = activeBrowserSession(checked.task!.conversationId ?? checked.task!.id);
+    const existing = activeBrowserSession(checked.task!.id);
     if (existing) await captureBrowserWatch(params.taskId, existing.page, "watch started");
   }
   return NextResponse.json({ preview: browserWatchStatus(params.taskId) }, { headers: HEADERS });
