@@ -23,7 +23,7 @@ import { initialWorkspacePrompt, runDirectWorkspace } from "./workspace-direct";
 import { newDirectState } from "./workspace-direct-apply";
 import { engineRefusal } from "./engines";
 import { delegateToSubAgent } from "./sub-agent";
-import { StallGuard, wrapUpQuery } from "./stall-guard"; import { ActionReplayGuard, mayHaveExternalEffects } from "./action-replay-guard"; import { checkHtmlPage, newOutputFiles, storeWorkbookValues } from "./outputs";
+import { hasVerifiedMilestone } from "./progress-evidence"; import { StallGuard, wrapUpQuery } from "./stall-guard"; import { ActionReplayGuard, mayHaveExternalEffects } from "./action-replay-guard"; import { checkHtmlPage, newOutputFiles, storeWorkbookValues } from "./outputs";
 import { isLargePdfOutput, storeLargePdfOutput } from "./large-output";
 import { render } from "./render-action";
 import { execInSandbox, resolveWorkspacePath, workspaceDir } from "./sandbox";
@@ -158,7 +158,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 	const replay = new ActionReplayGuard();
 	const turnContext = new RuntimeTurnContext(input.userPrompt ?? input.query);
 	let wrapReason: string | null = null, wrapLeft = 1;
-	for (let step = 1; step <= maxSteps; step += 1) {
+	for (let step = 1; step <= Math.min(MAX_STEPS + 30, maxSteps + (input.depth ? 0 : guard.additionalSteps(step))); step += 1) {
 		if (input.signal?.aborted) throw new Error("Task stopped"); const handback = await resumedBrowserContext(input, browserRevision, step); browserRevision = handback.revision; if (handback.preface) query = handback.preface + query;
 		if (Date.now() - started > DEADLINE_MS) throw new Error("The agent ran out of time before finishing");
 		const stall = guard.check({ step, elapsedMs: Date.now() - started, waitedMs: (input.budget?.waited?.seconds ?? 0) * 1000, tokens: freshTokens, resentTokens: totalPromptTokens });
@@ -271,7 +271,10 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 			const effectful = mayHaveExternalEffects(action), blocked = replay.before(action.action, replayKey, effectful);
 			if (blocked) { input.onStep?.({ tool: "loop_blocked", detail: blocked });
 				results.push(blocked + " Change approach or return a partial final answer.");
-				guard.noteAction(replayKey, true); break; }
+				guard.noteAction(replayKey, true);
+				if (replay.noteBlocked(replayKey) >= 2) { wrapReason = blocked; query = wrapUpQuery(blocked); }
+				break; }
+			replay.markAttempt(replayKey, effectful);
 			metrics.actions.set(action.action, (metrics.actions.get(action.action) ?? 0) + 1);
 			const actionStarted = Date.now();
 			const raw = await withPolicy(input, action, () => runAction(input, action, step, imageCalls, input.budget ?? (input.budget = { delegates: 0 }))) as Awaited<ReturnType<typeof runAction>>;
@@ -280,8 +283,9 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 			turnContext.record(action, outcome);
 			replay.record(action.action, replayKey, outcome.text, effectful);
 			metrics.actionMs += Date.now() - actionStarted;
-			if (action.action !== "wait" && action.action !== "plan") guard.noteAction(spanKey(action.action, JSON.stringify({ ...action, note: undefined })), Boolean(outcome.failed));
-			else guard.noteAction(`${action.action}:${step}`, Boolean(outcome.failed));
+			if (action.action !== "wait" && action.action !== "plan") guard.noteAction(replayKey, Boolean(outcome.failed), outcome.text);
+			else guard.noteAction(`${action.action}:${step}`, Boolean(outcome.failed), outcome.text);
+			if (hasVerifiedMilestone(action, outcome)) guard.noteMilestone(step, replayKey);
 			input.trace!.push({ agent: input.depth ? "sub" : "lead", kind: "action", name: action.action, ms: Date.now() - actionStarted, ok: !outcome.failed, step, key: spanKey(action.action, JSON.stringify(action)) });
 			if (outcome.failed) { metrics.failed += 1; input.onStep?.({ tool: "tool_failed", detail: `${action.action}: ${outcome.text.replace(/\s+/g, " ").slice(0, 150)}` }); }
 			if (outcome.sources?.length) recordSources(input.sources!, outcome.sources);
