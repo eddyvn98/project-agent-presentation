@@ -4,7 +4,6 @@ import { migrateLegacyTaskQueue } from "@/lib/project-agent/durable-queue-migrat
 import { migrateLegacyScheduleFiles } from "@/lib/project-agent/scheduled-migration";
 import { dispatchDueSchedules } from "@/lib/project-agent/scheduled-worker";
 import { migrateProactiveInsightHistory } from "@/lib/project-agent/proactive-migration";
-import { tickHarnessLab } from "@/lib/project-agent/harness-lab/evaluate";
 import { discoverProactiveOpportunities } from "@/lib/project-agent/proactive-store";
 import { tickDurableTasks } from "@/lib/project-agent/task-runner";
 import { tickWorkflowRuns } from "@/lib/project-agent/workflow-runner";
@@ -31,8 +30,7 @@ export async function POST(req: NextRequest) {
     const queue = await tickDurableTasks();
     const workflows = await tickWorkflowRuns();
     const proactive = await discoverProactiveOpportunities().catch(() => null);
-    const harness = await tickHarnessLab(1).catch(() => null);
     return NextResponse.json({ dispatched: result.filter(r => r.status === "dispatched").length,
-      attempted: result.length, queue, workflows, proactive, harness, ...(migration ? { migration } : {}), ...(queueMigration ? { queueMigration } : {}), ...(signalMigration ? { signalMigration } : {}) });
+      attempted: result.length, queue, workflows, proactive, ...(migration ? { migration } : {}), ...(queueMigration ? { queueMigration } : {}), ...(signalMigration ? { signalMigration } : {}) });
   } catch { return NextResponse.json({ error: "Scheduler unavailable" }, { status: 503 }); }
 }

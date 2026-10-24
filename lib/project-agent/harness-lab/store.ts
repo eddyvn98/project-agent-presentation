@@ -79,6 +79,12 @@ export async function queueHarnessEvaluation(owner: string, id: string) {
   return visible(res);
 }
 export async function claimHarnessEvaluation() {
+  // Fail closed after two interrupted evaluations instead of leaving permanent evaluating rows.
+  await (await coll()).updateMany({ status: "evaluating", attempts: { $gte: 2 },
+    leaseUntil: { $lt: now() } }, { $set: {
+      status: "rejected", failure: "Repeated evaluator worker timeout; review before trying again",
+      updatedAt: now(),
+    }, $unset: { leaseToken: "", leaseUntil: "" } });
   const token = randomUUID(), until = new Date(Date.now() + 12 * 60_000).toISOString();
   const row = await (await coll()).findOneAndUpdate({
     $or: [{ status: "queued" },
@@ -105,8 +111,9 @@ export async function changeHarnessRollout(owner: string, id: string,
   if (!variant) throw new Error("Harness not found");
   if (action === "rollback") {
     if (!["canary","active"].includes(variant.status)) throw new Error("Only deployed harnesses can roll back");
-    await collection.updateOne({ _id: id, ownerEmail: email, status: variant.status },
+    const changed = await collection.updateOne({ _id: id, ownerEmail: email, status: variant.status },
       { $set: { status: "retired" as HarnessStatus, rolloutPercent: 0, updatedAt: now() } });
+    if (!changed.matchedCount) throw new Error("Harness changed concurrently; reload before rollback");
     await releaseHarnessDeployment(email,variant.domain,variant.dimension,id);
     return getHarnessVariant(email, id);
   }

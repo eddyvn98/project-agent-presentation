@@ -20,7 +20,7 @@ This is a **TypeScript adaptation of concepts**, not a copy of the Google Resear
 3. Set `PROJECT_AGENT_HARNESS_LIVE=1` **only after offline security review** to enable owner-controlled 20% canary and promotion. Without it, the Lab can create drafts and record comparison evidence but no user-facing optimization is injected.
 4. Optional `PROJECT_AGENT_HARNESS_IMPROVER_MODEL` and `PROJECT_AGENT_HARNESS_EVAL_MODEL` choose model-step selectors; otherwise use configured default Dify model.
 5. Optional `PROJECT_AGENT_HARNESS_AUTO_PROPOSE=1` enables background draft suggestions for costly/wasteful task metadata; **off by default**. Drafts require explicit evaluation and deployment; no infinite self-optimizing loops.
-6. Existing scheduler daemon must call `POST /api/internal/project-agent/schedule-tick` using `PROJECT_AGENT_SCHEDULER_SECRET`. The tick evaluates **at most one candidate** and can entail 6–10 charged model calls; scheduler HTTP timeout should exceed probe duration.
+6. Keep the user-task scheduler independent. Run `node scripts/project-agent-harness-worker.mjs` in a separate restartable process, using `PROJECT_AGENT_SCHEDULER_URL` and `PROJECT_AGENT_SCHEDULER_SECRET`. This worker calls `POST /api/internal/project-agent/harness-tick` (same Bearer security) every five minutes by default. `PROJECT_AGENT_HARNESS_TICK_MS` controls the cadence. Each evaluation can use 6–10 charged model calls; user-task scheduling must not wait for this job.
 
 ## Durable collections
 
@@ -32,7 +32,7 @@ This is a **TypeScript adaptation of concepts**, not a copy of the Google Resear
 
 1. Verify host TypeScript build, imports, Next.js API compilation and component rendering. No CI/build/tests were run by this author.
 2. On two separate accounts, create equal domain/title variants; make sure access, evaluation and promotion cannot cross owners.
-3. Call two concurrent evaluate requests; Mongo must claim one evaluation per revision. Kill worker after claim; confirm lease expiry behavior, no unauthorized deployment.
+3. Call two concurrent evaluate requests; Mongo must claim one evaluation per revision. Kill worker after claim; confirm 12-minute lease expiry and rejection after two interrupted attempts. Verify user schedule ticks remain responsive during long Harness Lab probes.
 4. Send a draft containing attempts to bypass permission/Vault or embed URLs/commands. It must be rejected; approved bounded guidance must remain subordinate to deterministic runtime policies.
 5. Compare synthetic baseline/candidate on a fixed Dify selector. Verify case-level pass/fail and token evidence, meaningful non-regression gates and no real tool execution. Test LLM JSON output failures/timeouts.
 6. Verify active canary and control sampling remain stable for a task ID and that only new tasks are affected after rollback. Check no more than one deployment slot per owner/domain/dimension.
