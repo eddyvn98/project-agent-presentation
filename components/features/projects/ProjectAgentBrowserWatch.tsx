@@ -76,11 +76,16 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setLoading(false); }
   };
-  const command = async (action: Record<string, unknown>) => {
+  const command = async (action: Record<string, unknown>): Promise<void> => {
     setLoading(true); setError("");
     try {
       const response = await fetch(base + "/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(action) });
-      const result = await response.json() as { error?: string };
+      const result = await response.json() as { error?: string; approvalTicket?: string };
+      if (!response.ok && result.approvalTicket && action.op === "click" && !action.approvalTicket) {
+        if (window.confirm("This control may send, publish, delete, buy or change account data. Confirm this ONE click?"))
+          await command({ ...action, approvalTicket: result.approvalTicket });
+        return;
+      }
       if (!response.ok) throw new Error(result.error ?? "Browser action unavailable");
       if (action.op === "type") setEntry("");
       await refresh();
@@ -108,7 +113,7 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     if (!control.paused || (shown && shown.sequence !== preview?.sequence)) { setExpanded(true); return; }
     const rect = event.currentTarget.getBoundingClientRect();
     setSelected(null);
-    void command({ op: "click", x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height });
+    void command({ op: "click", frame: preview?.sequence, x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height });
   };
   const history = preview?.history ?? [];
   const shown = history.find((step) => step.sequence === selected) ?? history.at(-1);
