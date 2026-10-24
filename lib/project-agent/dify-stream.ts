@@ -3,6 +3,11 @@ import { extractDifyInlineFiles, type DifyAgentToolThought, type DifyInlineFile 
 import { extractOfficeToolLinks } from "./office-tools";
 import type { ProjectAgentTaskSource } from "./types";
 
+const MAX_STREAM_BYTES = 64 * 1024 * 1024;
+const MAX_EVENT_CHARS = 32 * 1024 * 1024;
+const MAX_ANSWER_CHARS = 8 * 1024 * 1024;
+const MAX_THOUGHTS = 200;
+
 export interface DifyAgentMessage {
 	answer: string;
 	conversationId?: string;
@@ -27,7 +32,7 @@ function getEventPayload(block: string): Record<string, unknown> | null {
 		const parsed: unknown = JSON.parse(data);
 		return parsed && typeof parsed === "object" ? parsed as Record<string, unknown> : null;
 	} catch {
-		return null;
+		throw new Error("Dify returned an invalid stream event");
 	}
 }
 
@@ -55,6 +60,7 @@ export async function readDifyAgentMessage(response: Response, onPartial?: DifyP
 	const reader = response.body.getReader();
 	const decoder = new TextDecoder();
 	let buffer = "";
+	let streamBytes = 0;
 	let answer = "";
 	let failure = "";
 	let conversationId: string | undefined;
@@ -69,8 +75,8 @@ export async function readDifyAgentMessage(response: Response, onPartial?: DifyP
 			failure = typeof payload.message === "string" ? payload.message : "Dify Project Agent failed";
 			return;
 		}
-		if (payload.event === "agent_message" && typeof payload.answer === "string") { answer += payload.answer; onPartial?.(answer); }
-		if (payload.event === "message" && typeof payload.answer === "string") { answer = payload.answer; onPartial?.(answer); }
+		if (payload.event === "agent_message" && typeof payload.answer === "string") { answer += payload.answer; if (answer.length > MAX_ANSWER_CHARS) throw new Error("Dify answer exceeded the size limit"); onPartial?.(answer); }
+		if (payload.event === "message" && typeof payload.answer === "string") { answer = payload.answer; if (answer.length > MAX_ANSWER_CHARS) throw new Error("Dify answer exceeded the size limit"); onPartial?.(answer); }
 		if (payload.event === "message_end") {
 			const usage = (payload.metadata as { usage?: { prompt_tokens?: unknown } } | undefined)?.usage;
 			if (typeof usage?.prompt_tokens === "number" && usage.prompt_tokens > 0) promptTokens = usage.prompt_tokens;
@@ -78,6 +84,7 @@ export async function readDifyAgentMessage(response: Response, onPartial?: DifyP
 		if (payload.event === "agent_thought") {
 			const fresh = payload as DifyAgentToolThought;
 			const key = typeof fresh.id === "string" && fresh.id ? fresh.id : `${fresh.position ?? ""}:${fresh.tool ?? ""}`;
+			if (!toolThoughts.has(key) && toolThoughts.size >= MAX_THOUGHTS) throw new Error("Dify tool activity exceeded the safety limit");
 			// Dify may stream tool_input and observation in separate events. Retain both for Office file extraction.
 			const thought = { ...toolThoughts.get(key), ...fresh };
 			toolThoughts.set(key, thought);
@@ -97,19 +104,25 @@ export async function readDifyAgentMessage(response: Response, onPartial?: DifyP
 		if (typeof payload.conversation_id === "string" && payload.conversation_id) conversationId = payload.conversation_id;
 	};
 
-	while (true) {
-		const { value, done } = await reader.read();
-		buffer += decoder.decode(value, { stream: !done });
-		let boundary = buffer.search(/\r?\n\r?\n/);
-		while (boundary >= 0) {
-			const separator = buffer.slice(boundary).match(/^\r?\n\r?\n/)?.[0] ?? "\n\n";
-			consume(buffer.slice(0, boundary));
-			buffer = buffer.slice(boundary + separator.length);
-			boundary = buffer.search(/\r?\n\r?\n/);
+	try {
+		while (true) {
+			const { value, done } = await reader.read();
+			streamBytes += value?.byteLength ?? 0;
+			if (streamBytes > MAX_STREAM_BYTES) throw new Error("Dify stream exceeded the byte limit");
+			buffer += decoder.decode(value, { stream: !done });
+			let boundary = buffer.search(/\r?\n\r?\n/);
+			while (boundary >= 0) {
+				const separator = buffer.slice(boundary).match(/^\r?\n\r?\n/)?.[0] ?? "\n\n";
+				consume(buffer.slice(0, boundary));
+				buffer = buffer.slice(boundary + separator.length);
+				boundary = buffer.search(/\r?\n\r?\n/);
+			}
+			if (buffer.length > MAX_EVENT_CHARS) throw new Error("Dify SSE event exceeded the size limit");
+			if (done) break;
 		}
-		if (done) break;
-	}
-	if (buffer.trim()) consume(buffer);
+		if (buffer.trim()) consume(buffer);
+	} catch (cause) { await reader.cancel().catch(() => {}); throw cause; }
+	finally { reader.releaseLock(); }
 	if (failure) throw new Error(failure.slice(0, 400));
 	const thoughts = [...toolThoughts.values()];
 	const inlineFiles = extractDifyInlineFiles(thoughts);
