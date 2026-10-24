@@ -33,6 +33,7 @@ export interface BrowserSession {
 	authHost?: string;
 	authMode?: "read" | "interact";
 	authVersion?: string;
+  lastAuthSavedAt?: number;
 	context: BrowserContext;
 	page: Page;
 	lastSnapshot: string;

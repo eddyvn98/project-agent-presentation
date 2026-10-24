@@ -34,6 +34,7 @@ export function getEndpoint(): string {
 import { extractAgentSideEffects, hideAgentTags, describeTaskWork, loadRunbookPrompt, removeAgentWebSources, saveAgentWebSources, saveRunbookNotes, saveTaskWorkLog, type AgentWebSource } from "./agent-sources";
 import { PROJECT_AGENT_BOOT_ID } from "./boot";
 import { loadProjectSkillSet, stripProjectSkillReadRequests } from "./project-skills";
+import { personalMemoryPrompt } from "./personal-agent-memory";
 import { buildReferenceReview } from "./reference-review";
 import { isRuntimeEnabled, runRuntimeAgent } from "./runtime/run-agent";
 import { redactSecrets } from "./runtime/policy";
@@ -54,7 +55,6 @@ export function isProjectAgentDifyConfigured(): boolean {
 	return Boolean(process.env.PROJECT_AGENT_DIFY_API_URL?.trim() && process.env.PROJECT_AGENT_DIFY_API_KEY?.trim());
 }
 const isBrokenConversationError = (cause: unknown) => /maximum output retries|conversation.*(not exist|invalid)/i.test(cause instanceof Error ? cause.message : String(cause));
-
 export async function runProjectAgentTask(taskId: string, signal?: AbortSignal): Promise<ProjectAgentTask> {
 	const task = await readProjectAgentTask(taskId);
 	if (!task) throw new Error(`Project Agent task not found: ${taskId}`);
@@ -76,7 +76,6 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		const projectAccess = await projectCap.getProjectAccess(task.projectId, task.ownerEmail);
 		if (!projectAccess) throw new Error("Project access was removed before the task could run");
 		const projectOwnerEmail = projectAccess.ownerEmail;
-
 		await updateProjectAgentTask(task.id, { status: "running", bootId: PROJECT_AGENT_BOOT_ID, startedAt: new Date().toISOString(), logLine: "app_stage :: loading_context" });
 		const [knowledge, projectChats, projectAgentHistory, personalChats] = await Promise.all([
 			getProjectAgentKnowledgeText(task.projectId, projectOwnerEmail, task.prompt, runtime),
@@ -110,6 +109,8 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		};
 		const classicTurn = (request: DifyCalculatorCall) => callDifyWithCalculator({ ...request, originalRequest: task.userPrompt ?? task.prompt, calculatorEnabled: !projectAccess.project.disabledToolGroups?.includes("code"), onBridgeEvent: (tool, detail) => updateProjectAgentTask(task.id, { logLine: `using tool ${tool} :: ${detail.replace(/\s+/g, " ").slice(0, 200)}` }) });
 		const skillSet = await loadProjectSkillSet(projectAccess.project.skillIds, projectAccess.ownerEmail);
+    const personalMemory = await personalMemoryPrompt(task.ownerEmail);
+    if (personalMemory) skillSet.context += "\n\n" + personalMemory;
 		let savedSources: AgentWebSource[] = [];
 		const firstCall = {
 			endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] },

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from "react";
-import { ArrowUp, CalendarClock, Check, Globe, Loader2, Mic, Paperclip, Plus, X } from "lucide-react";
+import { ArrowUp, CalendarClock, ShieldCheck, Check, Globe, Loader2, Mic, Paperclip, Plus, X } from "lucide-react";
 import { useAgentComposerStore } from "@/stores/useAgentComposerStore";
 import { useDictation } from "./useDictation";
 import { ProjectAgentModelPicker } from "./ProjectAgentModelPicker";
@@ -110,6 +110,7 @@ export function ProjectAgentComposer({ value, onChange, onSubmit, onAttach, onFi
 				}} className="absolute bottom-full left-0 z-30 mb-2 w-72 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
 					<button type="button" role="menuitem" onClick={() => { setMenu(null); onAttach(); menuButtonRef.current?.focus(); }} className={menuItem}><Paperclip className="h-4 w-4 text-slate-500" /><span>{attachLabel}</span><span className="ml-auto text-xs text-slate-400">Photos, screenshots, documents</span></button>
 					<button type="button" role="menuitem" onClick={() => { window.location.href = "/account/scheduled-tasks"; }} className={menuItem}><CalendarClock className="h-4 w-4 text-orange-500" /><span>Scheduled tasks</span></button>
+          <button type="button" role="menuitem" onClick={() => { window.location.href = "/account/agent-control"; }} className={menuItem}><ShieldCheck className="h-4 w-4 text-slate-500" /><span>Agent Control Center</span></button>
           <button type="button" role="menuitemcheckbox" aria-checked={webSearch} onClick={() => { setWebSearch(!webSearch); setMenu(null); menuButtonRef.current?.focus(); }} className={menuItem}><Globe className="h-4 w-4 text-sky-500" /><span>Web search</span><span className="ml-auto text-xs text-slate-400">Find current info</span>{webSearch ? <Check className="h-4 w-4" /> : null}</button>
 				</div> : null}
 			</div>

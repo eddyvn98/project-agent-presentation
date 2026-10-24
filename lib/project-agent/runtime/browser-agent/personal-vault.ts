@@ -85,6 +85,21 @@ async function getUserKey(owner: string, create: boolean): Promise<Buffer | null
     throw cause;
   }
 }
+async function withSiteLock<T>(owner: string, host: string, fn: () => Promise<T>): Promise<T> {
+  await privateDirectory(rootDir()); await privateDirectory(userPath(owner));
+  const lock = sitePath(owner, host) + ".lock";
+  let acquired = false;
+  for (let i = 0; i < 12; i++) {
+    try { await fs.mkdir(lock, { mode: 0o700 }); acquired = true; break; }
+    catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      await new Promise<void>(done => setTimeout(done, 75));
+    }
+  }
+  if (!acquired) throw new Error("Site grant busy, try again");
+  try { return await fn(); } finally { await fs.rmdir(lock).catch(() => {}); }
+}
+
 function filteredState(host: string, state: SavedBrowserState, relatedHosts: string[] = []): SavedBrowserState {
   const allowed = [host, ...relatedHosts];
   const onHost = (name: string) => {
@@ -111,9 +126,9 @@ export async function savePersonalBrowserGrant(owner: string, url: string,
     expiresAt: new Date(now.getTime() + days * 86_400_000).toISOString() };
   try {
     const payload = Buffer.from(JSON.stringify({ grant, state: filteredState(host, state, approved) } satisfies StoredGrant));
-    await atomicWrite(sitePath(owner, host), {
+    await withSiteLock(owner, host, () => atomicWrite(sitePath(owner, host), {
       host, sealed: seal(payload, secret, "project-agent:site:v1:" + ownerKey(owner) + ":" + host),
-    });
+    }));
     payload.fill(0);
     return grant;
   } finally { secret.fill(0); }
@@ -141,9 +156,9 @@ export async function readPersonalBrowserGrant(owner: string, url: string): Prom
 }
 export async function revokePersonalBrowserGrant(owner: string, url: string): Promise<void> {
   const host = vaultHost(url);
-  await fs.unlink(sitePath(owner, host)).catch((error: NodeJS.ErrnoException) => {
+  await withSiteLock(owner, host, () => fs.unlink(sitePath(owner, host)).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "ENOENT") throw error;
-  });
+  }));
 }
 
 /** Only non-secret metadata is returned. Supports old entries after they are saved once in v2. */
@@ -178,4 +193,29 @@ export async function updatePersonalBrowserGrant(owner: string, url: string,
 export async function revokeAllPersonalBrowserGrants(owner: string): Promise<void> {
   const entries = await listPersonalBrowserGrants(owner);
   for (const grant of entries) await revokePersonalBrowserGrant(owner, "https://" + grant.host);
+}
+
+/** Persist refreshed website tokens without changing an owner's consent or resurrecting a revoked grant. */
+export async function refreshPersonalBrowserState(owner: string, url: string,
+  expectedVersion: string, state: SavedBrowserState): Promise<boolean> {
+  const host = vaultHost(url);
+  return withSiteLock(owner, host, async () => {
+    const previous = await readPersonalBrowserGrant(owner, url);
+    if (!previous || !previous.grant.automation || previous.grant.version !== expectedVersion)
+      return false;
+    const secret = await getUserKey(owner, false);
+    if (!secret) return false;
+    try {
+      const payload = Buffer.from(JSON.stringify({
+        grant: previous.grant,
+        state: filteredState(host, state, previous.grant.relatedHosts ?? []),
+      } satisfies StoredGrant));
+      try {
+        await atomicWrite(sitePath(owner, host), {
+          host, sealed: seal(payload, secret, "project-agent:site:v1:" + ownerKey(owner) + ":" + host),
+        });
+        return true;
+      } finally { payload.fill(0); }
+    } finally { secret.fill(0); }
+  });
 }

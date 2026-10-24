@@ -8,6 +8,7 @@ import { guardedRequest } from "../guarded-fetch";
 import { assertPublicHttpUrl } from "../web-security";
 import { isCaptchaPage, isSensitiveField, resolveSafeRedirect, IRREVERSIBLE_PATTERN } from "./safety";
 import { requireAgentApproval } from "../../agent-approvals";
+import { checkSavedBrowserHealth } from "./browser-session-health";
 import { workspaceDir } from "../sandbox";
 import type { RuntimeInput, RuntimeStep } from "../run-agent";
 import type { BrowserAction } from "./action-parser";
@@ -267,9 +268,10 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			const currentSnapshot = await snapshot(session);
 			return { text: extra ? `${extra}\n\n${currentSnapshot}` : currentSnapshot };
 		});
-		if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op, marker);
-		scheduleIdleClose(session, id);
-		return result;
+		const authIssue = await checkSavedBrowserHealth(session);
+    if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op, marker);
+    scheduleIdleClose(session, id);
+    return authIssue ? { text: authIssue, failed: true } : result;
 	} catch (cause) {
 		if (cause instanceof Error && /timed out after 30 seconds/.test(cause.message)) await session.close();
 		const failureText = cause instanceof Error ? cause.message : "unknown error";

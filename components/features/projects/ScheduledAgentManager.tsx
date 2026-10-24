@@ -25,6 +25,14 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
     setItems(((await response.json()) as { schedules: ScheduledAgentTask[] }).schedules);
   };
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const suggestedPrompt = params.get("prompt");
+    const destination = params.get("projectId");
+    if (suggestedPrompt && suggestedPrompt.length <= 1000) {
+      setPrompt(suggestedPrompt);
+      setTitle(suggestedPrompt.replace(/\s+/g, " ").slice(0, 90));
+    }
+    if (destination && destination.length < 180) setProjectId(destination);
     void load().catch(e => setError(String(e)));
     const refresh = setInterval(() => { if (document.visibilityState === "visible") void load().catch(() => {}); }, 15000);
     void fetch("/api/projects").then(r => r.ok ? r.json() : []).then((data: Project[]) => {
