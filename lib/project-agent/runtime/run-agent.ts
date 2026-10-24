@@ -221,8 +221,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 				metrics.actions.set("delegate", (metrics.actions.get("delegate") ?? 0) + group.length);
 				const started = Date.now();
 				const budget = input.budget ?? (input.budget = { delegates: 0 });
-				const unique = uniqueParallelJobs(group);
-				const outcomes = await Promise.all(unique.map(({ job }) => delegateToSubAgent(runRuntimeAgent, input, job, budget, MAX_DELEGATES, SUB_AGENT_STEPS)));
+				const unique = uniqueParallelJobs(group); const outcomes = await Promise.all(unique.map(({ job }) => delegateToSubAgent(runRuntimeAgent, input, job, budget, MAX_DELEGATES, SUB_AGENT_STEPS)));
 				metrics.actionMs += Date.now() - started;
 				const prepared = await Promise.all(outcomes.map((outcome) => externalizeActionOutput(input, "delegate", outcome)));
 				for (const [offset, outcome] of prepared.entries()) { turnContext.record(unique[offset].job, outcome); results.push(`[${index + unique[offset].index + 1}/${actions.length}] ${outcome.text}`); }
