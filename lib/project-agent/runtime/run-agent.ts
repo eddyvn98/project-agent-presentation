@@ -1,4 +1,4 @@
-import { runCalculationStep } from "./calculate"; import { auditFinalAnswer } from "./final-audit"; import { enforceTaskBudget, estimatedModelCost } from "./usage-pricing";
+import { assertActiveTaskLease } from "../lease-fence"; import { runCalculationStep } from "./calculate"; import { auditFinalAnswer } from "./final-audit"; import { enforceTaskBudget, estimatedModelCost } from "./usage-pricing";
 import { agentScheduleAction } from "../scheduled-agent-tool"; import { agentWorkflowAction } from "../workflow-agent-tool";
 import { contextOutputAction, externalizeActionOutput } from "./context-output-manager"; import { runXerjAction } from "../xerj/runtime-action";
 import { recordContextCheckpoint } from "./context-checkpoint"; import { RuntimeTurnContext } from "./turn-context";
@@ -274,6 +274,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 			replay.markAttempt(replayKey, effectful);
 			metrics.actions.set(action.action, (metrics.actions.get(action.action) ?? 0) + 1);
 			const actionStarted = Date.now();
+			await assertActiveTaskLease();
 			const raw = await withPolicy(input, action, () => runAction(input, action, step, imageCalls, input.budget ?? (input.budget = { delegates: 0 }))) as Awaited<ReturnType<typeof runAction>>;
 			const outcome = action.action === "search_output" || action.action === "read_output" ? raw : await externalizeActionOutput(input, action.action, raw);
 			if (!input.depth && input.taskId) await recordContextCheckpoint(input, { taskId: input.taskId, step, action: action.action, failed: Boolean(outcome.failed), observation: outcome.text }).catch(() => {});
