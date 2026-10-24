@@ -286,7 +286,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 			input.trace!.push({ agent: input.depth ? "sub" : "lead", kind: "action", name: action.action, ms: Date.now() - actionStarted, ok: !outcome.failed, step, key: spanKey(action.action, JSON.stringify(action)) });
 			if (outcome.failed) { metrics.failed += 1; input.onStep?.({ tool: "tool_failed", detail: `${action.action}: ${outcome.text.replace(/\s+/g, " ").slice(0, 150)}` }); }
 			if (outcome.sources?.length) recordSources(input.sources!, outcome.sources);
-			if (action.action === "render" && !outcome.failed) gate.noteRender();
+			if (action.action === "render" && !outcome.failed) gate.noteRender(action.path);
 			else if (action.action === "shell" || action.action === "write_file") gate.noteMutation();
 			results.push(actions.length > 1 ? `[${index + 1}/${actions.length}] ${outcome.text}` : outcome.text);
 			if (outcome.image) images = [outcome.image];
