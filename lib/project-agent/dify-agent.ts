@@ -32,14 +32,11 @@ export function getEndpoint(): string {
 	return url.toString();
 }
 import { extractAgentSideEffects, hideAgentTags, describeTaskWork, loadRunbookPrompt, removeAgentWebSources, saveAgentWebSources, saveRunbookNotes, saveTaskWorkLog, type AgentWebSource } from "./agent-sources";
-import { PROJECT_AGENT_BOOT_ID } from "./boot";
-import { loadProjectSkillSet, stripProjectSkillReadRequests } from "./project-skills";
+import { PROJECT_AGENT_BOOT_ID } from "./boot"; import { loadProjectSkillSet, stripProjectSkillReadRequests } from "./project-skills";
 import { personalMemoryPrompt } from "./personal-agent-memory"; import { personalSkillsPrompt } from "./personal-agent-skills";
-import { buildReferenceReview } from "./reference-review";
-import { isRuntimeEnabled, runRuntimeAgent } from "./runtime/run-agent";
-import { selectHarnessForTask } from "./harness-lab/rollout";
-import { redactSecrets } from "./runtime/policy";
-import { newDirectState } from "./runtime/workspace-direct-apply";
+import { buildReferenceReview } from "./reference-review"; import { isRuntimeEnabled, runRuntimeAgent } from "./runtime/run-agent";
+import { attachHarnessToQuery } from "./harness-lab/attach";
+import { redactSecrets } from "./runtime/policy"; import { newDirectState } from "./runtime/workspace-direct-apply";
 import { cancelTaskWorkspaceTurns } from "./runtime/workspace-direct";
 import { workspaceSaveReporter } from "./runtime/workspace-task-progress";
 import { describeWorkspace } from "./runtime/prepare";
@@ -139,13 +136,8 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory.slice(0, 3_000), personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true, hindsightMemory, xerjContext)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
 			void updateProjectAgentTask(task.id, { logLine: `context :: query_chars=${firstCall.query.length} knowledge=${knowledge.length} project_chats=${projectChats.length} default_memory=${personalChats.length} agent_history=${projectAgentHistory.length} readback=${inputReadback.length} skills=${skillSet.context.length} runbook=${String(runbookText ?? "").length}` }).catch(() => {});
 		}
-    // Optional per-account canary: approach hints only; never changes tools or policy.
-    const choice = await selectHarnessForTask(task).catch(() => null);
-    if (choice) {
-      if (choice.addendum) firstCall.query += choice.addendum;
-      await updateProjectAgentTask(task.id, { logLine:
-        `harness_variant :: ${choice.variantId} ${choice.group}` }).catch(() => {});
-    }
+    firstCall.query = await attachHarnessToQuery(task, firstCall.query,
+      line => updateProjectAgentTask(task.id, { logLine: line }));
 		await updateProjectAgentTask(task.id, { logLine: "app_stage :: processing_request" });
 		let message = await (runtime ? runtimeTurn(firstCall.query) : classicTurn({ ...firstCall, conversationId })).catch(async (cause) => {
 			// A Dify conversation left in a broken state (e.g. after an aborted tool round) fails every later turn;

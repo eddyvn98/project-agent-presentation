@@ -7,6 +7,7 @@ const routes = [
   "/account/agent-workflows",
   "/account/agent-observability",
   "/account/agent-skills",
+  "/account/agent-harness",
   "/account/scheduled-tasks",
   "/account/browser-sessions",
 ];
