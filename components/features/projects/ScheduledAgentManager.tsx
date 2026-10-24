@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { ScheduledAgentTask, ScheduleSpec } from "@/lib/project-agent/scheduled-types";
+import { localScheduleInstant, formatLocalScheduleInstant } from "@/lib/project-agent/scheduled-time";
 type Project = { id: string; name: string };
 export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?: string }) {
   const [items, setItems] = useState<ScheduledAgentTask[]>([]);
@@ -45,8 +46,11 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
   }
   function submit() {
     if (!projectId || !title.trim() || !prompt.trim()) return;
+    let onceAt: string | undefined;
+    try { if (kind === "once") onceAt = localScheduleInstant(runAt, timezone); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Invalid scheduled time"); return; }
     const spec: ScheduleSpec = kind === "interval" ? { kind, timezone, everyMinutes } : kind === "once"
-      ? { kind, timezone, runAt: new Date(runAt).toISOString() }
+      ? { kind, timezone, runAt: onceAt }
       : { kind, timezone, localTime, ...(kind === "weekly" ? { weekdays } : {}) };
     void send(editing ? "PATCH" : "POST", editing ? { id: editing, action: "edit", projectId, title, prompt, spec } : { projectId, title, prompt, spec });
   }
@@ -85,13 +89,13 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
         <p className="whitespace-pre-wrap text-sm">{item.prompt}</p>
         <p className="text-xs text-slate-500">{item.spec.kind} · {item.spec.timezone} · Next: {item.nextRunAt ? new Date(item.nextRunAt).toLocaleString() : "none"}</p>
         <div className="flex flex-wrap gap-2 text-xs">
-          <button disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: item.status === "pending" ? "approve" : item.status === "active" ? "pause" : "resume" })}>{item.status === "pending" ? "Review" : item.status === "active" ? "Pause" : "Resume"}</button>
+          <button disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: item.status === "pending" ? "approve" : item.status === "active" ? "pause" : "resume" })}>{item.status === "pending" ? "Approve" : item.status === "active" ? "Pause" : "Resume"}</button>
           {item.status === "pending" && <span className="text-xs text-amber-600">Agent suggestion — requires your approval.</span>}
           <button disabled={busy} className="rounded border px-2 py-1" onClick={() => {
             setEditing(item.id); setTitle(item.title); setPrompt(item.prompt); setProjectId(item.projectId);
             setKind(item.spec.kind); setTimezone(item.spec.timezone);
             setLocalTime(item.spec.localTime ?? "08:00"); setEveryMinutes(item.spec.everyMinutes ?? 60); setWeekdays(item.spec.weekdays ?? [1,2,3,4,5]);
-            setRunAt(item.spec.runAt ? item.spec.runAt.slice(0,16) : "");
+            setRunAt(item.spec.runAt ? formatLocalScheduleInstant(item.spec.runAt, item.spec.timezone) : "");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}>Edit</button>
           <button disabled={busy || item.status !== "active"} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: "run" })}>Run now</button>

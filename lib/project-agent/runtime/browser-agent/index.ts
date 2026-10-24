@@ -99,7 +99,7 @@ async function saveDownload(input: RuntimeInput, action: BrowserAction, session:
 	}
 	const line = snapshotRefLine(session.lastSnapshot, action.ref!);
 	if (!line) throw new Error("That ref is not in the latest browser snapshot. Take a snapshot and use a current ref.");
-	if (requiresUserConfirmation(line, input.userPrompt ?? "", new URL(session.page.url()).hostname)) throw new Error("This action needs the user's confirmation. Ask before proceeding.");
+	if (requiresUserConfirmation(line, input.scheduledRun ? "" : input.userPrompt ?? "", new URL(session.page.url()).hostname)) throw new Error("This action needs the user's confirmation. Ask before proceeding.");
 	let download: import("playwright-core").Download | undefined;
 	const wait = session.page.waitForEvent("download", { timeout: 30_000 }).then((value) => { download = value; });
 	await locatorForRef(session, action.ref!).click();

@@ -84,3 +84,19 @@ export function nextScheduledRun(spec: ScheduleSpec, after = Date.now()): string
   }
   throw new Error("Could not resolve the next scheduled local time");
 }
+
+/** Convert a wall-clock form value in a chosen IANA timezone to an exact UTC instant. */
+export function localScheduleInstant(local: string, timezone: string): string {
+  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(local)) throw new Error("Choose a valid date and time");
+  const [date, clock] = local.split("T");
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = clock.split(":").map(Number);
+  const found = candidates({ year, month, day, hour, minute }, formatter(timezone));
+  if (!found.length) throw new Error("That local time does not exist in the selected timezone");
+  return new Date(found[0]).toISOString();
+}
+export function formatLocalScheduleInstant(utc: string, timezone: string): string {
+  const p = parts(Date.parse(utc), formatter(timezone));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour)}:${pad(p.minute)}`;
+}

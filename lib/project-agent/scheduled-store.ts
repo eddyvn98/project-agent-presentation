@@ -172,7 +172,7 @@ export async function claimScheduleRun(owner: string, id: string, manual = false
   });
 }
 export async function markScheduleRun(owner: string, id: string, occurrence: string,
-  fields: Pick<ScheduleRun, "status"> & Partial<Pick<ScheduleRun, "taskId" | "error" | "completedAt">>) {
+  fields: Pick<ScheduleRun, "status"> & Partial<Pick<ScheduleRun, "taskId" | "error" | "completedAt" | "resultDigest" | "changed" | "summary">>) {
   return locked(owner, id, async () => {
     const item = await getSchedule(owner, id);
     const run = item?.runs.find(value => value.occurrence === occurrence);
