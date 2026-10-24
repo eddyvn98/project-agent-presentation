@@ -1,30 +1,34 @@
-# Scheduled Agent Tasks — account-wide scheduler
+# Scheduled Agent Tasks — implementation and operations
 
-Branch: gpt/full-project-agent. Code delivered without CI, typecheck, browser QA or production deployment (per user request).
+Branch: `gpt/full-project-agent`.
 
-## User interface
-- /account/scheduled-tasks: Create (once/daily/weekly), edit, pause/resume, run immediately, delete, and view the last 20 run receipts.
-- The Project Agent composer plus-menu links to this page.
-- Schedules belong to the authenticated **user**, not the Project; projectId selects only where results are filed. Ownership is validated when created and again on dispatch.
-- User scheduling through chat is supported by app-hosted runtime action: \`{"action":"schedule","op":"create","title":"...","prompt":"...","kind":"daily","localTime":"08:00","timezone":"Asia/Ho_Chi_Minh"}\`.
-- The Agent can list, pause, resume and delete account schedules using its \`schedule\` action. Agent suggestions without an explicit request are **not automatically activated**.
+## Delivered source
+- Account-wide UI at `/account/scheduled-tasks`: one-off, daily, weekly, every-N-minutes, and watch-a-website schedules. Create, edit, pause, resume, delete, run now and inspect up to 20 run receipts.
+- Project Agent composer (+) links to schedules; the chat displays the pending Approve / Dismiss control and a bell for completed or failed runs.
+- App-hosted Agent `schedule` actions: `list`, `create`, `propose`, `pause`, `resume`, `delete`. **Every Agent-originated creation/change is a pending proposal**; only an authenticated account owner can approve it. Changes are never authorized through keyword regex, model text, or web page content.
+- A task run by the scheduler has an explicit `scheduleRunId` and a runtime `scheduledRun` marker, preventing schedule tool mutations and suppressing direct-user-confirmation shortcuts for risky browser actions.
+- Scheduler cron endpoint `POST /api/internal/project-agent/schedule-tick` uses a constant-time-checked Bearer secret.
+- Durable schedule records and per-occurrence run receipts stored in an owner-scoped directory outside sandbox mounts. A cooperative per-schedule lock and global tick lease reduce duplicate claims; task records themselves persist in the host's MongoDB task repository.
+- Reconciliation runs even for one-time schedules. Stale queued/running tasks use existing Project Agent recovery, and dispatch receipts interrupted before task creation are marked uncertain/failed rather than blindly retried.
+- Website watch: guarded HTTPS source → SHA-256 fingerprint → baseline saved first run → unchanged checks silent → changed checks launch Agent and notify on completion. This is a text-change heuristic; dynamic pages can produce false positives.
+- Account-scoped in-app notification endpoint `/api/project-agent/schedules/notifications` with persistent read receipts. No automatic external email or messaging delivery.
 
-## Server configuration
-1. Ensure PROJECT_AGENT_RUNTIME=sandbox, configure the model provider and sandbox runtime as normal.
-2. Set PROJECT_AGENT_SCHEDULES_DIR to a persistent, private directory on a **shared filesystem** accessible to the cron route and task workers. It must not be mounted to the user shell sandbox at /work.
-3. Set PROJECT_AGENT_SCHEDULER_SECRET to a securely generated 32+ character value (do not commit it). Deploy an authenticated scheduler that invokes \`POST /api/internal/project-agent/schedule-tick\` with \`Authorization: Bearer $PROJECT_AGENT_SCHEDULER_SECRET\` every minute. **Nothing runs in the background until that external scheduler is actually configured.**
-4. Deploy on a persistent Node.js worker host: \`startProjectAgentTask\` runs in the web-server process. A serverless request that shuts down immediately after dispatch is insufficient.
-5. Keep server clocks synchronized. Schedule times use IANA timezones and local calendar days; nonexistent DST wall times are skipped. Repeated DST times select the earlier candidate.
+## Required production configuration
+1. Deploy the Project Agent host with Next.js + MongoDB task records + persistent Node.js workers. Do **not** rely on short-lived serverless workers that disappear after returning an HTTP response.
+2. Configure a protected, shared durable filesystem with atomic directory creation and rename. Set `PROJECT_AGENT_SCHEDULES_DIR` outside any user shell workspace or mounted sandbox. For real multi-host/multi-region exactly-once guarantees, replace this adapter with a transactional MongoDB/Redis queue and unique occurrence keys.
+3. Generate a random 32+ character `PROJECT_AGENT_SCHEDULER_SECRET` and set `PROJECT_AGENT_SCHEDULER_URL` to the host origin. Run `node scripts/project-agent-scheduler.mjs` under a process manager that restarts crashed workers. Default check cadence is one minute; `PROJECT_AGENT_SCHEDULER_TICK_MS` overrides this.
+4. To reuse login sessions, set `PROJECT_AGENT_RUNTIME=sandbox`, `PROJECT_AGENT_BROWSER_AGENT=1`, `PROJECT_AGENT_SESSION_VAULT_MASTER_KEY` (stable 32-byte base64 key) and `PROJECT_AGENT_SESSION_VAULT_DIR`. Every site also needs the account owner's explicit unattended-browser permission.
+5. Secure API origin checks, task ownership, secret storage, ingress redaction and host directory ACLs. Host filesystem permission bits alone do not enforce Windows ACLs.
+6. Do not enable protected account automation before complete signed-in tests and security review.
 
-## Run safety and limitations
-- Due scans are bounded (20 entries per request). Folder locks protect one schedule across cooperative workers; no parallel runs of the same schedule are allowed.
-- A dispatch receipt is written before task creation; interruption in that interval is reported as uncertain/failed, never blindly retried into an unintended duplicate.
-- State is eventually reconciled by subsequent due dispatch or cron calls. Users can inspect each child task in its destination Project.
-- Any browser login is restored only when the account owner explicitly enabled unattended use in Personal Vault. The browser's action policy remains in force.
-- The program uses host filesystem atomic-directory locking. This is not a transaction-grade queue: for high volume, multi-region or strong exactly-once semantics, replace with MongoDB/Redis job claims and a durable worker, and implement task-run reconciliation with idempotency keys.
-- The one-time datetime-local UI interprets the input in the user's **device timezone**; the timezone field is metadata in that mode. Daily and weekly schedules use the chosen IANA timezone.
-- There is no push/email delivery of completed results and no built-in natural-language time parser. The Agent model forms the supported structured action; the backend validates the schedule.
-- Automated agent runs need fully scoped website permissions and must still honor confirmation requirements for high-impact actions. Vault grant is not a universal consent to post or pay.
+## Reliability and permission model
+- UI-created schedules are activated by the user's authenticated POST; Agent-proposed schedules are pending until approved.
+- Existing schedules can be paused or changed directly in the authenticated UI. The Agent cannot directly commit these changes; it creates an approval request.
+- The worker does not create child schedules or silently upgrade website access.
+- Scheduler delivery is **at-least-attempted**, not proven exactly-once. A crash after Mongo task creation and before schedule receipt remains an indeterminate state; no unsafe automatic retry is attempted.
+- Pausing/deleting a schedule stops future dispatch, but does not cancel a task that is already running.
+- One-time schedule inputs are interpreted in the selected IANA timezone, with DST validation. Weekly/daily use calendar-local recurrences; `watch` and `interval` run at elapsed-minute intervals.
+- Browser sessions may expire and require the user to reauthenticate. Revoking a grant invalidates its version and closes affected contexts when a worker notices the change.
 
-## Deferred verification
-Never call this production-ready without tests of recurrence/DST, owner isolation, duplicate cron calls, crashes between task creation and receipt, revocation, pause/resume and repeated dates; then run typecheck and a live authenticated browser test.
+## Deferred acceptance (requested by user)
+No CI, test suite, typecheck, Next.js build, live Chromium or production deployment was run. Later QA must check: type safety, Windows and Linux mounts, owner isolation, persistence after host restarts, busy/stale locks, duplicate cron ticks, Mongo write/recovery race, intervals and DST, multilingual proposals, approval/rejection, website-change baseline, authenticated browser session, revocation, notification read receipts, host lifecycle and multi-worker failover. Always perform these checks before claiming production readiness.
