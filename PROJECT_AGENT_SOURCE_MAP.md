@@ -51,3 +51,7 @@ See XERJ_PROJECT_SEARCH_INTEGRATION.md for read-only XERJ REST integration, per-
 ## Visual Browser Watch (opt-in)
 
 See VISUAL_BROWSER_WATCH.md for read-only near-live screenshots inside Project Chat, initiating-user-only authorization, masked form fields, bounded upload/drag/multi-tab browser operations, safe stale-DOM recovery, single-host constraints and deferred QA. The feature is not a remote Chrome connection or full video stream.
+
+## Human-assisted Browser Preview and takeover
+
+See HUMAN_BROWSER_ASSISTANCE.md for the right-side Browser Preview, opt-in screenshots, initiating-owner manual click/type/scroll, serialized Playwright takeover, stale-model-action invalidation and handback snapshot, security constraints and deferred host QA.

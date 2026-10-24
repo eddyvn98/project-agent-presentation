@@ -32,7 +32,7 @@ import { useProjectAgentConversationSync } from "./useProjectAgentConversationSy
 import { useProjectAgentTaskControls } from "./useProjectAgentTaskControls";
 import { useProjectAgentSubmit } from "./useProjectAgentSubmit";
 import { ProjectAgentTaskAnswer } from "./ProjectAgentTaskAnswer";
-import { ProjectAgentBrowserWatch } from "./ProjectAgentBrowserWatch";
+import { ProjectAgentBrowserPreview } from "./ProjectAgentBrowserPreview";
 
 export function ProjectAgentConversationPane() {
 	const projectId = useProjectStore((state) => state.activeProjectId);
@@ -205,7 +205,7 @@ export function ProjectAgentConversationPane() {
 					{task.plan?.length ? <ProjectAgentPlan language={task.activityLanguage} items={task.plan} running={task.status === "running" || task.status === "queued"} /> : null}
 					<ProjectAgentTaskDuration task={task} />
 					<ProjectAgentActivity language={task.activityLanguage} progress={task.progress} imageBase={`/api/projects/${encodeURIComponent(projectId)}/agent/tasks/${encodeURIComponent(task.id)}/renders/`} activity={task.activity ?? []} running={task.status === "running" || task.status === "queued"} sources={extractSources(task.resultText)} onSkip={task.canContinue ? () => void skipTask(task) : undefined} />
-					{task.canContinue && (((task.status === "running" || task.status === "queued") && task.browserAvailable) || task.browserUsed) && <ProjectAgentBrowserWatch projectId={projectId} taskId={task.id} running={task.status === "running" || task.status === "queued"} language={task.activityLanguage} />}
+					{task.canContinue && (((task.status === "running" || task.status === "queued") && task.browserAvailable) || task.browserUsed) && <ProjectAgentBrowserPreview projectId={projectId} taskId={task.id} running={task.status === "running" || task.status === "queued"} language={task.activityLanguage} />}
 					{task.resultText || (task.partialText && task.status === "running") ? <ProjectAgentTaskAnswer language={task.activityLanguage} markdown={task.resultText ?? task.partialText ?? ""} sources={task.sources ?? []} resolveImage={(src) => resolveInlineImage(src, task.files, (file) => fileHref(task, file))} presentation={task.status === "done"} running={task.status === "running"} onStop={() => void stopTask(task)} /> : (task.status === "queued" || task.status === "running") ? <p className="flex flex-wrap items-center gap-2 text-slate-500">{task.activity?.length ? null : <><Loader2 className="h-4 w-4 animate-spin" /><span>{task.progress ?? "Project Agent is working…"}</span></>}{task.canContinue && <button type="button" onClick={() => void stopTask(task)} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:px-4 text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><Square className="h-3 w-3" />Stop</button>}</p> : null}
 					{task.resultText && <ProjectAgentSourceList markdown={task.resultText} sources={task.sources} />}
 					{task.error && !(task.status === "done" && task.resultText) && <TaskErrorNotice error={task.error} cancelled={Boolean(task.cancelled)} />}

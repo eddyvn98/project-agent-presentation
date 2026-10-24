@@ -3,6 +3,7 @@ import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { readProjectAgentTask } from "@/lib/project-agent/task-store";
 import { browserWatchImage, browserWatchStatus, captureBrowserWatch, setBrowserWatch } from "@/lib/project-agent/runtime/browser-agent/watch";
 import { activeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
+import { browserControlState, releaseBrowserControl } from "@/lib/project-agent/runtime/browser-agent/control";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       headers: { ...HEADERS, "Content-Type": "image/jpeg", "Content-Disposition": "inline" },
     });
   }
-  return NextResponse.json({ preview: browserWatchStatus(params.taskId) }, { headers: HEADERS });
+  return NextResponse.json({ preview: browserWatchStatus(params.taskId), control: browserControlState(params.taskId) }, { headers: HEADERS });
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -51,10 +52,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (body.watch && !["queued", "running"].includes(checked.task!.status)) {
     return NextResponse.json({ error: "Only active tasks can start a browser watch" }, { status: 409, headers: HEADERS });
   }
+  if (!body.watch) releaseBrowserControl(params.taskId);
   setBrowserWatch(params.taskId, body.watch);
   if (body.watch) {
     // No browser launch: capture only the session which the agent has already created.
-    const existing = activeBrowserSession(params.taskId);
+    const existing = activeBrowserSession(checked.task!.conversationId ?? checked.task!.id);
     if (existing) await captureBrowserWatch(params.taskId, existing.page, "watch started");
   }
   return NextResponse.json({ preview: browserWatchStatus(params.taskId) }, { headers: HEADERS });

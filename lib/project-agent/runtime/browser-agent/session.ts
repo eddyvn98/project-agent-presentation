@@ -115,14 +115,20 @@ export function activeBrowserSession(id: string): BrowserSession | null { return
 export function closeBrowserSession(id: string): Promise<void> { return sessions.get(id)?.close() ?? Promise.resolve(); }
 export function closeAllBrowserSessions(): Promise<void> { return Promise.all([...sessions.keys()].map(closeBrowserSession)).then(() => {}); }
 
-export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promise<T>): Promise<T> {
-	session.operationCount += 1;
-	if (session.operationCount > 60) throw new Error("Browser action limit (60) reached for this task");
+const operationLocks = new WeakMap<BrowserSession, Promise<void>>();
+export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promise<T>, countAgentAction = true): Promise<T> {
+	const preceding = operationLocks.get(session) ?? Promise.resolve();
+	let unlock!: () => void;
+	const current = new Promise<void>((resolve) => { unlock = resolve; });
+	operationLocks.set(session, preceding.then(() => current));
+	await preceding;
+	if (countAgentAction) session.operationCount += 1;
+	if (countAgentAction && session.operationCount > 60) { unlock(); throw new Error("Browser action limit (60) reached for this task"); }
 	session.lastUsed = Date.now();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
 		return await Promise.race([fn(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Browser operation timed out after 30 seconds")), OP_TIMEOUT_MS); })]);
-	} finally { if (timer) clearTimeout(timer); }
+	} finally { if (timer) clearTimeout(timer); unlock(); }
 }
 
 export function scheduleIdleClose(session: BrowserSession, id: string): void {

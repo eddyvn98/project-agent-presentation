@@ -41,7 +41,7 @@ import { runWait } from "./wait-action";
 import { prefetchReference } from "./reference-prefetch";
 import { proposeTaskReference } from "./reference-candidates";
 import { runBrowserAction } from "./browser-agent";
-import { closeBrowserSession } from "./browser-agent/session";
+import { closeBrowserSession } from "./browser-agent/session"; import { clearBrowserControl, browserControlState } from "./browser-agent/control"; import { resumedBrowserContext, browserPlanOutdated } from "./browser-agent/handback";
 import { transcribeTables } from "./table-transcribe";
 import type { ProjectAgentTaskSource } from "../types";
 import type { RuntimeInput } from "./run-agent-types";
@@ -126,7 +126,7 @@ export async function runRuntimeAgent(input: RuntimeInput): Promise<DifyAgentMes
 		if (!input.depth) {
 			input.onStep?.({ tool: "trajectory", detail: trajectoryLine(analyzeTrajectory(input.trace!)) });
 			if (input.taskId) await writeTrace(input.taskId, input.trace!);
-			await closeBrowserSession(input.taskId ?? input.chatId).catch(() => {});
+			if (input.taskId) clearBrowserControl(input.taskId); await closeBrowserSession(input.taskId ?? input.chatId).catch(() => {});
 		}
 		const seconds = (ms: number) => Math.round(ms / 1000);
 		input.onStep?.({ tool: "metrics", detail: `total_s=${seconds(Date.now() - started)} model_s=${seconds(metrics.modelMs)} action_s=${seconds(metrics.actionMs)} reference_ms=${metrics.referenceMs} steps=${metrics.rounds} prompt_tokens=${metrics.promptTokens} step_tokens=${metrics.stepTokens.slice(0, 30).join("/")} out_max=${Math.max(0, ...metrics.stepOut)} out_total=${metrics.stepOut.reduce((a, b) => a + b, 0)} step_out=${metrics.stepOut.slice(0, 30).join("/")} compactions=${metrics.compactions} invalid=${metrics.invalid} failed=${metrics.failed} context_captures=${input.contextStats?.captures ?? 0} context_kept_bytes=${input.contextStats?.storedBytes ?? 0} context_returned_bytes=${input.contextStats?.returnedBytes ?? 0} model=${input.modelSelector || "default"} tools=${[...metrics.actions].map(([name, count]) => `${name}:${count}`).join(",") || "none"}${input.subUsage ? ` sub_runs=${input.subUsage.runs} sub_steps=${input.subUsage.steps} sub_tokens=${input.subUsage.tokens} sub_models=${[...input.subUsage.models].join(",")}` : ""}` });
@@ -159,14 +159,14 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 	let lastPrompt = 0;
 	const gate = new VerificationGate();
 	const evaluator = new DeliverableEvaluator();
-	let steerSeen = 0;
+	let steerSeen = 0, browserRevision = input.taskId ? browserControlState(input.taskId).revision : 0;
 	const imageCalls = { value: 0 };
 	const maxSteps = input.maxSteps ?? MAX_STEPS;
 	const guard = new StallGuard();
 	const turnContext = new RuntimeTurnContext(input.userPrompt ?? input.query);
 	let wrapReason: string | null = null, wrapLeft = 1;
 	for (let step = 1; step <= maxSteps; step += 1) {
-		if (input.signal?.aborted) throw new Error("Task stopped");
+		if (input.signal?.aborted) throw new Error("Task stopped"); const handback = await resumedBrowserContext(input, browserRevision, step); browserRevision = handback.revision; if (handback.preface) query = handback.preface + query;
 		if (Date.now() - started > DEADLINE_MS) throw new Error("The agent ran out of time before finishing");
 		const stall = guard.check({ step, elapsedMs: Date.now() - started, waitedMs: (input.budget?.waited?.seconds ?? 0) * 1000, tokens: freshTokens, resentTokens: totalPromptTokens });
 		if (wrapReason !== null) { if (wrapLeft-- <= 0) throw new Error(`The agent was stopped because ${wrapReason}`); }
@@ -226,7 +226,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 		const results: string[] = [];
 		let skipUntil = 0;
 		for (const [index, action] of actions.entries()) {
-			if (index < skipUntil) continue;
+			if (index < skipUntil) continue; if (await browserPlanOutdated(input, browserRevision)) { results.push("Human changed the browser during this model turn. Discard stale actions and inspect the updated page on the next turn."); break; }
 			if (action.action === "delegate" && actions[index + 1]?.action === "delegate") {
 				// Consecutive delegates are independent jobs: they run side by side.
 				const group = actions.slice(index).filter((candidate, offset, all) => all.slice(0, offset + 1).every((item) => item.action === "delegate")) as Array<Extract<RuntimeAction, { action: "delegate" }>>;

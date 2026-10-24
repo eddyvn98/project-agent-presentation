@@ -11,6 +11,7 @@ import { workspaceDir } from "../sandbox";
 import type { RuntimeInput, RuntimeStep } from "../run-agent";
 import type { BrowserAction } from "./action-parser";
 import { getBrowserSession, scheduleIdleClose, withBrowserOp, type BrowserSession } from "./session";
+import { captureBrowserWatch, finishBrowserWatch } from "./watch";
 
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 function snapshotRefLine(snapshot: string, ref: string): string {
@@ -137,7 +138,7 @@ async function stagedUpload(input: RuntimeInput, action: BrowserAction, session:
 export async function runBrowserAction(input: RuntimeInput, action: BrowserAction, step: number): Promise<{ text: string; image?: DifyChatFile; failed?: boolean }> {
 	if (process.env.PROJECT_AGENT_BROWSER_AGENT !== "1") return { text: "Browser agent is disabled. Set PROJECT_AGENT_BROWSER_AGENT=1 to enable it.", failed: true };
 	const id = input.taskId ?? input.chatId;
-	if (action.op === "close") { const session = await getBrowserSession(id, input.signal); await session.close(); return { text: "Browser session closed." }; }
+	if (action.op === "close") { finishBrowserWatch(input.taskId ?? id); const session = await getBrowserSession(id, input.signal); await session.close(); return { text: "Browser session closed." }; }
 	let session: BrowserSession;
 	try { session = await getBrowserSession(id, input.signal); } catch (cause) { return { text: cause instanceof Error ? cause.message : "Could not start browser", failed: true }; }
 	const refDetail = action.ref ? snapshotRefLine(session.lastSnapshot, action.ref).replace(/\[ref=[^\]]+\]/, "").trim() : "";
@@ -246,6 +247,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			const currentSnapshot = await snapshot(session);
 			return { text: extra ? `${extra}\n\n${currentSnapshot}` : currentSnapshot };
 		});
+		if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op);
 		scheduleIdleClose(session, id);
 		return result;
 	} catch (cause) {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Eye, EyeOff, Expand, Loader2, X } from "lucide-react";
 import type { ActivityLanguage } from "@/lib/project-agent/activity-language";
 import { browserActionLabel } from "@/lib/project-agent/browser-watch-labels";
+import { browserAssistText } from "@/lib/project-agent/browser-assist-labels";
 
 type Preview = {
   watching: boolean; sequence: number; updatedAt: number;
@@ -31,13 +32,15 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const ui = LABEL[language];
+  const [control, setControl] = useState({ paused: false, revision: 0 });
+  const [entry, setEntry] = useState("");
+  const ui = LABEL[language], actions = browserAssistText(language);
   const base = "/api/projects/" + encodeURIComponent(projectId) + "/agent/tasks/" + encodeURIComponent(taskId) + "/browser";
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch(base, { cache: "no-store", signal });
     if (response.ok) {
-      const data = await response.json() as { preview: Preview | null };
-      if (!signal?.aborted) setPreview(data.preview);
+      const data = await response.json() as { preview: Preview | null; control?: { paused: boolean; revision: number } };
+      if (!signal?.aborted) { setPreview(data.preview); if (data.control) setControl(data.control); }
     }
   }, [base]);
   useEffect(() => {
@@ -65,6 +68,22 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setLoading(false); }
   };
+  const command = async (action: Record<string, unknown>) => {
+    setLoading(true); setError("");
+    try {
+      const response = await fetch(base + "/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(action) });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Browser action unavailable");
+      if (action.op === "type") setEntry("");
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setLoading(false); }
+  };
+  const clickPreview = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!control.paused) { setExpanded(true); return; }
+    const rect = event.currentTarget.getBoundingClientRect();
+    void command({ op: "click", x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height });
+  };
   const image = base + "?image=1&v=" + (preview?.sequence ?? 0);
   if (!running && !preview?.watching) return null;
   return <section aria-label={ui.watch} className="not-prose my-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-900/40">
@@ -78,14 +97,35 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     </div>
     {error && <p role="alert" className="mt-2 text-xs text-red-600">{error}</p>}
     {preview?.watching && <div className="mt-3 space-y-2">
+      {running && preview.hasImage && <div className="flex flex-wrap items-center gap-2">
+        <button type="button" disabled={loading} onClick={() => void command({ op: control.paused ? "release" : "takeover" })}
+          className={control.paused ? "rounded-full bg-orange-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" : "rounded-full border border-orange-300 px-3 py-1.5 text-xs text-orange-700 disabled:opacity-50 dark:text-orange-300"}>
+          {control.paused ? actions.release : actions.take}
+        </button>
+        {control.paused && <span role="status" className="text-xs text-orange-600">{actions.click}</span>}
+      </div>}
       <p role="status" className="text-xs text-slate-500">{preview.hasImage ? ui.last + ": " + browserActionLabel(preview.action, language) : ui.waiting}</p>
       {preview.location && <p className="truncate text-xs text-slate-400" title={preview.location}>{preview.location}</p>}
-      {preview.hasImage && <button type="button" onClick={() => setExpanded(true)} title={ui.enlarge}
+      {preview.hasImage && <button type="button" disabled={loading && control.paused} onClick={clickPreview} title={control.paused ? actions.help : ui.enlarge}
         className="relative block w-full overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={image} alt={ui.last} className="max-h-[380px] w-full object-contain" />
-        <Expand className="absolute right-2 top-2 h-5 w-5 rounded bg-slate-900/70 p-1 text-white" />
+        <img src={image} alt={ui.last} className="block h-auto w-full" />
+        {!control.paused && <Expand className="absolute right-2 top-2 h-5 w-5 rounded bg-slate-900/70 p-1 text-white" />}
       </button>}
+      {control.paused && <div className="space-y-2">
+        <p className="text-xs text-slate-500">{actions.help}</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button type="button" disabled={loading} onClick={() => void command({ op: "scroll", direction: "up" })} className="rounded-md border px-2 py-1.5 text-xs dark:border-slate-600">{actions.up}</button>
+          <button type="button" disabled={loading} onClick={() => void command({ op: "scroll", direction: "down" })} className="rounded-md border px-2 py-1.5 text-xs dark:border-slate-600">{actions.down}</button>
+          <button type="button" disabled={loading} onClick={() => void command({ op: "key", key: "Tab" })} className="rounded-md border px-2 py-1.5 text-xs dark:border-slate-600">Tab</button>
+          <button type="button" disabled={loading} onClick={() => void command({ op: "key", key: "Backspace" })} className="rounded-md border px-2 py-1.5 text-xs dark:border-slate-600">⌫</button>
+        </div>
+        <form onSubmit={(event) => { event.preventDefault(); if (entry.trim()) void command({ op: "type", text: entry }); }} className="flex gap-2">
+          <input value={entry} onChange={(event) => setEntry(event.target.value)} maxLength={600} placeholder={actions.type}
+            className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200" />
+          <button type="submit" disabled={loading || !entry.trim()} className="rounded-md bg-slate-800 px-3 py-1.5 text-xs text-white disabled:opacity-50">{actions.send}</button>
+        </form>
+      </div>}
       <p className="text-[11px] text-slate-400">{ui.privacy}</p>
     </div>}
     {expanded && preview?.hasImage && <div role="dialog" aria-modal="true" aria-label={ui.enlarge}
