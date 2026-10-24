@@ -37,6 +37,8 @@ export type RuntimeAction =
       id?: string; title?: string; prompt?: string; kind?: "once" | "daily" | "weekly" | "interval" | "watch";
       timezone?: string; localTime?: string; runAt?: string; url?: string;
       everyMinutes?: number; weekdays?: number[]; note?: string }
+	| { action: "workflow"; op: "list" | "propose"; title?: string; description?: string;
+      steps?: Array<{ title: string; prompt: string; requiresApproval: boolean }>; note?: string }
 	| BrowserAction
 	| PdfAction
 	| { action: "workspace_read"; board?: string; note?: string }
