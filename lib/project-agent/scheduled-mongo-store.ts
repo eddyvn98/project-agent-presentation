@@ -81,7 +81,7 @@ export async function createSchedule(owner: string, input: ScheduleCreation, pen
   return publicSchedule(record);
 }
 async function atomic<T>(owner: string, id: string, edit: (row: Stored) =>
-  { record?: Stored; deletion?: boolean; result: T }): Promise<T> {
+  { record?: Stored; deletion?: boolean; skipped?: boolean; result: T }): Promise<T> {
   if (!validId(id)) throw new Error("Invalid schedule ID");
   const coll = await collection();
   for (let attempt = 0; attempt < 8; attempt++) {
@@ -89,6 +89,7 @@ async function atomic<T>(owner: string, id: string, edit: (row: Stored) =>
     if (!previous) throw new Error("Schedule not found");
     const changed = edit({ ...previous, runs: previous.runs.map(r => ({ ...r })) });
     const filter = { _id: id, ownerEmail: ownerId(owner), revision: previous.revision };
+    if (changed.skipped) return changed.result;
     if (changed.deletion) {
       const removed = await coll.deleteOne(filter);
       if (removed.deletedCount) return changed.result;
@@ -157,7 +158,7 @@ export async function claimScheduleRun(owner: string, id: string, manual = false
   return atomic<{ item: ScheduledAgentTask; run: ScheduleRun } | null>(owner, id, row => {
     if (row.status !== "active" || row.activeRun ||
       (!manual && (!row.nextRunAt || Date.parse(row.nextRunAt) > Date.now())))
-      return { record: row, result: null };
+      return { skipped: true, result: null };
     const occurrence = manual ? new Date().toISOString() : row.nextRunAt!;
     const run: ScheduleRun = { occurrence, status: "dispatching", createdAt: new Date().toISOString() };
     row.runs = [...row.runs, run].slice(-20);
@@ -197,3 +198,22 @@ export async function acknowledgeScheduleRun(owner: string, id: string, occurren
 }
 /** Each occurrence is CAS-claimed in Mongo. No global filesystem process lease is needed. */
 export async function withSchedulerTickLease<T>(fn: () => Promise<T>): Promise<T> { return fn(); }
+
+/** One-way, idempotent import. File is archived only after this returns. */
+export async function importLegacySchedule(record: ScheduledAgentTask): Promise<void> {
+  if (!validId(record.id) || !record.ownerEmail.includes("@"))
+    throw new Error("Malformed legacy schedule");
+  const owner = ownerId(record.ownerEmail);
+  const unfinished = record.runs.find(r => ["dispatching", "queued", "running"].includes(r.status));
+  const row: Stored = { ...record, ownerEmail: owner, _id: record.id, revision: 0,
+    dedupeKey: "migration:" + record.id, ...(unfinished ? { activeRun: unfinished.occurrence } : {}) };
+  try {
+    await (await collection()).updateOne({ _id: record.id, ownerEmail: owner },
+      { $setOnInsert: row }, { upsert: true });
+  } catch (error) {
+    if ((error as { code?: number }).code !== 11000) throw error;
+    const existing = await (await collection()).findOne({ _id: record.id });
+    if (!existing || existing.ownerEmail !== owner)
+      throw new Error("Legacy schedule ID collision with another account");
+  }
+}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
+import { migrateLegacyScheduleFiles } from "@/lib/project-agent/scheduled-migration";
 import { dispatchDueSchedules } from "@/lib/project-agent/scheduled-worker";
 import { tickDurableTasks } from "@/lib/project-agent/task-runner";
 import { tickWorkflowRuns } from "@/lib/project-agent/workflow-runner";
@@ -16,10 +17,12 @@ export async function POST(req: NextRequest) {
   if (given.length !== expected.length || !timingSafeEqual(given, expected))
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
+    const migration = process.env.PROJECT_AGENT_MIGRATE_FILE_SCHEDULES === "1"
+      ? await migrateLegacyScheduleFiles() : undefined;
     const result = await dispatchDueSchedules();
     const queue = await tickDurableTasks();
     const workflows = await tickWorkflowRuns();
     return NextResponse.json({ dispatched: result.filter(r => r.status === "dispatched").length,
-      attempted: result.length, queue, workflows });
+      attempted: result.length, queue, workflows, ...(migration ? { migration } : {}) });
   } catch { return NextResponse.json({ error: "Scheduler unavailable" }, { status: 503 }); }
 }
