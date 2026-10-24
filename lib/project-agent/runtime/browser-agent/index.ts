@@ -269,8 +269,8 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 		const refreshed = domFailure ? await snapshot(session).catch(() => "") : "";
 		const observed = domFailure ? await observeVisualFrame(input, session).catch(() => null) : null;
 		return { text: "Browser " + action.op + " failed: " + failureText +
-			(refreshed ? "\\nFresh DOM snapshot:\\n" + refreshed : "") +
-			(observed ? "\\n" + observed.text : ""),
+			(refreshed ? "\nFresh DOM snapshot:\n" + refreshed : "") +
+			(observed ? "\n" + observed.text : ""),
 			...(observed?.image ? { image: observed.image } : {}), failed: true };
 	}
 }
