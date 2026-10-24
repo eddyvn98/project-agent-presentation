@@ -66,7 +66,7 @@ function trackPageTraffic(session: BrowserSession, page: Page): void {
     append(session.network, `${response.status()} ${response.request().method()} ${redactedUrl(response.url())}`));
 }
 async function getSharedBrowser(): Promise<Browser> {
-	if (browserIdleTimer) clearTimeout(browserIdleTimer);
+	if (browserIdleTimer) { clearTimeout(browserIdleTimer); browserIdleTimer = undefined; }
 	if (sharedBrowser) {
     const live = await sharedBrowser.catch(() => null);
     if (!live?.isConnected()) { sharedBrowser = null; await closeAllBrowserSessions(); }
@@ -128,11 +128,11 @@ async function createBrowserSession(id: string, signal?: AbortSignal, owner?: st
 			close: async () => {
 				if (closed) return;
 				closed = true;
-				sessions.delete(id);
+				if (sessions.get(id) === session) sessions.delete(id);
 				await session!.context.close().catch(() => {});
 				releaseSlot();
 				if (slots.active === 0) {
-					browserIdleTimer = setTimeout(() => { const current = sharedBrowser; sharedBrowser = null; void current?.then((instance) => instance.close()).catch(() => {}); }, 30_000);
+					browserIdleTimer = setTimeout(() => { if (slots.active !== 0 || pendingSessions.size > 0) return; const current = sharedBrowser; sharedBrowser = null; void current?.then((instance) => instance.close()).catch(() => {}); }, 30_000);
 					browserIdleTimer.unref?.();
 				}
 			},
@@ -161,7 +161,7 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
 	const current = new Promise<void>((resolve) => { unlock = resolve; });
 	operationLocks.set(session, preceding.then(() => current));
 	await preceding;
-	if (session.page.isClosed()) { unlock(); throw new Error("Browser session is closed"); }
+	if (session.page.isClosed() || !session.browser.isConnected()) { unlock(); throw new Error("Browser session is closed"); }
 	if (countAgentAction) session.operationCount += 1;
 	if (countAgentAction && session.operationCount > 60) { unlock(); throw new Error("Browser action limit (60) reached for this task"); }
 	session.lastUsed = Date.now();
