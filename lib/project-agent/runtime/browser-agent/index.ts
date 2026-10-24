@@ -112,6 +112,26 @@ async function saveDownload(input: RuntimeInput, action: BrowserAction, session:
 	return `/work/inputs/web/${name}`;
 }
 
+/** Browser uploads are restricted to the current chat's staged input files, never arbitrary host paths. */
+async function stagedUpload(input: RuntimeInput, action: BrowserAction, session: BrowserSession): Promise<string> {
+  if (process.env.PROJECT_AGENT_ALLOW_UPLOADS !== "1") throw new Error("Browser uploads are disabled by deployment policy.");
+  const host = new URL(session.page.url()).hostname;
+  if (needsConfirmation(input, session, "upload")) throw new Error("Uploading to this site requires explicit user approval.");
+  const original = path.join(workspaceDir(input.chatId), "inputs");
+  const root = await fs.realpath(original);
+  const given = action.path!.slice("/work/inputs/".length);
+  const candidate = path.resolve(root, given);
+  if (!candidate.startsWith(root + path.sep)) throw new Error("Upload file is outside staged inputs.");
+  const actual = await fs.realpath(candidate);
+  if (!actual.startsWith(root + path.sep)) throw new Error("Upload file crosses out of staged inputs.");
+  const stat = await fs.stat(actual);
+  if (!stat.isFile() || stat.size > MAX_DOWNLOAD_BYTES) throw new Error("Upload requires a file of 25 MB or less.");
+  const ref = snapshotRefLine(session.lastSnapshot, action.ref!);
+  if (!ref) throw new Error("Upload control must be in the current snapshot.");
+  await locatorForRef(session, action.ref!).setInputFiles(actual);
+  return "Selected staged file " + path.basename(actual) + " for upload to " + host + ". No form was submitted.";
+}
+
 export async function runBrowserAction(input: RuntimeInput, action: BrowserAction, step: number): Promise<{ text: string; image?: DifyChatFile; failed?: boolean }> {
 	if (process.env.PROJECT_AGENT_BROWSER_AGENT !== "1") return { text: "Browser agent is disabled. Set PROJECT_AGENT_BROWSER_AGENT=1 to enable it.", failed: true };
 	const id = input.taskId ?? input.chatId;
@@ -156,6 +176,41 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 					await session.page.keyboard.press(action.key!); break;
 				}
 				case "select": await locatorForRef(session, action.ref!).selectOption(action.value!); break;
+				case "upload": extra = await stagedUpload(input, action, session); break;
+				case "drag": {
+					const target = snapshotRefLine(session.lastSnapshot, action.targetRef!);
+					if (!target) return { text: "Take a new snapshot before dragging.", failed: true };
+					if (needsConfirmation(input, session, target)) return { text: "This drag could change data and needs the user's explicit confirmation.", failed: true };
+					await locatorForRef(session, action.ref!).dragTo(locatorForRef(session, action.targetRef!));
+					extra = "Dragged the selected element to its target."; break;
+				}
+				case "tabs":
+					extra = session.context.pages().slice(0, 4).map((tab, i) => "tab " + i + (tab === session.page ? " (active)" : "") + ": " + tab.url()).join("\n");
+					break;
+				case "new_tab": {
+					if (session.context.pages().length >= 4) return { text: "The browser supports at most four tabs.", failed: true };
+					const tab = await session.context.newPage();
+					try { if (action.url) { await assertPublicHttpUrl(action.url); await tab.goto(action.url, { waitUntil: "domcontentloaded", timeout: 20_000 }); } }
+					catch (cause) { await tab.close(); throw cause; }
+					session.page = tab; session.refs.clear(); session.snapshotUrl = "";
+					extra = "Opened a new browser tab."; break;
+				}
+				case "switch_tab": {
+					const tab = session.context.pages()[action.tabIndex!];
+					if (!tab) return { text: "Tab not found; request tabs to inspect open tabs.", failed: true };
+					session.page = tab; session.refs.clear(); session.snapshotUrl = "";
+					extra = "Switched to tab " + action.tabIndex + "."; break;
+				}
+				case "close_tab": {
+					const all = session.context.pages();
+					if (all.length < 2) return { text: "Cannot close the final tab.", failed: true };
+					const tab = all[action.tabIndex!];
+					if (!tab) return { text: "Tab not found.", failed: true };
+					await tab.close();
+					if (session.page === tab) session.page = session.context.pages()[0];
+					session.refs.clear(); session.snapshotUrl = "";
+					extra = "Closed tab " + action.tabIndex + "."; break;
+				}
 				case "wait": {
 					const timeout = (action.seconds ?? 10) * 1000;
 					if (action.find) {
@@ -193,6 +248,8 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 		return result;
 	} catch (cause) {
 		if (cause instanceof Error && /timed out after 30 seconds/.test(cause.message)) await session.close();
-		return { text: `Browser ${action.op} failed: ${cause instanceof Error ? cause.message : "unknown error"}`, failed: true };
+		const failureText = cause instanceof Error ? cause.message : "unknown error";
+		const refreshed = /ref|locator|element|stale|not attached/i.test(failureText) ? await snapshot(session).catch(() => "") : "";
+		return { text: "Browser " + action.op + " failed: " + failureText + (refreshed ? "\nFresh page snapshot for recovery:\n" + refreshed : ""), failed: true };
 	}
 }

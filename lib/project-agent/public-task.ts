@@ -5,7 +5,7 @@ import { planFromLog, type PlanItem } from "./plan";
 import { activityLabel, activityText, projectAgentLanguage, type ActivityLanguage } from "./activity-language";
 import { agentStageText, agentToolReturnedText } from "./activity-stage";
 
-export type PublicProjectAgentTask = Omit<ProjectAgentTask, "ownerEmail" | "projectOwnerEmail" | "difyConversationId" | "bootId" | "log" | "inputFiles"> & { attachments?: ProjectAgentTaskInputFile[]; progress?: string; steps?: string[]; activity?: ProjectAgentActivityStep[]; activityLanguage?: ActivityLanguage; plan?: PlanItem[]; canContinue: boolean };
+export type PublicProjectAgentTask = Omit<ProjectAgentTask, "ownerEmail" | "projectOwnerEmail" | "difyConversationId" | "bootId" | "log" | "inputFiles"> & { attachments?: ProjectAgentTaskInputFile[]; progress?: string; steps?: string[]; activity?: ProjectAgentActivityStep[]; activityLanguage?: ActivityLanguage; browserUsed?: boolean; browserAvailable?: boolean; plan?: PlanItem[]; canContinue: boolean };
 
 export interface ProjectAgentActivityStep { label: string; kind: "search" | "read" | "other" | "update"; count: number; details: string[]; images?: string[]; returnedCount?: number }
 
@@ -143,6 +143,8 @@ export function toPublicProjectAgentTask(task: ProjectAgentTask, viewerEmail = t
 		steps: taskSteps(task.log, activityLanguage),
 		activity: taskActivity(task.log, activityLanguage),
 		activityLanguage,
+		browserUsed: task.log.some((line) => /using tool browser_/i.test(line)),
+		browserAvailable: process.env.PROJECT_AGENT_RUNTIME === "sandbox" && process.env.PROJECT_AGENT_BROWSER_AGENT === "1",
 		plan: planFromLog(task.log),
 		files: task.files?.filter((file) => filesAvailable || Boolean(file.savedToProjectFileId) || Boolean(file.resource)) ?? [],
 	};

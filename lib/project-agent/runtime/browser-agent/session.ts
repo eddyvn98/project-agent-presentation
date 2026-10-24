@@ -109,6 +109,9 @@ async function createBrowserSession(id: string, signal?: AbortSignal): Promise<B
 	}
 }
 
+/** Read-only peek: a watcher must not launch an extra browser session. */
+export function activeBrowserSession(id: string): BrowserSession | null { return sessions.get(id) ?? null; }
+
 export function closeBrowserSession(id: string): Promise<void> { return sessions.get(id)?.close() ?? Promise.resolve(); }
 export function closeAllBrowserSessions(): Promise<void> { return Promise.all([...sessions.keys()].map(closeBrowserSession)).then(() => {}); }
 

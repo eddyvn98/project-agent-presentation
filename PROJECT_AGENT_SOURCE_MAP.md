@@ -47,3 +47,7 @@ See USER_LANGUAGE_ACTIVITY.md for the app-hosted started/returned tool lifecycle
 ## XERJ Project-scoped search
 
 See XERJ_PROJECT_SEARCH_INTEGRATION.md for read-only XERJ REST integration, per-Project prefix and key requirements, optional indexed-source retrieval in Dify/sandbox, opt-in installation, manually provisioned indexes and deletion/privacy limitations. Source code: lib/project-agent/xerj/*, scripts/xerj-project-prefix.mjs.
+
+## Visual Browser Watch (opt-in)
+
+See VISUAL_BROWSER_WATCH.md for read-only near-live screenshots inside Project Chat, initiating-user-only authorization, masked form fields, bounded upload/drag/multi-tab browser operations, safe stale-DOM recovery, single-host constraints and deferred QA. The feature is not a remote Chrome connection or full video stream.

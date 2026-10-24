@@ -1,7 +1,7 @@
 import { assertPublicHttpUrl } from "../web-security";
 
 export const CAPTCHA_PATTERN = /cloudflare.{0,40}challenge|recaptcha|hcaptcha|verify you are human|xác minh bảo mật/i; // vi-allow
-export const IRREVERSIBLE_PATTERN = /buy|pay|order|checkout|book|send|post|publish|delete|sign up|subscribe|purchase|submit|mua|thanh toán|đặt hàng|đặt lịch|gửi|đăng|xóa|đăng ký|ký tên|gửi biểu mẫu/i; // vi-allow
+export const IRREVERSIBLE_PATTERN = /buy|pay|order|checkout|book|send|post|publish|upload|attach|delete|sign up|subscribe|purchase|submit|mua|thanh toán|đặt hàng|đặt lịch|tải lên|đính kèm|gửi|đăng|xóa|đăng ký|ký tên|gửi biểu mẫu/i; // vi-allow
 export const SENSITIVE_PATTERN = /password|credit.?card|card number|cvv|cvc|bank account|routing number|social security|government id|mật khẩu|thẻ tín dụng|số thẻ|tài khoản ngân hàng|căn cước/i; // vi-allow
 
 export const isCaptchaPage = (text: string): boolean => CAPTCHA_PATTERN.test(text);
