@@ -1,6 +1,7 @@
 import { getMongoAiDb } from "@/services/mongodb/client";
 import { harnessAssignment, harnessAddendum } from "./guard";
 import { listHarnessVariants } from "./store";
+import { isHarnessDeployed } from "./deployment";
 import type { ProjectAgentTask } from "../types";
 
 export function classifyHarnessDomain(request: string): string {
@@ -20,7 +21,14 @@ export async function selectHarnessForTask(task: ProjectAgentTask): Promise<Harn
     ["canary","active"].includes(v.status) && v.evidence?.improved);
   if (!selected.length) return null;
   // Do not inject multiple independent experiments into the same task.
-  const variant = selected.sort((a,b) => (a.domain === domain ? -1 : 1) - (b.domain === domain ? -1 : 1))[0];
+  const ordered = selected.sort((a,b) => Number(b.domain===domain)-Number(a.domain===domain));
+  let variant = ordered[0];
+  for (const candidate of ordered) {
+    if (await isHarnessDeployed(task.ownerEmail,candidate.domain,candidate.dimension,candidate.id)) {
+      variant = candidate; break;
+    }
+  }
+  if (!await isHarnessDeployed(task.ownerEmail,variant.domain,variant.dimension,variant.id)) return null;
   const isTrial = variant.status === "active" ||
     harnessAssignment(task.id, task.ownerEmail, variant.id) < variant.rolloutPercent;
   return { addendum: isTrial ? harnessAddendum(variant.domain, variant.dimension, variant.guidance) : "",

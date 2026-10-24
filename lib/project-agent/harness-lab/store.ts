@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { reserveHarnessDeployment, releaseHarnessDeployment, isHarnessDeployed } from "./deployment";
 import { getMongoAiDb } from "@/services/mongodb/client";
 import { validateHarnessGuidance, parseHarnessDimension, parseHarnessDomain } from "./guard";
 import type { HarnessVariant, HarnessEvidence, HarnessDimension, HarnessStatus } from "./types";
@@ -106,6 +107,7 @@ export async function changeHarnessRollout(owner: string, id: string,
     if (!["canary","active"].includes(variant.status)) throw new Error("Only deployed harnesses can roll back");
     await collection.updateOne({ _id: id, ownerEmail: email, status: variant.status },
       { $set: { status: "retired" as HarnessStatus, rolloutPercent: 0, updatedAt: now() } });
+    await releaseHarnessDeployment(email,variant.domain,variant.dimension,id);
     return getHarnessVariant(email, id);
   }
   if (!variant.evidence?.improved) throw new Error("Harness has not passed offline comparison");
@@ -116,18 +118,24 @@ export async function changeHarnessRollout(owner: string, id: string,
     status: { $in: ["canary","active"] }, _id: { $ne: id },
   }, { limit: 1 });
   if (competing) throw new Error("Roll back the other deployed variant in this domain/dimension first");
+  if (action === "promote" && !await isHarnessDeployed(email,variant.domain,variant.dimension,id))
+    throw new Error("This revision is no longer the deployed canary");
   if (action === "promote") {
     const { trial, control } = await harnessOutcomeTotals(email, id);
     if (trial.count < 15 || control.count < 15 ||
       trial.failed / trial.count > control.failed / control.count + 0.05)
       throw new Error("Canary needs 15 trial and 15 control runs without failure regression");
   }
+  if (action === "canary") await reserveHarnessDeployment(email,variant.domain,variant.dimension,id);
   const status: HarnessStatus = action === "canary" ? "canary" : "active";
   const saved = await collection.findOneAndUpdate({
     _id: id, ownerEmail: email, status: variant.status,
   }, { $set: { status, rolloutPercent: action === "canary" ? 20 : 100, updatedAt: now() } },
   { returnDocument: "after" });
-  if (!saved) throw new Error("Concurrent change; reload the harness");
+  if (!saved) {
+    if (action === "canary") await releaseHarnessDeployment(email,variant.domain,variant.dimension,id);
+    throw new Error("Concurrent change; reload the harness");
+  }
   return visible(saved);
 }
 export async function harnessOutcomeTotals(owner: string, id: string) {

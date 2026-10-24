@@ -1,4 +1,5 @@
 import { callRuntimeModel } from "../runtime/model";
+import { createHash } from "node:crypto";
 import { validateHarnessGuidance, parseHarnessDimension, parseHarnessDomain } from "./guard";
 import { createHarnessVariant, listHarnessVariants, getHarnessVariant } from "./store";
 import type { HarnessDimension } from "./types";
@@ -31,7 +32,7 @@ export async function proposeHarnessFromTrace(owner: string, domain: string, tra
     "The guidance must be 40–1800 characters, concrete, and avoid task-specific/private facts.",
     "Domain: " + normalized, "Anonymized trace:\n" + safe,
   ].join("\n");
-  const output = await callRuntimeModel({ query: message, user: "harness-improver-" + owner,
+  const output = await callRuntimeModel({ query: message, user: "harness-improver-" + createHash("sha256").update(owner.toLowerCase()).digest("hex").slice(0,24),
     modelSelector: process.env.PROJECT_AGENT_HARNESS_IMPROVER_MODEL || undefined,
     signal: AbortSignal.timeout(45_000) });
   const suggestion = parse(output.answer);
