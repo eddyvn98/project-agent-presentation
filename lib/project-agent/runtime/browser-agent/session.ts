@@ -146,7 +146,7 @@ export async function restorePersonalBrowserSession(session: BrowserSession, url
   try { host = vaultHost(url); } catch { return; }
   if (session.authHost === host) return;
   const record = await readPersonalBrowserGrant(session.owner, url);
-  if (!record) { session.authHost = undefined; session.authMode = undefined; return; }
+  if (!record || !record.grant.automation) { session.authHost = undefined; session.authMode = undefined; return; }
   await session.context.addCookies(record.state.cookies);
   if (record.state.origins.length) {
     const existing = record.state.origins.find((origin) => origin.origin === new URL(url).origin);

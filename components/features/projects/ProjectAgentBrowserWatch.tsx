@@ -36,6 +36,11 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
   const [selected, setSelected] = useState<number | null>(null);
   const [control, setControl] = useState({ paused: false, revision: 0 });
   const [entry, setEntry] = useState("");
+  const [loginSecret, setLoginSecret] = useState("");
+  const [loginReady, setLoginReady] = useState(false);
+  const [loginHost, setLoginHost] = useState("");
+  const [allowAutomation, setAllowAutomation] = useState(false);
+  const [grantMode, setGrantMode] = useState<"read" | "interact">("read");
   const ui = LABEL[language], actions = browserAssistText(language);
   const base = "/api/projects/" + encodeURIComponent(projectId) + "/agent/tasks/" + encodeURIComponent(taskId) + "/browser";
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -79,6 +84,23 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
       if (action.op === "type") setEntry("");
       await refresh();
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setLoading(false); }
+  };
+  const loginCommand = async (payload: Record<string, unknown>) => {
+    setLoading(true); setError("");
+    try {
+      const response = await fetch(base + "/control", {
+        method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json() as { error?: string; host?: string; grant?: { host: string } };
+      if (!response.ok) throw new Error(data.error ?? "Login action failed");
+      if (payload.op === "login_begin") { setLoginReady(true); setLoginHost(data.host ?? ""); }
+      if (payload.op === "login_save") { setLoginReady(false); setLoginHost(data.grant?.host ?? loginHost); }
+      if (payload.op === "login_revoke") { setLoginReady(false); setLoginHost(""); }
+      setLoginSecret("");
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Login action failed"); setLoginSecret(""); }
     finally { setLoading(false); }
   };
   const clickPreview = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -128,6 +150,46 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
         {!control.paused && <Expand className="absolute right-2 top-2 h-5 w-5 rounded bg-slate-900/70 p-1 text-white" />}
       </button>}
       {control.paused && <div className="space-y-2">
+        <div className="space-y-2 rounded-lg border border-slate-300 p-2 dark:border-slate-700" aria-label="Personal website login">
+          <div className="text-xs font-semibold">Personal website login</div>
+          <p className="text-[11px] text-slate-500">Sign in once for your account across projects. Credentials are entered in the private browser control, never the Agent chat.</p>
+          {!loginReady ? <button type="button" disabled={loading}
+            onClick={() => void loginCommand({ op: "login_begin" })}
+            className="rounded-md border px-2 py-1.5 text-xs">Start private login</button> : <>
+            <p className="text-xs">Website: {loginHost}</p>
+            <form autoComplete="off" onSubmit={(event) => {
+              event.preventDefault(); if (loginSecret) void loginCommand({ op: "login_secret", text: loginSecret });
+            }} className="flex gap-2">
+              <input type="password" autoComplete="off" value={loginSecret}
+                onChange={(event) => setLoginSecret(event.target.value)}
+                placeholder="Password or one-time code" maxLength={2048}
+                className="min-w-0 flex-1 rounded-md border px-2 py-1.5 text-xs dark:bg-slate-900" />
+              <button type="submit" disabled={loading || !loginSecret}
+                className="rounded-md border px-2 py-1.5 text-xs">Enter securely</button>
+            </form>
+            <button type="button" disabled={loading} onClick={() => void loginCommand({ op: "login_submit" })}
+              className="rounded-md border px-2 py-1.5 text-xs">Submit login field</button>
+            <label className="flex items-center gap-2 text-xs">Access level
+              <select value={grantMode} onChange={(e) => setGrantMode(e.target.value as "read" | "interact")}
+                className="rounded-md border px-1 py-1 dark:bg-slate-900">
+                <option value="read">Read only</option><option value="interact">Interact</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={allowAutomation}
+                onChange={(event) => setAllowAutomation(event.target.checked)} />
+              Allow reuse by unattended tasks
+            </label>
+            <button type="button" disabled={loading} onClick={() => void loginCommand({
+              op: "login_save", mode: grantMode, automation: allowAutomation,
+            })} className="rounded-md border border-orange-400 px-2 py-1.5 text-xs">
+              Save encrypted browser login
+            </button>
+          </>}
+          {loginHost && <button type="button" disabled={loading}
+            onClick={() => void loginCommand({ op: "login_revoke", url: "https://" + loginHost })}
+            className="ml-2 rounded-md border px-2 py-1.5 text-xs text-red-600">Revoke this site</button>}
+        </div>
         <p className="text-xs text-slate-500">{actions.help}</p>
         <div className="flex flex-wrap items-center gap-1.5">
           <button type="button" disabled={loading} onClick={() => void command({ op: "scroll", direction: "up" })} className="rounded-md border px-2 py-1.5 text-xs dark:border-slate-600">{actions.up}</button>

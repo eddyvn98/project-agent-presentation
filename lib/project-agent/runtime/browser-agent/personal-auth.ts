@@ -54,6 +54,23 @@ export async function enterPersonalLoginSecret(taskId: string, owner: string, te
   }, false);
   return { ok: true }; // NEVER return the secret, include it in logs, or forward it to the model
 }
+export async function submitPersonalLoginField(taskId: string, owner: string) {
+  if (!isPersonalLoginPreparing(taskId, owner)) throw new Error("Login consent has expired");
+  const session = requireOwner(taskId, owner);
+  await withBrowserOp(session, async () => {
+    const field = await session.page.evaluate(() => {
+      const input = document.activeElement as HTMLInputElement | null;
+      return { tag: input?.tagName.toLowerCase(), type: input?.getAttribute("type") ?? "",
+        name: input?.getAttribute("name") ?? "", autocomplete: input?.getAttribute("autocomplete") ?? "" };
+    });
+    if (!["input", "textarea"].includes(field.tag ?? "") ||
+        !/password|otp|one.time|2fa|verification|security.code|auth.code/i.test(
+          [field.type, field.name, field.autocomplete].join(" ")))
+      throw new Error("Focus the password or verification-code field first");
+    await session.page.keyboard.press("Enter");
+  }, false);
+  return { ok: true };
+}
 export async function savePersonalLogin(taskId: string, owner: string,
   mode: BrowserGrantMode, automation: boolean) {
   const session = requireOwner(taskId, owner);
