@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getMongoAiDb } from "@/services/mongodb/client";
-import { readInsightHistory } from "./insights-store";
+import { listProactiveSignalOwners } from "./proactive-signals";
 import { proactiveSuggestions, type AgentProactiveSuggestion } from "./proactive-suggestions";
 
 interface Opportunity {
@@ -64,12 +64,9 @@ export async function discoverProactiveOpportunities(): Promise<{ scanned: numbe
   if (!acquired || acquired.token !== token) return { scanned: 0, proposed: 0, skipped: true };
   let scanned = 0, proposed = 0;
   try {
-    const history = await readInsightHistory();
-    const active = history.filter(task => task.status === "done" &&
-      Date.parse(task.createdAt) > Date.now() - 45 * 86400000 && !task.scheduleRunId);
-    const owners = [...new Set(active.map(t => owner(t.ownerEmail)))].slice(0, 200);
+    const owners = await listProactiveSignalOwners();
     for (const email of owners) {
-      const candidates = await proactiveSuggestions(email, active);
+      const candidates = await proactiveSuggestions(email);
       await saveProactiveOpportunities(email, candidates);
       scanned++; proposed += candidates.length;
     }

@@ -25,6 +25,8 @@ export async function readInsightHistory(): Promise<ProjectAgentTask[]> {
 
 /** Called when a task finishes: appends its summary and refreshes data/project-agent/insights/latest.md so the report is always current while testing. */
 export async function recordFinishedTask(task: ProjectAgentTask): Promise<void> {
+  // Durable, owner-scoped proactive signal must not depend on the local JSONL report.
+  await import("./proactive-signals").then(m => m.recordProactiveSignal(task)).catch(() => {});
 	try {
 		await fs.mkdir(DIR, { recursive: true });
 		await fs.appendFile(HISTORY, `${JSON.stringify(trimmed(task))}\n`);

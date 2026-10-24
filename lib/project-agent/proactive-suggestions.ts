@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readInsightHistory } from "./insights-store";
+import { readProactiveSignals } from "./proactive-signals";
 import { listSchedules } from "./scheduled-mongo-store";
 import type { ProjectAgentTask } from "./types";
 
@@ -12,7 +12,7 @@ const norm = (s: string) => s.toLowerCase().replace(/[\u0000-\u001f]/g, " ").rep
 const sensitive = /(password|otp|secret|token|credit.card|bank|financial.transfer|mật khẩu|mã otp|chuyển khoản|thanh toán)/iu;
 /** Deterministic, owner-scoped suggestions only. Never schedules or executes on its own. */
 export async function proactiveSuggestions(owner: string, knownHistory?: ProjectAgentTask[]): Promise<AgentProactiveSuggestion[]> {
-  const [history, schedules] = await Promise.all([knownHistory ? Promise.resolve(knownHistory) : readInsightHistory(), listSchedules(owner)]);
+  const [history, schedules] = await Promise.all([knownHistory ? Promise.resolve(knownHistory) : readProactiveSignals(owner), listSchedules(owner)]);
   const groups = new Map<string, Array<{ projectId: string; prompt: string; createdAt: string }>>();
   const since = Date.now() - 45 * 86_400_000;
   for (const task of history) {
