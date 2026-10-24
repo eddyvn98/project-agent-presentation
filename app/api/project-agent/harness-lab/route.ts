@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { createHarnessVariant, listHarnessVariants, queueHarnessEvaluation,
-  changeHarnessRollout, harnessOutcomeTotals } from "@/lib/project-agent/harness-lab/store";
-import { proposeHarnessFromTrace } from "@/lib/project-agent/harness-lab/propose";
+  changeHarnessRollout, harnessOutcomeTotals, composeHarnessVariants } from "@/lib/project-agent/harness-lab/store";
+import { proposeHarnessFromTrace, refineHarnessFromEvidence } from "@/lib/project-agent/harness-lab/propose";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const HEADERS = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
@@ -42,6 +42,18 @@ export async function POST(req: NextRequest) {
         baselineId: typeof input.baselineId === "string" ? input.baselineId : undefined,
       });
       return NextResponse.json({ variant }, { status: 201, headers: HEADERS });
+    }
+    if (input.op === "compose") {
+      if(typeof input.leftId!=="string" || typeof input.rightId!=="string")
+        throw new Error("Choose two evaluated harness revisions");
+      return NextResponse.json({ variant: await composeHarnessVariants(account,input.leftId,input.rightId) },
+        { status:201, headers:HEADERS });
+    }
+    if (input.op === "refine") {
+      if (process.env.PROJECT_AGENT_HARNESS_LAB !== "1" || typeof input.id !== "string")
+        throw new Error("Select an evaluated variant in an enabled Lab");
+      return NextResponse.json({ variant:await refineHarnessFromEvidence(account,input.id) },
+        { status:201, headers:HEADERS });
     }
     if (input.op === "propose") {
       if (process.env.PROJECT_AGENT_HARNESS_LAB !== "1")

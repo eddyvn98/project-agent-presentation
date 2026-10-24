@@ -12,6 +12,7 @@ export function AgentHarnessLab() {
   const [dimension, setDimension] = useState<HarnessDimension>("approach");
   const [guidance, setGuidance] = useState("");
   const [trace, setTrace] = useState("");
+  const [selectedFirst, setSelectedFirst] = useState<string>("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
@@ -92,6 +93,9 @@ export function AgentHarnessLab() {
     <div className="space-y-3">
       <h2 className="font-semibold">Evidence and rollouts ({data.variants.length})</h2>
       {!data.variants.length && <p className="text-sm text-slate-500">No candidates yet.</p>}
+      {selectedFirst && <div className="text-xs text-slate-500">Selected first for composition: {selectedFirst}
+        <button className="ml-2 underline" type="button" onClick={() => setSelectedFirst("")}>Clear</button>
+      </div>}
       {data.variants.map(variant => {
         const counts = data.counts.find(c => c.id === variant.id);
         return <article className="space-y-2 rounded-xl border p-4" key={variant.id}>
@@ -117,6 +121,16 @@ export function AgentHarnessLab() {
             ({counts.trial.failed} failed) · {counts.control.count} control ({counts.control.failed} failed)</p>}
           {variant.failure && <p className="text-xs text-red-600">{variant.failure}</p>}
           <div className="flex flex-wrap gap-2">
+            {variant.evidence && <button type="button" disabled={Boolean(busy)||!data.enabled}
+              onClick={() => void send("refine", { id: variant.id })}
+              className="rounded border px-3 py-1.5 text-xs">Refine from evidence</button>}
+            {variant.evidence?.improved && <button type="button" disabled={Boolean(busy)}
+              onClick={() => { if (!selectedFirst) { setSelectedFirst(variant.id); return; }
+                if (selectedFirst === variant.id) { setSelectedFirst(""); return; }
+                void send("compose", { leftId: selectedFirst, rightId: variant.id }).then(() => setSelectedFirst(""));
+              }} className="rounded border px-3 py-1.5 text-xs">
+              {selectedFirst && selectedFirst !== variant.id ? "Compose selected with this" : "Select to compose"}
+            </button>}
             {["draft","rejected","evaluated"].includes(variant.status) &&
               <button type="button" disabled={Boolean(busy)||!data.enabled} onClick={() => void send("evaluate", { id: variant.id })}
                 className="rounded border px-3 py-1.5 text-xs">Run offline probe</button>}

@@ -50,15 +50,17 @@ export async function createHarnessVariant(owner: string, input: {
   const collection = await coll();
   if (await collection.countDocuments({ ownerEmail: email }, { limit: 81 }) >= 80)
     throw new Error("At most 80 harness revisions per account");
+  let parentVersion = 0;
   if (input.baselineId) {
     const parent = await getHarnessVariant(email, input.baselineId);
     if (!parent || parent.domain !== domain || parent.dimension !== dimension)
       throw new Error("Parent harness does not exist in this account and domain");
+    parentVersion = parent.version;
   }
   const timestamp = now();
   const record: Stored = {
     _id: "hl_" + randomUUID(), id: "", ownerEmail: email, domain, dimension,
-    title, guidance, status: "draft", version: 1, rolloutPercent: 0,
+    title, guidance, status: "draft", version: parentVersion + 1, rolloutPercent: 0,
     rationale: input.rationale?.slice(0, 400), baselineId: input.baselineId,
     createdAt: timestamp, updatedAt: timestamp, attempts: 0,
   };
@@ -137,4 +139,25 @@ export async function harnessOutcomeTotals(owner: string, id: string) {
     failed: rows.filter(r => r.group === group && r.outcome === "failed").length,
   });
   return { trial: summarize("trial"), control: summarize("control") };
+}
+
+/** Compose only previously evaluated, same-domain evidence-backed candidates. */
+export async function composeHarnessVariants(owner: string, leftId: string, rightId: string) {
+  if (leftId === rightId) throw new Error("Select two different candidates");
+  const [left, right] = await Promise.all([
+    getHarnessVariant(owner,leftId), getHarnessVariant(owner,rightId),
+  ]);
+  if (!left || !right || left.domain !== right.domain ||
+    !left.evidence?.improved || !right.evidence?.improved)
+    throw new Error("Both components need favorable evidence from the same domain");
+  if (left.dimension !== right.dimension)
+    throw new Error("Compose within one component; cross-component combinations require independent evaluation");
+  const guidance = validateHarnessGuidance(
+    [left.guidance,right.guidance].join("\n\n").slice(0,1800));
+  return createHarnessVariant(owner,{
+    title: ("Composition: "+left.title+" + "+right.title).slice(0,100),
+    domain: left.domain, dimension: left.dimension,
+    guidance, baselineId: left.id,
+    rationale: "Composition of two evidence-supported revisions: "+left.id+", "+right.id,
+  });
 }

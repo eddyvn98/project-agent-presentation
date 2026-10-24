@@ -1,6 +1,6 @@
 import { callRuntimeModel } from "../runtime/model";
 import { validateHarnessGuidance, parseHarnessDimension, parseHarnessDomain } from "./guard";
-import { createHarnessVariant, listHarnessVariants } from "./store";
+import { createHarnessVariant, listHarnessVariants, getHarnessVariant } from "./store";
 import type { HarnessDimension } from "./types";
 import { buildTrace, isWasteful } from "../learning/reflect";
 import type { ProjectAgentTask } from "../types";
@@ -46,4 +46,30 @@ export async function autoProposeHarness(task: ProjectAgentTask) {
   if (!trace || task.log.some(v => v.includes("harness_variant ::"))) return;
   await proposeHarnessFromTrace(task.ownerEmail,
     classifyHarnessDomain(task.userPrompt??task.prompt), trace).catch(() => {});
+}
+
+/** Sequential Propose–Probe–Compose: refine an earlier tested variant from concrete evidence. */
+export async function refineHarnessFromEvidence(owner: string, id: string) {
+  const parent = await getHarnessVariant(owner,id);
+  if (!parent || !parent.evidence)
+    throw new Error("Evaluate an earlier candidate before refining it");
+  const evidence = parent.evidence;
+  const trace = [
+    "Improve the earlier generic hint, without changing security policies.",
+    "Current dimension: "+parent.dimension, "Current hint:\n"+parent.guidance,
+    "Evidence: "+JSON.stringify({ reason: evidence.reason,
+      cases: evidence.cases.map(c=>({id:c.caseId, pass:c.candidatePass, before:c.basePass})) }),
+  ].join("\n").slice(0,2500);
+  const existing = await listHarnessVariants(owner);
+  if (existing.filter(v=>Date.parse(v.createdAt)>Date.now()-86400000).length>=MAX_REFINEMENTS_PER_DAY)
+    throw new Error("Daily improvement budget exceeded");
+  const output = await callRuntimeModel({query:
+    "Reply ONLY with JSON {title,dimension,guidance,rationale}. Keep dimension="+parent.dimension+
+    ". Propose a safer, more effective bounded hint for synthetic, read-only comparisons."+
+    " No permissions, credentials, scripts, system prompt overrides or URLs.\n"+trace,
+    user: "harness-refiner-"+parent.id, signal:AbortSignal.timeout(45_000),
+    modelSelector:process.env.PROJECT_AGENT_HARNESS_IMPROVER_MODEL || undefined});
+  const proposal = parse(output.answer);
+  if(proposal.dimension!==parent.dimension) throw new Error("Refinement cannot change component type");
+  return createHarnessVariant(owner,{ ...proposal, domain:parent.domain, baselineId:parent.id});
 }
