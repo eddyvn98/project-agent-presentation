@@ -84,7 +84,8 @@ function taskProgress(task: ProjectAgentTask, language: ActivityLanguage): strin
 	if (used) {
 		const label = language === "en" ? TOOL_LABELS[used[1].toLowerCase()] ?? t.tool : activityLabel(used[1], language);
 		const detail = used[1].startsWith("sandbox_") || used[1] === "render_pages" || used[1] === "web_fetch" || used[1] === "web_search" || used[1] === "workspace" || used[1] === "delegate" || used[1] === "generate_image" || used[1] === "calculate" ? used[2]?.replace(/\s+/g, " ").trim().slice(0, 90) : "";
-		return detail && !/(shell|code|write|workspace_apply|sandbox|execute)/i.test(used[1]) && !/[{}\n;]/.test(detail) ? `${label}: ${detail}` : label;
+		const detailClean = used[1] === "calculate" ? !/[{}\n]/.test(detail) : !/[{}\n;]/.test(detail);
+		return detail && !/(shell|code|write|workspace_apply|sandbox|execute)/i.test(used[1]) && detailClean ? `${label}: ${detail}` : label;
 	}
 	return t.working;
 }

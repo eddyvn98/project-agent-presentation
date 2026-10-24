@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto";
 import path from "path";
-import JSZip from "jszip";
 import type { ProjectAgentTaskFile } from "./types";
 import type { DifyInlineFile } from "./dify-inline-output";
 import { INTERACTIVE_HTML_CSP, STATIC_HTML_CSP } from "./interactive-html";
@@ -166,14 +165,21 @@ export function inferProjectAgentFileMetadata(fileName: string, contentType: str
 
 export async function normalizeGeneratedOfficeFile(fileName: string, bytes: Uint8Array): Promise<Uint8Array> {
 	if (!fileName.toLowerCase().endsWith(".xlsx") || bytes[0] !== 0x50 || bytes[1] !== 0x4b) return bytes;
-	const zip = await JSZip.loadAsync(bytes);
-	const contentTypesFile = zip.file("[Content_Types].xml");
-	if (!contentTypesFile) return bytes;
-	const contentTypes = await contentTypesFile.async("string");
-	const badNamespace = /(<Types\s+xmlns=")http:\/\/schemas\.openxmlformats\.org\/package\/2006\/relationships(")/;
-	if (!badNamespace.test(contentTypes)) return bytes;
-	zip.file("[Content_Types].xml", contentTypes.replace(badNamespace, "$1http://schemas.openxmlformats.org/package/2006/content-types$2"));
-	return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+	try {
+		const pkg = "jszip";
+		const mod: any = await import(/* @vite-ignore */ pkg);
+		const JSZip = mod.default || mod;
+		const zip = await JSZip.loadAsync(bytes);
+		const contentTypesFile = zip.file("[Content_Types].xml");
+		if (!contentTypesFile) return bytes;
+		const contentTypes = await contentTypesFile.async("string");
+		const badNamespace = /(<Types\s+xmlns=")http:\/\/schemas\.openxmlformats\.org\/package\/2006\/relationships(")/;
+		if (!badNamespace.test(contentTypes)) return bytes;
+		zip.file("[Content_Types].xml", contentTypes.replace(badNamespace, "$1http://schemas.openxmlformats.org/package/2006/content-types$2"));
+		return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+	} catch {
+		return bytes;
+	}
 }
 
 export function buildProjectAgentFileHeaders(file: Pick<ProjectAgentTaskFile, "name" | "mimeType" | "size">, preview: boolean, interactive = false): Record<string, string> {
