@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { runWithLeaseFence } from "./lease-fence";
 import { queueRecoveryDecision } from "./recovery-decision";
 import { getMongoAiDb } from "@/services/mongodb/client";
 import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
@@ -72,7 +73,7 @@ export async function withDurableTaskLease(id: string, work: () => Promise<void>
       }, $unset: { leaseToken: "", leaseUntil: "" } });
       return false;
     }
-    try { await work(); if (lostLease) throw new Error("MongoDB worker lease was lost"); }
+    try { await runWithLeaseFence({ taskId: id, token }, work); if (lostLease) throw new Error("MongoDB worker lease was lost"); }
     catch (error) {
       await coll.updateOne({ _id: id, leaseToken: token }, { $set: {
         state: "needs_review", completedAt: iso(),
