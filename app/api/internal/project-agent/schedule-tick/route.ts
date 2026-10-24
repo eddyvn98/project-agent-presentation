@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { dispatchDueSchedules } from "@/lib/project-agent/scheduled-worker";
+import { tickDurableTasks } from "@/lib/project-agent/task-runner";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +16,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const result = await dispatchDueSchedules();
+    const queue = await tickDurableTasks();
     return NextResponse.json({ dispatched: result.filter(r => r.status === "dispatched").length,
-      attempted: result.length });
+      attempted: result.length, queue });
   } catch { return NextResponse.json({ error: "Scheduler unavailable" }, { status: 503 }); }
 }

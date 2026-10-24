@@ -6,7 +6,8 @@ import { renderFileId } from "../../render-ids";
 import { uploadRuntimeImage } from "../model";
 import { guardedRequest } from "../guarded-fetch";
 import { assertPublicHttpUrl } from "../web-security";
-import { isCaptchaPage, isSensitiveField, requiresUserConfirmation, resolveSafeRedirect } from "./safety";
+import { isCaptchaPage, isSensitiveField, resolveSafeRedirect, IRREVERSIBLE_PATTERN } from "./safety";
+import { requireAgentApproval } from "../../agent-approvals";
 import { workspaceDir } from "../sandbox";
 import type { RuntimeInput, RuntimeStep } from "../run-agent";
 import type { BrowserAction } from "./action-parser";
@@ -25,11 +26,14 @@ function locatorForRef(session: BrowserSession, ref: string) {
 	return session.page.locator(selector);
 }
 
-function needsConfirmation(input: RuntimeInput, session: BrowserSession, label: string): boolean {
-	const prompt = (input.scheduledRun ? "" : input.userPrompt ?? "").toLowerCase();
-	let host = "";
-	try { host = new URL(session.page.url()).hostname.toLowerCase(); } catch { return true; }
-	return requiresUserConfirmation(label, prompt, host);
+function needsConfirmation(_input: RuntimeInput, _session: BrowserSession, label: string): boolean {
+  return IRREVERSIBLE_PATTERN.test(label);
+}
+async function approvalFor(input: RuntimeInput, session: BrowserSession, intent: string) {
+  let host = "";
+  try { host = new URL(session.page.url()).hostname.toLowerCase(); } catch { /* deny if unknown */ }
+  return requireAgentApproval({ owner: input.ownerEmail ?? "", projectId: input.projectId ?? "",
+    taskId: input.taskId ?? "", host, intent, scheduled: Boolean(input.scheduledRun) });
 }
 
 async function checkCaptcha(session: BrowserSession): Promise<string | null> {
@@ -99,7 +103,7 @@ async function saveDownload(input: RuntimeInput, action: BrowserAction, session:
 	}
 	const line = snapshotRefLine(session.lastSnapshot, action.ref!);
 	if (!line) throw new Error("That ref is not in the latest browser snapshot. Take a snapshot and use a current ref.");
-	if (requiresUserConfirmation(line, input.scheduledRun ? "" : input.userPrompt ?? "", new URL(session.page.url()).hostname)) throw new Error("This action needs the user's confirmation. Ask before proceeding.");
+	if (needsConfirmation(input, session, line)) { const grant = await approvalFor(input, session, "download: " + line); if (!grant.allowed) throw new Error(grant.message); }
 	let download: import("playwright-core").Download | undefined;
 	const wait = session.page.waitForEvent("download", { timeout: 30_000 }).then((value) => { download = value; });
 	await locatorForRef(session, action.ref!).click();
@@ -118,7 +122,8 @@ async function saveDownload(input: RuntimeInput, action: BrowserAction, session:
 async function stagedUpload(input: RuntimeInput, action: BrowserAction, session: BrowserSession): Promise<string> {
   if (process.env.PROJECT_AGENT_ALLOW_UPLOADS !== "1") throw new Error("Browser uploads are disabled by deployment policy.");
   const host = new URL(session.page.url()).hostname;
-  if (needsConfirmation(input, session, "upload")) throw new Error("Uploading to this site requires explicit user approval.");
+  const grant = await approvalFor(input, session, "upload: " + (action.path ?? "") + " to " + host);
+  if (!grant.allowed) throw new Error(grant.message);
   const workspace = await fs.realpath(workspaceDir(input.chatId));
   const original = path.join(workspace, "inputs");
   const root = await fs.realpath(original);
@@ -169,7 +174,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 				case "click": {
 					const line = snapshotRefLine(session.lastSnapshot, action.ref!);
 					if (!line) throw new Error("DOM ref is not in the latest browser snapshot.");
-					if (requiresUserConfirmation(line, input.scheduledRun ? "" : input.userPrompt ?? "", new URL(session.page.url()).hostname)) return { text: "This action needs the user's confirmation. Ask before proceeding.", failed: true };
+					if (needsConfirmation(input, session, line)) { const grant = await approvalFor(input, session, "click: " + line); if (!grant.allowed) return { text: grant.message, failed: true }; }
 					const bounds = await locatorForRef(session, action.ref!).boundingBox();
 					if (bounds) { const viewport = session.page.viewportSize() ?? { width: 1280, height: 800 }; marker = { x: Math.max(0, Math.min(1, (bounds.x + bounds.width / 2) / viewport.width)), y: Math.max(0, Math.min(1, (bounds.y + bounds.height / 2) / viewport.height)), kind: "agent" }; }
 					await locatorForRef(session, action.ref!).click(); break;
@@ -179,7 +184,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 					if (!line) throw new Error("DOM ref is not in the latest browser snapshot.");
 					const hasSensitive = await session.page.locator('input[type="password"],input[autocomplete*="cc-"],input[name*="cvv" i],input[name*="ssn" i]').evaluateAll((nodes) => nodes.some((node) => (node as HTMLElement).offsetWidth > 0));
 					if (isSensitiveField(line) || hasSensitive) return { text: "This field may contain a password, payment, bank, or government ID value. Ask the user to enter it themselves.", failed: true };
-					if (action.submit && !/searchbox|search/i.test(line) && needsConfirmation(input, session, "send")) return { text: "Submitting a non-search form needs the user's confirmation. Ask before submitting.", failed: true };
+					if (action.submit && !/searchbox|search/i.test(line)) { const grant = await approvalFor(input, session, "submit input: " + line); if (!grant.allowed) return { text: grant.message, failed: true }; }
 					await locatorForRef(session, action.ref!).fill(action.text!);
 					if (action.submit) await locatorForRef(session, action.ref!).press("Enter");
 					break;
@@ -187,7 +192,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 				case "press": {
 					if (/^enter$/i.test(action.key ?? "")) {
 						const active = await session.page.locator(":focus").evaluate((element) => `${element.getAttribute("type") ?? ""} ${element.getAttribute("aria-label") ?? ""} ${element.textContent ?? ""} ${element.closest("form")?.getAttribute("role") ?? ""}`).catch(() => "");
-						if (active && !/search/i.test(active) && !/search/i.test(action.key ?? "") && needsConfirmation(input, session, "submit")) return { text: "Submitting a non-search form needs the user's confirmation. Ask before submitting.", failed: true };
+						if (active && !/search/i.test(active)) { const grant = await approvalFor(input, session, "submit form: " + active); if (!grant.allowed) return { text: grant.message, failed: true }; }
 					}
 					await session.page.keyboard.press(action.key!); break;
 				}
@@ -196,7 +201,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 				case "drag": {
 					const target = snapshotRefLine(session.lastSnapshot, action.targetRef!);
 					if (!target) return { text: "Take a new snapshot before dragging.", failed: true };
-					if (needsConfirmation(input, session, target)) return { text: "This drag could change data and needs the user's explicit confirmation.", failed: true };
+					if (needsConfirmation(input, session, target)) { const grant = await approvalFor(input, session, "drag: " + target); if (!grant.allowed) return { text: grant.message, failed: true }; }
 					await locatorForRef(session, action.ref!).dragTo(locatorForRef(session, action.targetRef!));
 					extra = "Dragged the selected element to its target."; break;
 				}

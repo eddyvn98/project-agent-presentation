@@ -2,6 +2,7 @@ import { runProjectAgentTask } from "./dify-agent";
 import { updateProjectAgentTask } from "./task-store";
 import { autoTitleProjectAgentConversation } from "./chat-title";
 import { afterTaskForGoal } from "./goal-hook";
+import { enqueueDurableTask, withDurableTaskLease, scanDurableQueue } from "./durable-queue";
 
 import { PROJECT_AGENT_BOOT_ID, runningProjectAgentTasks as runningTasks } from "./boot";
 
@@ -13,7 +14,14 @@ export function startProjectAgentTask(taskId: string): void {
 	if (runningTasks.has(taskId)) return;
 	const controller = new AbortController();
 	controllers.set(taskId, controller);
-	const run = runProjectAgentTask(taskId, controller.signal)
+	let actuallyRan = false;
+	const run = (async () => {
+		if (process.env.PROJECT_AGENT_DURABLE_QUEUE !== "1") { actuallyRan = true; return runProjectAgentTask(taskId, controller.signal); }
+		await enqueueDurableTask(taskId);
+		actuallyRan = await withDurableTaskLease(taskId, async () => {
+			await runProjectAgentTask(taskId, controller.signal);
+		});
+	})()
 		.then(() => { void autoTitleProjectAgentConversation(taskId); })
 		.catch(async (cause) => {
 			const error = cause instanceof Error ? cause.message : String(cause);
@@ -25,7 +33,7 @@ export function startProjectAgentTask(taskId: string): void {
 				logLine: `failed: ${error}`,
 			}).catch(() => {});
 		})
-		.finally(() => { runningTasks.delete(taskId); controllers.delete(taskId); void afterTaskForGoal(taskId, startProjectAgentTask); });
+		.finally(() => { runningTasks.delete(taskId); controllers.delete(taskId); if (actuallyRan) void afterTaskForGoal(taskId, startProjectAgentTask); });
 	runningTasks.set(taskId, run);
 }
 
@@ -35,4 +43,12 @@ export function stopProjectAgentTask(taskId: string): boolean {
 	if (!controller) return false;
 	controller.abort();
 	return true;
+}
+
+/** Cron replays only durable jobs that were queued and never claimed. Uncertain side effects require review. */
+export async function tickDurableTasks(limit = 12): Promise<{ enqueued: number; uncertain: number }> {
+	if (process.env.PROJECT_AGENT_DURABLE_QUEUE !== "1") return { enqueued: 0, uncertain: 0 };
+	const found = await scanDurableQueue(limit);
+	for (const taskId of found.queued) startProjectAgentTask(taskId);
+	return { enqueued: found.queued.length, uncertain: found.uncertain };
 }

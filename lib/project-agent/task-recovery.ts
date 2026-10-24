@@ -13,6 +13,8 @@ export function isProjectAgentTaskOrphaned(task: ProjectAgentTask): boolean {
 }
 
 export async function recoverProjectAgentTask(task: ProjectAgentTask): Promise<ProjectAgentTask> {
+	// A durable leased task belongs to its queue worker; UI reads must never steal a live task.
+	if (process.env.PROJECT_AGENT_DURABLE_QUEUE === "1" && task.status === "running") return task;
 	if (isProjectAgentTaskOrphaned(task)) {
 		const resumes = task.resumeCount ?? 0;
 		if (resumes >= MAX_RESUMES) return updateProjectAgentTask(task.id, { status: "failed", completedAt: new Date().toISOString(), error: "The web server stopped twice while this task was running. Please send the request again.", logLine: "failed: interrupted by server restart" });
