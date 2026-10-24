@@ -69,9 +69,11 @@ export async function POST(
   if ("error" in parsedFiles) return NextResponse.json({ error: parsedFiles.error }, { status: parsedFiles.status });
   let inputFiles: CreateProjectAgentTaskInput["inputFiles"] = parsedFiles.files;
   let reuseInputsFrom: string | undefined;
-  if (typeof body.retryOfTaskId === "string" && !inputFiles.length) {
+  let retryOfTaskId: string | undefined;
+  if (typeof body.retryOfTaskId === "string") {
     const previous = await readProjectAgentTask(body.retryOfTaskId).catch(() => null);
-    if (previous?.projectId === params.projectId && previous.ownerEmail === auth.callerEmail && previous.inputFiles?.length) {
+    if (previous?.projectId === params.projectId && previous.ownerEmail === auth.callerEmail && previous.status !== "running" && previous.status !== "queued") retryOfTaskId = previous.id;
+    if (retryOfTaskId && !inputFiles.length && previous?.inputFiles?.length) {
       inputFiles = previous.inputFiles.map(({ id, name, mimeType, size }) => ({ id, name, mimeType, size }));
       reuseInputsFrom = previous.id;
     }
@@ -100,6 +102,7 @@ export async function POST(
     engines: await allowedEngines(async (moduleId) => (await allowedModulesForRequest(req, [moduleId])).allowed ?? null),
     ...(inputFiles.length ? { inputFiles } : {}),
     ...(reuseInputsFrom ? { reuseInputsFrom } : {}),
+    ...(retryOfTaskId ? { retryOfTaskId } : {}),
   });
 
   if (goal) await saveGoal(conversationId ?? task.id, goal);
