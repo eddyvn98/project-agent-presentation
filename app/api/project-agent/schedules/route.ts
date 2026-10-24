@@ -39,7 +39,7 @@ export async function PATCH(req: NextRequest) {
   if (!owner) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: HEADERS });
   if (!originOk(req)) return NextResponse.json({ error: "Origin denied" }, { status: 403, headers: HEADERS });
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
-  if (!body || typeof body.id !== "string" || !["approve", "pause", "resume", "delete", "edit", "run"].includes(String(body.action)))
+  if (!body || typeof body.id !== "string" || !["approve", "approve_action", "reject_action", "pause", "resume", "delete", "edit", "run"].includes(String(body.action)))
     return NextResponse.json({ error: "Invalid action" }, { status: 400, headers: HEADERS });
   try {
     if (body.action === "run") return NextResponse.json(await runScheduleNow(owner, body.id), { headers: HEADERS });

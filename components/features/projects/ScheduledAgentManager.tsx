@@ -94,6 +94,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
         <p className="text-xs text-slate-500">{item.spec.kind} · {item.spec.timezone} · Next: {item.nextRunAt ? new Date(item.nextRunAt).toLocaleString() : "none"}</p>
         <div className="flex flex-wrap gap-2 text-xs">
           <button disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: item.status === "pending" ? "approve" : item.status === "active" ? "pause" : "resume" })}>{item.status === "pending" ? "Approve" : item.status === "active" ? "Pause" : "Resume"}</button>
+          {item.pendingAction && <><span className="text-xs text-amber-700">Agent requests: {item.pendingAction}</span><button type="button" disabled={busy} className="rounded border border-orange-400 px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: "approve_action" })}>Approve change</button><button type="button" disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: "reject_action" })}>Reject change</button></>}
           {item.status === "pending" && <span className="text-xs text-amber-600">Agent suggestion — requires your approval.</span>}
           <button disabled={busy} className="rounded border px-2 py-1" onClick={() => {
             setEditing(item.id); setTitle(item.title); setPrompt(item.prompt); setProjectId(item.projectId);

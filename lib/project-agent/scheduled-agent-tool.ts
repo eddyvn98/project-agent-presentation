@@ -16,8 +16,6 @@ export async function agentScheduleAction(input: RuntimeInput, action: Action) {
   if (input.readOnly || input.depth) return { text: "Only the primary Agent can manage scheduled tasks", failed: true };
   try {
     if (action.op === "create" || action.op === "propose") {
-      if (action.op === "create" && !/(schedule|remind|every|daily|weekly|tomorrow|at\s+\d|đặt lịch|hẹn giờ|mỗi ngày|mỗi tuần|hàng ngày|hàng tuần|nhắc tôi|ngày mai|vào lúc)/iu.test(input.userPrompt ?? input.query))
-        return { text: "Ask the user for explicit permission before saving a scheduled task", failed: true };
       if (!await projectCap.getProjectAccess(input.projectId, owner))
         return { text: "User has no access to the target Project", failed: true };
       const spec = action.kind === "watch" ?
@@ -28,19 +26,18 @@ export async function agentScheduleAction(input: RuntimeInput, action: Action) {
         { kind: action.kind!, timezone: action.timezone!, localTime: action.localTime,
           ...(action.kind === "weekly" ? { weekdays: action.weekdays } : {}) };
       const schedule = await createSchedule(owner, { projectId: input.projectId, title: action.title!,
-        prompt: action.prompt!, spec }, action.op === "propose");
-      return { text: (action.op === "propose" ? "Schedule proposal awaiting user approval: " : "Schedule created: ") + JSON.stringify({
+        prompt: action.prompt!, spec }, true);
+      return { text: "Schedule awaiting user approval: " + JSON.stringify({
         id: schedule.id, title: schedule.title, nextRunAt: schedule.nextRunAt,
         timezone: schedule.spec.timezone, projectId: schedule.projectId,
       }) };
     }
-    // Destructive schedule changes need a direct user instruction; never self-modify while running.
-    const request = input.userPrompt ?? input.query;
-    if (!/(pause|resume|delete|cancel|stop schedule|tạm dừng|tiếp tục|xóa lịch|huỷ lịch|hủy lịch)/iu.test(request))
-      return { text: "Ask the user before modifying a saved schedule", failed: true };
-    const schedule = await updateSchedule(owner, action.id!, { action: action.op });
-    return { text: "Schedule updated: " + JSON.stringify(schedule ?
-      { id: schedule.id, status: schedule.status, nextRunAt: schedule.nextRunAt } : { deleted: true }) };
+    // Neither user text nor page content is a signed approval. Persist a proposal only.
+    const requestedAction = ("suggest_" + action.op) as "suggest_pause" | "suggest_resume" | "suggest_delete";
+    const schedule = await updateSchedule(owner, action.id!, { action: requestedAction });
+    return { text: "Schedule change awaits owner approval: " + JSON.stringify({
+      id: schedule?.id, proposedAction: schedule?.pendingAction,
+    }) };
   } catch (error) {
     return { text: "Schedule error: " + (error instanceof Error ? error.message : "unknown"), failed: true };
   }

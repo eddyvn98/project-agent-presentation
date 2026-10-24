@@ -103,11 +103,27 @@ async function locked<T>(owner: string, id: string, fn: () => Promise<T>): Promi
   finally { await fs.rm(dir, { recursive: true, force: true }); }
 }
 export async function updateSchedule(owner: string, id: string,
-  change: { action: "approve" | "pause" | "resume" | "delete" | "edit"; title?: string;
+  change: { action: "approve" | "approve_action" | "reject_action" | "suggest_pause" | "suggest_resume" | "suggest_delete" | "pause" | "resume" | "delete" | "edit"; title?: string;
     prompt?: string; spec?: ScheduleCreation["spec"]; projectId?: string }) {
   return locked(owner, id, async () => {
     const item = await getSchedule(owner, id);
     if (!item) throw new Error("Schedule not found");
+    if (change.action.startsWith("suggest_")) {
+      if (item.status === "pending") throw new Error("Approve the new schedule before requesting modifications");
+      item.pendingAction = change.action.slice("suggest_".length) as "pause" | "resume" | "delete";
+    }
+    if (change.action === "reject_action") item.pendingAction = undefined;
+    if (change.action === "approve_action") {
+      const pending = item.pendingAction;
+      if (!pending) throw new Error("No proposed schedule change");
+      item.pendingAction = undefined;
+      if (pending === "delete") { await fs.unlink(scheduleFile(owner, id)); return null; }
+      if (pending === "pause") item.status = "paused";
+      if (pending === "resume") {
+        item.nextRunAt = nextScheduledRun(item.spec);
+        item.status = item.nextRunAt ? "active" : "completed";
+      }
+    }
     if (change.action === "delete") { await fs.unlink(scheduleFile(owner, id)); return null; }
     if (change.action === "approve") {
       if (item.status !== "pending") throw new Error("This schedule is not awaiting approval");

@@ -35,6 +35,8 @@ export interface ScheduledAgentTask {
   updatedAt: string;
   lastRunAt?: string;
   watchDigest?: string;
+  /** Agent-requested modification that remains inactive until owner approval. */
+  pendingAction?: "pause" | "resume" | "delete";
   runs: ScheduleRun[];
 }
 export type ScheduleCreation = Pick<ScheduledAgentTask, "projectId" | "title" | "prompt" | "spec">;
