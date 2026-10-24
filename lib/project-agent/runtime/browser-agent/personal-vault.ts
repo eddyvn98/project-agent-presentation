@@ -32,6 +32,8 @@ function rootDir() {
   if (root === workspace || root.startsWith(workspace + path.sep) ||
       workspace.startsWith(root + path.sep) || root === process.cwd())
     throw new Error("Session Vault directory must not overlap a sandbox workspace");
+  if (process.env.NODE_ENV === "production" && !process.env.PROJECT_AGENT_SESSION_VAULT_DIR)
+    throw new Error("Production Session Vault needs an explicit private persistent directory");
   return root;
 }
 function userPath(owner: string) { return path.join(rootDir(), ownerKey(owner)); }
@@ -52,12 +54,13 @@ async function atomicWrite(dest: string, json: unknown) {
 }
 async function getUserKey(owner: string, create: boolean): Promise<Buffer | null> {
   const dest = path.join(userPath(owner), "key.json");
-  const master = masterVaultKey(); // no silent plaintext or disposable-key fallback
   const aad = "project-agent:user-key:v1:" + ownerKey(owner);
   let wrapped = await fs.readFile(dest, "utf8").catch((error: NodeJS.ErrnoException) => {
     if (error.code === "ENOENT") return null;
     throw error;
   });
+  if (!wrapped && !create) return null;
+  const master = masterVaultKey(); // public browsing remains available without a configured Vault
   if (!wrapped && create) {
     await privateDirectory(rootDir());
     await privateDirectory(userPath(owner));
