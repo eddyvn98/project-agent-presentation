@@ -270,10 +270,10 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 				guard.noteAction(replayKey, true);
 				if (replay.noteBlocked(replayKey) >= 2) { wrapReason = blocked; query = wrapUpQuery(blocked); }
 				break; }
+			await assertActiveTaskLease();
 			replay.markAttempt(replayKey, effectful);
 			metrics.actions.set(action.action, (metrics.actions.get(action.action) ?? 0) + 1);
 			const actionStarted = Date.now();
-			await assertActiveTaskLease();
 			const raw = await withPolicy(input, action, () => runAction(input, action, step, imageCalls, input.budget ?? (input.budget = { delegates: 0 }))) as Awaited<ReturnType<typeof runAction>>;
 			const outcome = action.action === "search_output" || action.action === "read_output" ? raw : await externalizeActionOutput(input, action.action, raw);
 			if (!input.depth && input.taskId) await recordContextCheckpoint(input, { taskId: input.taskId, step, action: action.action, failed: Boolean(outcome.failed), observation: outcome.text }).catch(() => {});
