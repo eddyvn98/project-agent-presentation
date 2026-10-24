@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Folder, Plus, Settings2 } from "lucide-react";
+import { Folder, Plus } from "lucide-react";
 import ProtectedRoute from "@/components/features/auth/protected-route";
 import { ProjectCreateDialog } from "@/components/features/projects/ProjectCreateDialog";
 import { useProjectStore } from "@/stores/useProjectStore";
@@ -23,10 +23,7 @@ export default function AgentWebPage() {
 			<div className="mx-auto w-full max-w-2xl px-4 py-6 sm:py-10">
 				<div className="mb-4 flex items-center justify-between">
 					<h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Agent Web</h1>
-					<div className="flex items-center gap-2">
-            <a href="/account/agent-control" aria-label="Manage Agent settings" className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"><Settings2 className="h-4 w-4" />Agent settings</a>
-            <button type="button" onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"><Plus className="h-4 w-4" />New project</button>
-            </div>
+					<button type="button" onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"><Plus className="h-4 w-4" />New project</button>
 				</div>
 				{shown.length === 0 ? <p className="text-sm text-slate-500">No projects yet. Create one to start.</p> : (
 					<ul className="flex flex-col gap-1.5">

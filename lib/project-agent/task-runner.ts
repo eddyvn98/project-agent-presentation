@@ -20,7 +20,7 @@ export function startProjectAgentTask(taskId: string): void {
 		await enqueueDurableTask(taskId);
 		actuallyRan = await withDurableTaskLease(taskId, async () => {
 			await runProjectAgentTask(taskId, controller.signal);
-		});
+		}, () => controller.abort(new Error("MongoDB worker lease was lost")));
 	})()
 		.then(() => { void autoTitleProjectAgentConversation(taskId); })
 		.catch(async (cause) => {

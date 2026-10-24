@@ -75,7 +75,7 @@ export function useProjectAgentConversationSync(
         for (const task of page.tasks!) older.set(task.id, task);
         cursor = page.nextCursor ?? null;
         setHasOlder(Boolean(cursor));
-        publish();
+        if (changed) publish();
         setLoadError("");
       } catch (cause) {
         if (!cancelled) setLoadError(cause instanceof Error ? cause.message : "Could not load older messages");
@@ -113,7 +113,7 @@ export function useProjectAgentConversationSync(
           }
         }
         setHasOlder(Boolean(cursor));
-        if (changed) publish();
+        publish();
         setLoadError("");
       } catch (cause) {
         if (!cancelled) setLoadError(cause instanceof Error ? cause.message : "Could not load Project Agent chat");

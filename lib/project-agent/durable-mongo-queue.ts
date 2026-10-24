@@ -41,17 +41,26 @@ export async function enqueueDurableTask(id: string): Promise<QueueReceipt> {
   } }, { upsert: true });
   return (await readQueueReceipt(id))!;
 }
-export async function withDurableTaskLease(id: string, work: () => Promise<void>) {
+export async function withDurableTaskLease(id: string, work: () => Promise<void>, onLeaseLost?: () => void) {
   const coll = await collection(), token = randomUUID(), now = iso();
   const record = await coll.findOneAndUpdate({ _id: id, state: "queued" },
     { $set: { state: "running", startedAt: now, leaseToken: token,
       leaseUntil: new Date(Date.now() + 120000).toISOString() },
       $inc: { attempt: 1 } }, { returnDocument: "after" });
   if (!record || record.leaseToken !== token) return false;
+  let lastHeartbeat = Date.now(), lostLease = false;
   const heartbeat = setInterval(() => {
     void coll.updateOne({ _id: id, leaseToken: token, state: "running" },
       { $set: { leaseUntil: new Date(Date.now() + 120000).toISOString() } })
-      .catch(() => {});
+      .then(result => {
+        if (!result.matchedCount) {
+          if (!lostLease) { lostLease = true; onLeaseLost?.(); }
+        } else lastHeartbeat = Date.now();
+      }).catch(() => {
+        if (Date.now() - lastHeartbeat > 60000 && !lostLease) {
+          lostLease = true; onLeaseLost?.();
+        }
+      });
   }, 20000);
   heartbeat.unref?.();
   try {
@@ -62,7 +71,7 @@ export async function withDurableTaskLease(id: string, work: () => Promise<void>
       }, $unset: { leaseToken: "", leaseUntil: "" } });
       return false;
     }
-    try { await work(); }
+    try { await work(); if (lostLease) throw new Error("MongoDB worker lease was lost"); }
     catch (error) {
       await coll.updateOne({ _id: id, leaseToken: token }, { $set: {
         state: "needs_review", completedAt: iso(),

@@ -12,8 +12,7 @@
     "build:demo": "vite build",
     "test:e2e": "playwright test",
     "check:lines": "node tests/check-lines.mjs",
-    "test:agent": "vitest run --config vitest.agent.config.ts",
-    "check:agent-routes": "node scripts/check-agent-routes.mjs"
+    "test:agent": "vitest run --config vitest.agent.config.ts"
   },
   "peerDependencies": {
     "next": ">=14",

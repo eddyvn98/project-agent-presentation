@@ -1,18 +1,10 @@
-import ProtectedRoute from "@/components/features/auth/protected-route";
-import { AgentAccountNav } from "@/components/features/projects/AgentAccountNav";
 import { AgentApprovalInbox } from "@/components/features/projects/AgentApprovalInbox";
 import { PersonalSessionVaultManager } from "@/components/features/projects/PersonalSessionVaultManager";
-import { PersonalAgentMemoryManager } from "@/components/features/projects/PersonalAgentMemoryManager";
-import { AgentProactiveSuggestions } from "@/components/features/projects/AgentProactiveSuggestions";
-
 export default function AgentControlCenter() {
-  return <ProtectedRoute><main className="mx-auto max-w-4xl space-y-5 p-4 sm:p-8">
-    <AgentAccountNav current="/account/agent-control" />
+  return <main className="mx-auto max-w-4xl space-y-5 p-4 sm:p-8">
     <header><h1 className="text-xl font-semibold">Agent Control Center</h1>
-      <p className="text-sm text-slate-500">Approve sensitive actions, manage account permissions, memory and automation suggestions across Projects.</p></header>
+      <p className="text-sm text-slate-500">Manage your Agent's permissions and approve sensitive actions across all Projects.</p></header>
     <AgentApprovalInbox />
     <PersonalSessionVaultManager />
-    <PersonalAgentMemoryManager />
-    <AgentProactiveSuggestions />
-  </main></ProtectedRoute>;
+  </main>;
 }
