@@ -277,14 +277,10 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 				return { answer: action.answer, conversationId, inlineFiles: files, promptTokens: totalPromptTokens ? estimateContextTokens(totalPromptTokens, rounds) : undefined, iterations: rounds, sources: input.sources };
 			}
 			const replayKey = spanKey(action.action, JSON.stringify({ ...action, note: undefined }));
-			const effectful = mayHaveExternalEffects(action);
-			const blocked = replay.before(action.action, replayKey, effectful);
-			if (blocked) {
-				input.onStep?.({ tool: "loop_blocked", detail: blocked });
+			const effectful = mayHaveExternalEffects(action), blocked = replay.before(action.action, replayKey, effectful);
+			if (blocked) { input.onStep?.({ tool: "loop_blocked", detail: blocked });
 				results.push(blocked + " Change approach or return a partial final answer.");
-				guard.noteAction(replayKey, true);
-				break;
-			}
+				guard.noteAction(replayKey, true); break; }
 			metrics.actions.set(action.action, (metrics.actions.get(action.action) ?? 0) + 1);
 			const actionStarted = Date.now();
 			const raw = await withPolicy(input, action, () => runAction(input, action, step, imageCalls, input.budget ?? (input.budget = { delegates: 0 }))) as Awaited<ReturnType<typeof runAction>>;
