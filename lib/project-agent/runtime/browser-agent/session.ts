@@ -232,3 +232,9 @@ export async function closeBrowserSessionsForChat(chatId: string): Promise<void>
     .filter(session => session.chatId === chatId)
     .map(session => session.close()));
 }
+
+/** Process-local aggregate counters; excludes URLs, users, cookies and screenshots. */
+export function browserResourceSnapshot() {
+  return { activeContexts: slots.active, waitingContexts: slots.waiting,
+    activeSessions: sessions.size, pendingSessions: pendingSessions.size };
+}
