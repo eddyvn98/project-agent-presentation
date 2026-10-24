@@ -42,6 +42,7 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
   }
   if (!browserControlState(taskId).paused) return { error: "Take control before interacting with the browser" };
   if (!claimHumanBrowserAction(taskId)) return { error: "Manual browser action limit reached; hand control back to Agent." };
+  let marker: { x: number; y: number; kind: "human" } | undefined;
   try {
     await withBrowserOp(session, async () => {
       const page = session.page;
@@ -55,6 +56,7 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
         }, { px: x, py: y });
         if (!safeTarget(target)) throw new Error("Sensitive or irreversible controls cannot be clicked from assisted mode");
         await page.mouse.click(x, y);
+        marker = { x: action.x, y: action.y, kind: "human" };
       } else if (action.op === "scroll") {
         await page.mouse.wheel(0, action.direction === "down" ? 540 : -540);
       } else if (action.op === "type") {
@@ -71,7 +73,7 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
         await page.keyboard.press(action.key);
       }
     }, false);
-    await captureBrowserWatch(taskId, session.page, "human_" + action.op);
+    await captureBrowserWatch(taskId, session.page, "human_" + action.op, marker);
     return { ok: true, paused: true };
   } catch (cause) {
     return { error: cause instanceof Error ? cause.message.slice(0, 180) : "Manual browser action could not finish" };
