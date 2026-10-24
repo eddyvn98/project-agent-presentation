@@ -148,6 +148,7 @@ export async function listDueSchedules(at = Date.now(), limit = 20) {
 export async function claimScheduleRun(owner: string, id: string, manual = false) {
   return locked(owner, id, async () => {
     const item = await getSchedule(owner, id);
+    if (item) { for (const stale of item.runs.filter(run => run.status === "dispatching" && Date.now() - Date.parse(run.createdAt) > 600_000)) { stale.status = "failed"; stale.completedAt = new Date().toISOString(); stale.error = "Dispatch receipt was interrupted. Verify whether the task was started before retrying."; } }
     if (!item || item.status !== "active" || (!manual &&
       (!item.nextRunAt || Date.parse(item.nextRunAt) > Date.now()))) return null;
     if (item.runs.some(r => r.status === "dispatching" || r.status === "queued" || r.status === "running"))
@@ -157,7 +158,7 @@ export async function claimScheduleRun(owner: string, id: string, manual = false
     item.runs = [...item.runs, run].slice(-MAX_RUNS);
     item.lastRunAt = occurrence;
     if (!manual) {
-      item.nextRunAt = nextScheduledRun(item.spec, Date.parse(occurrence) + 3_600_000);
+      item.nextRunAt = nextScheduledRun(item.spec, Date.parse(occurrence) + 60_000);
       if (!item.nextRunAt) item.status = "completed";
     }
     item.updatedAt = new Date().toISOString();

@@ -15,6 +15,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
   const load = async () => {
     const response = await fetch("/api/project-agent/schedules", { cache: "no-store" });
     if (!response.ok) throw new Error("Cannot read schedules");
@@ -37,6 +38,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
       if (!response.ok) throw new Error(data.error || "Cannot update scheduled task");
       await load();
       if (method === "POST") { setTitle(""); setPrompt(""); }
+      setEditing(null);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   }
@@ -45,7 +47,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
     const spec: ScheduleSpec = kind === "once"
       ? { kind, timezone, runAt: new Date(runAt).toISOString() }
       : { kind, timezone, localTime, ...(kind === "weekly" ? { weekdays } : {}) };
-    void send("POST", { projectId, title, prompt, spec });
+    void send(editing ? "PATCH" : "POST", editing ? { id: editing, action: "edit", projectId, title, prompt, spec } : { projectId, title, prompt, spec });
   }
   const input = "w-full rounded-lg border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900";
   return <section aria-label="Scheduled Agent Tasks" className="mx-auto max-w-4xl space-y-5 p-4">
@@ -53,7 +55,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
       <p className="text-sm text-slate-500">Account-wide schedules, independent of your open browser. Runs appear in the selected Project chat.</p></header>
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
     <div className="space-y-3 rounded-xl border p-4">
-      <h2 className="font-semibold">New scheduled task</h2>
+      <h2 className="font-semibold">{editing ? "Edit scheduled task" : "New scheduled task"}</h2>
       <label className="block text-sm">Title<input className={input} value={title} onChange={e => setTitle(e.target.value)} maxLength={140}/></label>
       <label className="block text-sm">Agent instructions<textarea rows={3} className={input} value={prompt} onChange={e => setPrompt(e.target.value)} maxLength={6000}/></label>
       <label className="block text-sm">Save results to Project<select className={input} value={projectId} onChange={e => setProjectId(e.target.value)}>
@@ -72,7 +74,8 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
         <label className="flex items-center gap-1 text-xs" key={day}><input type="checkbox" checked={weekdays.includes(i)}
           onChange={e => setWeekdays(old => e.target.checked ? [...old,i] : old.filter(n => n !== i))}/>{day}</label>)}</div>}
       <button type="button" disabled={busy || !title || !prompt || !projectId || (kind === "once" && !runAt)}
-        onClick={submit} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">Create schedule</button>
+        onClick={submit} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? "Save changes" : "Create schedule"}</button>
+      {editing && <button type="button" className="ml-2 rounded border px-3 py-2 text-sm" onClick={() => setEditing(null)}>Cancel edit</button>}
     </div>
     <div className="space-y-3"><h2 className="font-semibold">Your schedules ({items.length})</h2>
       {items.map(item => <article key={item.id} className="space-y-2 rounded-xl border p-3">
@@ -82,6 +85,13 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
         <p className="text-xs text-slate-500">{item.spec.kind} · {item.spec.timezone} · Next: {item.nextRunAt ? new Date(item.nextRunAt).toLocaleString() : "none"}</p>
         <div className="flex flex-wrap gap-2 text-xs">
           <button disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: item.status === "active" ? "pause" : "resume" })}>{item.status === "active" ? "Pause" : "Resume"}</button>
+          <button disabled={busy} className="rounded border px-2 py-1" onClick={() => {
+            setEditing(item.id); setTitle(item.title); setPrompt(item.prompt); setProjectId(item.projectId);
+            setKind(item.spec.kind); setTimezone(item.spec.timezone);
+            setLocalTime(item.spec.localTime ?? "08:00"); setWeekdays(item.spec.weekdays ?? [1,2,3,4,5]);
+            setRunAt(item.spec.runAt ? item.spec.runAt.slice(0,16) : "");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}>Edit</button>
           <button disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: "run" })}>Run now</button>
           <button disabled={busy} className="rounded border px-2 py-1 text-red-600" onClick={() => {
             if (window.confirm("Delete this schedule?")) void send("PATCH", { id: item.id, action: "delete" });
