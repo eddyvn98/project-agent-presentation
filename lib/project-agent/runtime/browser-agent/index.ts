@@ -169,7 +169,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 				case "click": {
 					const line = snapshotRefLine(session.lastSnapshot, action.ref!);
 					if (!line) throw new Error("DOM ref is not in the latest browser snapshot.");
-					if (requiresUserConfirmation(line, input.userPrompt ?? "", new URL(session.page.url()).hostname)) return { text: "This action needs the user's confirmation. Ask before proceeding.", failed: true };
+					if (requiresUserConfirmation(line, input.scheduledRun ? "" : input.userPrompt ?? "", new URL(session.page.url()).hostname)) return { text: "This action needs the user's confirmation. Ask before proceeding.", failed: true };
 					const bounds = await locatorForRef(session, action.ref!).boundingBox();
 					if (bounds) { const viewport = session.page.viewportSize() ?? { width: 1280, height: 800 }; marker = { x: Math.max(0, Math.min(1, (bounds.x + bounds.width / 2) / viewport.width)), y: Math.max(0, Math.min(1, (bounds.y + bounds.height / 2) / viewport.height)), kind: "agent" }; }
 					await locatorForRef(session, action.ref!).click(); break;

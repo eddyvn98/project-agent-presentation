@@ -33,6 +33,10 @@ export type RuntimeAction =
 	| { action: "web_fetch"; url: string; offset?: number; find?: string; note?: string }
 	| { action: "reference"; query?: string; id?: string; find?: string; note?: string }
 	| { action: "web_search"; query?: string; queries?: string[]; recency?: "day" | "week" | "month" | "year"; lang?: string; note?: string }
+	| { action: "schedule"; op: "list" | "create" | "propose" | "pause" | "resume" | "delete";
+      id?: string; title?: string; prompt?: string; kind?: "once" | "daily" | "weekly" | "interval" | "watch";
+      timezone?: string; localTime?: string; runAt?: string; url?: string;
+      everyMinutes?: number; weekdays?: number[]; note?: string }
 	| BrowserAction
 	| PdfAction
 	| { action: "workspace_read"; board?: string; note?: string }

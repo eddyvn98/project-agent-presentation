@@ -9,6 +9,13 @@ import type { ScheduledAgentTask } from "./scheduled-types";
 import * as projectCap from "@/lib/capabilities/project";
 
 async function reconcile(item: ScheduledAgentTask) {
+  for (const run of item.runs.filter(r => r.status === "dispatching")) {
+    if (Date.now() - Date.parse(run.createdAt) > 600_000)
+      await markScheduleRun(item.ownerEmail, item.id, run.occurrence, {
+        status: "failed", completedAt: new Date().toISOString(),
+        error: "Dispatch interrupted before receipt. Inspect task history before retrying.",
+      });
+  }
   for (const run of item.runs.filter(r => r.status === "queued" || r.status === "running")) {
     if (!run.taskId) continue;
     let task = await readProjectAgentTask(run.taskId);

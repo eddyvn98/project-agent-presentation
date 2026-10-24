@@ -44,6 +44,20 @@ export interface BrowserSession {
 	close(): Promise<void>;
 }
 
+function trackPageTraffic(session: BrowserSession, page: Page): void {
+  page.on("console", message => {
+    if (!session.authHost && ["error", "warning"].includes(message.type()))
+      session.console.push(`${message.type()}: ${message.text()}`);
+  });
+  const redactedUrl = (raw: string) => {
+    try { const u = new URL(raw); return u.origin + u.pathname.slice(0, 140); }
+    catch { return "[unavailable]"; }
+  };
+  page.on("requestfailed", request =>
+    session.network.push(`FAILED ${request.method()} ${redactedUrl(request.url())}`));
+  page.on("response", response =>
+    session.network.push(`${response.status()} ${response.request().method()} ${redactedUrl(response.url())}`));
+}
 async function getSharedBrowser(): Promise<Browser> {
 	if (browserIdleTimer) clearTimeout(browserIdleTimer);
 	if (!sharedBrowser) sharedBrowser = launchChromium().catch((error) => { sharedBrowser = null; throw error; });
@@ -112,10 +126,7 @@ async function createBrowserSession(id: string, signal?: AbortSignal, owner?: st
 				}
 			},
 		};
-		page.on("console", (message) => { if (!session!.authHost && ["error", "warning"].includes(message.type())) session!.console.push(`${message.type()}: ${message.text()}`); });
-		const redactedUrl = (raw: string) => { try { const u = new URL(raw); return u.origin + u.pathname.slice(0, 140); } catch { return "[unavailable]"; } };
-    page.on("requestfailed", (request) => session!.network.push(`FAILED ${request.method()} ${redactedUrl(request.url())}`));
-		page.on("response", (response) => session!.network.push(`${response.status()} ${response.request().method()} ${redactedUrl(response.url())}`));
+		trackPageTraffic(session, page);
 		sessions.set(id, session);
 		bindAbort(signal, () => { void session?.close(); });
 		return session;
@@ -171,6 +182,7 @@ export async function restorePersonalBrowserSession(session: BrowserSession, url
     const page = await next.newPage();
     const previous = session.context;
     session.context = next; session.page = page;
+    trackPageTraffic(session, page);
     session.refs.clear(); session.snapshotUrl = ""; session.lastSnapshot = "";
     await previous.close();
   } catch (error) { await next.close().catch(() => {}); throw error; }
