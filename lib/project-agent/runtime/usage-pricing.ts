@@ -9,6 +9,7 @@ function table(): Record<string, TokenPrice> {
   } catch { return {}; }
 }
 export function estimatedModelCost(model: string, inputTokens: number, outputTokens: number): number | null {
+  if (!Number.isFinite(inputTokens) || !Number.isFinite(outputTokens) || inputTokens < 0 || outputTokens < 0) return null;
   const rate = table()[model];
   if (!rate) return null;
   return (inputTokens * rate.inputPerMillion + outputTokens * rate.outputPerMillion) / 1_000_000;
@@ -18,7 +19,11 @@ export function enforceTaskBudget(inputTokens: number, outputTokens: number, mod
   const limit = Number(process.env.PROJECT_AGENT_TASK_MAX_COST_USD ?? 0);
   if (Number.isFinite(tokenBudget) && tokenBudget > 0 && inputTokens + outputTokens > tokenBudget)
     throw new Error("The task token budget was reached. No more actions will be executed.");
+  if (![inputTokens, outputTokens].every(value => Number.isSafeInteger(value) && value >= 0))
+    throw new Error("Invalid model token usage; task cost cannot be verified.");
   const cost = estimatedModelCost(model, inputTokens, outputTokens);
+  if (limit > 0 && cost === null && process.env.PROJECT_AGENT_STRICT_COST_BUDGET === "1")
+    throw new Error("Model pricing is unknown; strict task cost budget blocks further actions.");
   if (cost !== null && Number.isFinite(limit) && limit > 0 && cost > limit)
     throw new Error("The configured task cost budget was reached. No more actions will be executed.");
 }
