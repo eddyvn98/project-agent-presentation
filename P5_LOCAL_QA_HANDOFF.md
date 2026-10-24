@@ -5,6 +5,7 @@ No automatic deployment or merge into `main` / `staging`.
 
 ## Implemented
 - Browser session admission now uses `BrowserSlotPool`, a FIFO, abortable, 30-second bounded queue with a hard limit of three active contexts. Closing or failed setup releases each slot once.
+- Browser Watch retains at most 16 task histories process-wide (each already limited to 4 MiB); evicts the oldest when a new watch exceeds capacity.
 - Browser console and failed/request-response telemetry is bounded to 100 sanitized records of at most 500 characters per session.
 - Closed pages cannot be reused, and a timed-out browser operation triggers session closure, to quarantine an action with uncertain completion rather than immediately dispatch another browser operation.
 - New optional `PROJECT_AGENT_STRICT_COST_BUDGET=1` prevents further actions when a positive USD task budget is configured but the selected model is unpriced. Invalid/nonfinite token counts are rejected.
