@@ -9,10 +9,10 @@ export async function checkAgentBrowserPolicy(input: RuntimeInput, session: Brow
   try { hostname = new URL(url).hostname; } catch { throw new Error("Browser destination is invalid"); }
   try {
     await checkBrowserSitePolicy(input.ownerEmail, url, operation);
-    void recordBrowserSecurityAudit({ owner: input.ownerEmail, projectId: input.projectId ?? "",
+    await recordBrowserSecurityAudit({ owner: input.ownerEmail, projectId: input.projectId ?? "",
       taskId: input.taskId ?? "", hostname, action: operation, decision: "allow" });
   } catch (error) {
-    void recordBrowserSecurityAudit({ owner: input.ownerEmail, projectId: input.projectId ?? "",
+    await recordBrowserSecurityAudit({ owner: input.ownerEmail, projectId: input.projectId ?? "",
       taskId: input.taskId ?? "", hostname, action: operation, decision: "deny" });
     throw error;
   }

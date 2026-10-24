@@ -50,7 +50,21 @@ function normalizeSteps(input: AgentWorkflowStep[]): AgentWorkflowStep[] {
     const title = step.title?.trim(), prompt = step.prompt?.trim();
     if (!title || title.length > 100 || !prompt || prompt.length > 2400)
       throw new Error("Step " + (i + 1) + " needs a short title and task instruction");
-    return { id: "step_" + (i + 1), title, prompt, requiresApproval: step.requiresApproval === true };
+    const route = step.route;
+    if (route && (typeof route.contains !== "string" || !route.contains.trim() ||
+      route.contains.length > 120 || ![route.onMatch, route.onOther].every(
+        target => target === "next" || target === "stop" ||
+          (typeof target === "string" && /^step_([1-9]|1[0-2])$/.test(target) &&
+            Number(target.slice(5)) > i+1 && Number(target.slice(5)) <= input.length))))
+      throw new Error("Conditional branches must target a later step, next, or stop");
+    if (step.onFailure && !["stop","next"].includes(step.onFailure))
+      throw new Error("Failure handling must be stop or continue");
+    return { id: "step_" + (i + 1), title, prompt,
+      requiresApproval: step.requiresApproval === true,
+      ...(route ? { route: { contains: route.contains.trim(),
+        onMatch: route.onMatch, onOther: route.onOther } } : {}),
+      ...(step.onFailure ? { onFailure: step.onFailure } : {}),
+    };
   });
 }
 export async function listAgentWorkflows(owner: string): Promise<AgentWorkflow[]> {

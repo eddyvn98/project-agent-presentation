@@ -15,6 +15,7 @@ import type { ProjectAgentTask, ProjectAgentTaskSource } from "./types";
 import { resolveDifyConversationId } from "./conversation";
 import { autoCompactIfNeeded } from "./auto-compact";
 import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
+import { routeModelSelector } from "./runtime/usage-pricing";
 import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
 import { buildChatRecap } from "./chat-recap";
 const MAX_VISUAL_REVIEW_PASSES = 4;
@@ -65,7 +66,6 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 	const threadId = task.conversationId;
 	const runtime = isRuntimeEnabled();
 	let conversationId = (runtime ? undefined : await autoCompactIfNeeded(task)) ?? await resolveDifyConversationId(task);
-	// Persist the stable chat id plus the Dify conversation behind it (they differ after a compaction).
 	const conversationPatch = (difyId?: string) => difyId ? { conversationId: threadId ?? difyId, ...(threadId && difyId !== threadId ? { difyConversationId: difyId } : {}) } : {};
 	try {
 		const apiKey = process.env.PROJECT_AGENT_DIFY_API_KEY?.trim();
@@ -121,7 +121,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		const onWorkspaceSaved = workspaceSaveReporter(task.id);
 		const runtimeTurn = async (query: string): Promise<DifyAgentMessage> => {
 			const message = await runRuntimeAgent({
-				workspaceState, sources: runtimeSources, chatId: chatKey, taskId: task.id, projectId: task.projectId, user, ownerEmail: task.ownerEmail, scheduledRun: Boolean(task.scheduleRunId || task.workflowRunId), engines: task.engines, modelSelector: task.modelSelector, recoverChatContext: () => buildChatRecap(task), userPrompt: task.userPrompt ?? task.prompt, onBoard: (boardId) => { void updateProjectAgentTask(task.id, { workspaceBoardId: boardId }).catch(() => {}); }, boardId: task.boardId, onWorkspaceSaved, query, conversationId, signal,
+				workspaceState, sources: runtimeSources, chatId: chatKey, taskId: task.id, projectId: task.projectId, user, ownerEmail: task.ownerEmail, scheduledRun: Boolean(task.scheduleRunId || task.workflowRunId), engines: task.engines, modelSelector: task.modelSelector || routeModelSelector(task.userPrompt ?? task.prompt), recoverChatContext: () => buildChatRecap(task), userPrompt: task.userPrompt ?? task.prompt, onBoard: (boardId) => { void updateProjectAgentTask(task.id, { workspaceBoardId: boardId }).catch(() => {}); }, boardId: task.boardId, onWorkspaceSaved, query, conversationId, signal,
 				onStep: (step) => { void updateProjectAgentTask(task.id, { logLine: step.tool === "model_step" ? `thinking :: ${step.detail}` : step.tool === "metrics" ? `metrics :: ${step.detail}` : step.tool === "trajectory" ? `trajectory :: ${step.detail}` : step.tool === "plan" ? `plan :: ${step.detail.slice(0, 1800)}` : step.tool === "tool_failed" ? `tool failed :: ${step.detail}` : step.tool === "progress_message" ? `progress_message :: ${step.detail.replace(/\s+/g, " ").slice(0, 240)}` : `using tool ${step.tool} :: ${step.detail.replace(/\s+/g, " ").slice(0, 200)}` }).catch(() => {}); },
 				onConversation: (id) => { conversationId = id; void updateProjectAgentTask(task.id, conversationPatch(id)).catch(() => {}); },
 			});

@@ -8,6 +8,7 @@ const routes = [
   "/account/agent-observability",
   "/account/agent-skills",
   "/account/agent-harness",
+  "/account/agent-benchmark",
   "/account/scheduled-tasks",
   "/account/browser-sessions",
 ];

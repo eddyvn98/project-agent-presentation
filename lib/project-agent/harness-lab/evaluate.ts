@@ -1,4 +1,5 @@
 import { callRuntimeModel } from "../runtime/model";
+import { runModelBrowserBenchmark } from "../benchmark/model-runner";
 import { validateHarnessGuidance, harnessAddendum } from "./guard";
 import { probeSet, scoreProbe } from "./probes";
 import type { HarnessEvidence, HarnessVariant, HarnessCaseResult } from "./types";
@@ -54,8 +55,22 @@ export async function evaluateHarnessVariant(variant: HarnessVariant): Promise<H
   const noRegression = candidatePass >= basePass && candidatePass >= cases.length-1;
   const improvement = candidatePass > basePass ||
     (baseTokens > 0 && candidateTokens > 0 && candidateTokens <= baseTokens*0.9);
-  const improved = noRegression && improvement;
+  let browserBench: HarnessEvidence["browserBench"] | undefined;
+  if (process.env.PROJECT_AGENT_HARNESS_REALWORLD_GATE === "1" && noRegression && improvement) {
+    const [baseline, candidate] = await Promise.all([
+      runModelBrowserBenchmark(3, baselineGuidance),
+      runModelBrowserBenchmark(3, guidance),
+    ]);
+    const baselinePassed = baseline.filter(row => row.passed).length;
+    const candidatePassed = candidate.filter(row => row.passed).length;
+    browserBench = { baselinePassed, candidatePassed, count: baseline.length,
+      baselineTokens: baseline.reduce((n,row)=>n+row.inputTokens+row.outputTokens,0),
+      candidateTokens: candidate.reduce((n,row)=>n+row.inputTokens+row.outputTokens,0),
+      passedGate: candidatePassed >= baselinePassed && candidatePassed >= 2 };
+  }
+  const improved = noRegression && improvement && (!browserBench || browserBench.passedGate);
   return { cases: results, basePass, candidatePass, baseTokens, candidateTokens,
+    ...(browserBench ? { browserBench } : {}),
     ...(parent ? { baselineReference: parent.id } : {}),
     improved, completedAt: new Date().toISOString(),
     reason: !noRegression ? "Regression or insufficient correctness on the fixed synthetic fixtures"

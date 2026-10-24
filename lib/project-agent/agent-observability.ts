@@ -7,7 +7,8 @@ export interface AgentMetricDay {
 }
 export interface AgentObservability {
   total: number; completed: number; failed: number; successRate: number;
-  tokens: number; durationSeconds: number; avgDurationSeconds: number;
+  tokens: number; outputTokens: number; estimatedCostUsd: number | null;
+  durationSeconds: number; avgDurationSeconds: number;
   pendingApprovals: number; activeSchedules: number;
   days: AgentMetricDay[]; recent: Array<{ id: string; status: string; createdAt: string;
     durationSeconds: number; tokens: number; error?: string }>;
@@ -33,10 +34,17 @@ export async function accountAgentObservability(owner: string): Promise<AgentObs
     const date = new Date(Date.now() - offset * 86_400_000).toISOString().slice(0, 10);
     dates.set(date, { date, completed: 0, failed: 0, tokens: 0, durationSeconds: 0 });
   }
-  let completed = 0, failed = 0, tokens = 0, durationSeconds = 0;
+  let completed = 0, failed = 0, tokens = 0, outputTokens = 0, durationSeconds = 0;
+  let estimatedCostUsd = 0, priced = 0;
   for (const task of tasks) {
     const used = tokenCount(task.log ?? []), seconds = duration(task);
     tokens += used; durationSeconds += seconds;
+    const metric = task.log.findLast(s => s.includes("metrics ::")) ?? "";
+    outputTokens += Number(metric.match(/out_total=(\d+)/)?.[1] ?? 0);
+    const price = Number(metric.match(/cost_usd=(\d+(?:\.\d+)?)/)?.[1]);
+    if (metric.includes("cost_usd=") && Number.isFinite(price)) {
+      estimatedCostUsd += price; priced++;
+    }
     if (task.status === "done") completed++; else if (task.status === "failed") failed++;
     const day = dates.get(task.createdAt.slice(0, 10));
     if (day) {
@@ -48,7 +56,9 @@ export async function accountAgentObservability(owner: string): Promise<AgentObs
   const finished = completed + failed;
   return { total: tasks.length, completed, failed,
     successRate: finished ? Math.round(completed / finished * 1000) / 10 : 0,
-    tokens, durationSeconds, avgDurationSeconds: finished ? Math.round(durationSeconds / finished) : 0,
+    tokens, outputTokens, estimatedCostUsd: priced === tasks.length && tasks.length ?
+      Math.round(estimatedCostUsd * 1_000_000) / 1_000_000 : null,
+    durationSeconds, avgDurationSeconds: finished ? Math.round(durationSeconds / finished) : 0,
     pendingApprovals: approvals.filter(a => a.state === "pending" && Date.parse(a.expiresAt) > Date.now()).length,
     activeSchedules: schedules.filter(s => s.status === "active").length,
     days: [...dates.values()],

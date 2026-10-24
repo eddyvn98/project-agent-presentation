@@ -1,4 +1,5 @@
 import { runCalculationStep } from "./calculate";
+import { auditFinalAnswer } from "./final-audit"; import { enforceTaskBudget, estimatedModelCost } from "./usage-pricing";
 import { agentScheduleAction } from "../scheduled-agent-tool"; import { agentWorkflowAction } from "../workflow-agent-tool";
 import { contextOutputAction, externalizeActionOutput } from "./context-output-manager"; import { runXerjAction } from "../xerj/runtime-action";
 import { recordContextCheckpoint } from "./context-checkpoint";
@@ -52,7 +53,6 @@ const DEADLINE_MS = 25 * 60_000, MAX_IMAGE_CALLS = 5;
 const MAX_DELEGATES = 3, SUB_AGENT_STEPS = 25, MAX_FILE_BYTES = 40 * 1024 * 1024;
 export const isRuntimeEnabled = () => process.env.PROJECT_AGENT_RUNTIME === "sandbox";
 async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { action: "final" }>, loopStep: number, imageCalls: { value: number }, budget: { delegates: number }): Promise<{ text: string; rawOutput?: string; image?: DifyChatFile; images?: DifyChatFile[]; failed?: boolean; sources?: ProjectAgentTaskSource[] }> {
-	// Sub-agents count their render images from 100 so they never overwrite the lead agent's thumbnails.
 	const step = loopStep + (input.depth ? 100 * ((input.slot ?? 0) + 1) : 0);
 	if (!input.depth && action.note && action.action !== "progress") input.onStep?.({ tool: "progress_message", detail: redactSecrets(action.note).replace(/\s+/g, " ").trim().slice(0, 200) });
 	if (action.action === "progress") { if (!input.depth) input.onStep?.({ tool: "progress_message", detail: redactSecrets(action.message) }); return { text: "Progress note shown to user; continue with the actions needed for the request." }; }
@@ -113,8 +113,7 @@ async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { a
 		const rendered = await render(input.chatId, input.taskId, input.user, action.path, action.pages ?? "sample", step, action.region);
 		return { text: rendered.text, image: rendered.image, failed: !rendered.image };
 	} catch (cause) { return { text: `render failed: ${cause instanceof Error ? cause.message : "error"}`, failed: true }; }
-}
-interface RunMetrics { failed: number; modelMs: number; actionMs: number; referenceMs: number; rounds: number; promptTokens: number; stepTokens: number[]; stepOut: number[]; compactions: number; invalid: number; actions: Map<string, number> }
+}interface RunMetrics { failed: number; modelMs: number; actionMs: number; referenceMs: number; rounds: number; promptTokens: number; stepTokens: number[]; stepOut: number[]; compactions: number; invalid: number; actions: Map<string, number> }
 /** The app-hosted agent loop: the model proposes actions, the app runs them in the chat's sandbox and replies with the results. Logs one metrics line per run, even when it fails. */
 export async function runRuntimeAgent(input: RuntimeInput): Promise<DifyAgentMessage> {
 	const started = Date.now();
@@ -130,7 +129,7 @@ export async function runRuntimeAgent(input: RuntimeInput): Promise<DifyAgentMes
 			if (input.taskId) clearBrowserControl(input.taskId); await closeBrowserSession(input.taskId ?? input.chatId).catch(() => {});
 		}
 		const seconds = (ms: number) => Math.round(ms / 1000);
-		input.onStep?.({ tool: "metrics", detail: `total_s=${seconds(Date.now() - started)} model_s=${seconds(metrics.modelMs)} action_s=${seconds(metrics.actionMs)} reference_ms=${metrics.referenceMs} steps=${metrics.rounds} prompt_tokens=${metrics.promptTokens} step_tokens=${metrics.stepTokens.slice(0, 30).join("/")} out_max=${Math.max(0, ...metrics.stepOut)} out_total=${metrics.stepOut.reduce((a, b) => a + b, 0)} step_out=${metrics.stepOut.slice(0, 30).join("/")} compactions=${metrics.compactions} invalid=${metrics.invalid} failed=${metrics.failed} context_captures=${input.contextStats?.captures ?? 0} context_kept_bytes=${input.contextStats?.storedBytes ?? 0} context_returned_bytes=${input.contextStats?.returnedBytes ?? 0} model=${input.modelSelector || "default"} tools=${[...metrics.actions].map(([name, count]) => `${name}:${count}`).join(",") || "none"}${input.subUsage ? ` sub_runs=${input.subUsage.runs} sub_steps=${input.subUsage.steps} sub_tokens=${input.subUsage.tokens} sub_models=${[...input.subUsage.models].join(",")}` : ""}` });
+		input.onStep?.({ tool: "metrics", detail: `total_s=${seconds(Date.now() - started)} model_s=${seconds(metrics.modelMs)} action_s=${seconds(metrics.actionMs)} reference_ms=${metrics.referenceMs} steps=${metrics.rounds} prompt_tokens=${metrics.promptTokens} step_tokens=${metrics.stepTokens.slice(0, 30).join("/")} out_max=${Math.max(0, ...metrics.stepOut)} out_total=${metrics.stepOut.reduce((a, b) => a + b, 0)} step_out=${metrics.stepOut.slice(0, 30).join("/")} compactions=${metrics.compactions} invalid=${metrics.invalid} failed=${metrics.failed} context_captures=${input.contextStats?.captures ?? 0} context_kept_bytes=${input.contextStats?.storedBytes ?? 0} context_returned_bytes=${input.contextStats?.returnedBytes ?? 0} model=${input.modelSelector || "default"} cost_usd=${estimatedModelCost(input.modelSelector || "default", metrics.promptTokens, metrics.stepOut.reduce((n,v)=>n+v,0))?.toFixed(6) ?? "unknown"} tools=${[...metrics.actions].map(([name, count]) => `${name}:${count}`).join(",") || "none"}${input.subUsage ? ` sub_runs=${input.subUsage.runs} sub_steps=${input.subUsage.steps} sub_tokens=${input.subUsage.tokens} sub_models=${[...input.subUsage.models].join(",")}` : ""}` });
 	}
 }
 async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgentMessage> {
@@ -191,7 +190,6 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 		const modelStarted = Date.now();
 		let reply: RuntimeModelReply;
 		try { reply = await callRuntimeModel({ query: turnContext.query(query), user: input.user, conversationId, images, signal: input.signal, modelSelector: input.modelSelector }); } catch (cause) {
-			// The model conversation behind this chat no longer exists (a chat from a previous model-step app): continue once in a new one, briefed with the chat so far.
 			if (!conversationId || input.signal?.aborted || !isConversationLostError(cause)) throw cause;
 			query = await restartAfterLoss(input, query);
 			conversationId = undefined;
@@ -229,7 +227,6 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 		for (const [index, action] of actions.entries()) {
 			if (index < skipUntil) continue; if (await browserPlanOutdated(input, browserRevision)) { results.push("Human changed the browser during this model turn. Discard stale actions and inspect the updated page on the next turn."); break; }
 			if (action.action === "delegate" && actions[index + 1]?.action === "delegate") {
-				// Consecutive delegates are independent jobs: they run side by side.
 				const group = actions.slice(index).filter((candidate, offset, all) => all.slice(0, offset + 1).every((item) => item.action === "delegate")) as Array<Extract<RuntimeAction, { action: "delegate" }>>;
 				skipUntil = index + group.length;
 				metrics.actions.set("delegate", (metrics.actions.get("delegate") ?? 0) + group.length);
@@ -258,12 +255,15 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 					} catch { missing.push(file); }
 				}
 				const nudge = missing.length || wrapReason !== null ? null : gate.check(listed);
+        const finalAudit = !nudge && !input.depth ? auditFinalAnswer({
+          answer: action.answer, trace: input.trace!, attempts: invalid,
+        }) : null;
+        if (finalAudit) { invalid++; results.push(finalAudit); break; }
 				if (nudge) { results.push(nudge); break; }
 				const verdict = missing.length || wrapReason !== null ? null : await evaluator.check(runRuntimeAgent, input, action.answer, listed);
 				if (verdict) { results.push(verdict); break; }
 				if (missing.length && ++invalid <= MAX_INVALID_REPLIES) { results.push(`These files listed in final do not exist or are empty: ${missing.join(", ")}. Create them under /work/outputs and send final again.`); break; }
 				if (input.taskId && !input.depth) {
-					// A message added while the final answer was being written must not be lost.
 					const late = await takeSteerNotes(input.taskId, steerSeen);
 					if (late.block) { steerSeen = late.seen; results.push(`${late.block}Update your answer to cover it and send final again.`); break; }
 				}

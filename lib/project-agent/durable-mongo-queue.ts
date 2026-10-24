@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { queueRecoveryDecision } from "./recovery-decision";
 import { getMongoAiDb } from "@/services/mongodb/client";
 import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
 
@@ -99,7 +100,9 @@ export async function scanDurableQueue(limit = 100) {
   for (const row of stale) {
     const task = await readProjectAgentTask(row.taskId);
     const terminal = task && ["done", "failed"].includes(task.status);
-    const state: QueueState = terminal ? task.status as "done" | "failed" : "needs_review";
+    const decision = queueRecoveryDecision(row.state, task?.status ?? null, true);
+    const state: QueueState = decision === "complete" ? "done" :
+      decision === "fail" ? "failed" : "needs_review";
     const result = await coll.updateOne({ _id: row._id, leaseToken: row.leaseToken,
       state: "running", leaseUntil: { $lt: iso() } }, { $set: {
       state, completedAt: iso(),

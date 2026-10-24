@@ -34,6 +34,8 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
+  const [live, setLive] = useState(false);
+  const [liveEpoch, setLiveEpoch] = useState(0);
   const [control, setControl] = useState({ paused: false, revision: 0 });
   const [entry, setEntry] = useState("");
   const [loginSecret, setLoginSecret] = useState("");
@@ -64,6 +66,13 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     }, 1_600);
     return () => window.clearInterval(timer);
   }, [preview?.watching, refresh]);
+  useEffect(() => {
+    if (!live || !preview?.watching || !running) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") setLiveEpoch(x => x + 1);
+    }, 13_000);
+    return () => window.clearInterval(timer);
+  }, [live, preview?.watching, running]);
   const toggle = async () => {
     setLoading(true); setError("");
     try {
@@ -72,7 +81,7 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
       const data = await response.json() as { preview?: Preview | null; error?: string };
       if (!response.ok) throw new Error(data.error ?? "Browser preview unavailable");
       setPreview(data.preview ?? null);
-      if (!data.preview?.watching) setExpanded(false);
+      if (!data.preview?.watching) { setExpanded(false); setLive(false); }
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setLoading(false); }
   };
@@ -132,6 +141,10 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     {error && <p role="alert" className="mt-2 text-xs text-red-600">{error}</p>}
     {preview?.watching && <div className="mt-3 space-y-2">
       {running && preview.hasImage && <div className="flex flex-wrap items-center gap-2">
+        <button type="button" aria-pressed={live} onClick={() => { setLive(v => !v); setSelected(null); }}
+          className="rounded-full border border-slate-300 px-3 py-1.5 text-xs dark:border-slate-600">
+          {live ? "Show history" : "Live view"}
+        </button>
         <button type="button" disabled={loading} onClick={() => void command({ op: control.paused ? "release" : "takeover" })}
           className={control.paused ? "rounded-full bg-orange-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" : "rounded-full border border-orange-300 px-3 py-1.5 text-xs text-orange-700 disabled:opacity-50 dark:text-orange-300"}>
           {control.paused ? actions.release : actions.take}
@@ -148,7 +161,14 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
           {step.sequence} · {browserActionLabel(step.action, language)}
         </button>)}
       </div>}
-      {preview.hasImage && <button type="button" disabled={loading && control.paused} onClick={clickPreview} title={control.paused ? actions.help : ui.enlarge}
+      {live && running && <div className="relative overflow-hidden rounded-lg border bg-white dark:bg-slate-900"
+        aria-label="Live browser stream, view-only">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img key={liveEpoch} src={base + "/live?v=" + liveEpoch} alt="Live browser preview"
+          className="block h-auto w-full" />
+        <p className="px-2 py-1 text-[11px] text-slate-500">View only. Use step history to click while controlling the browser.</p>
+      </div>}
+      {!live && preview.hasImage && <button type="button" disabled={loading && control.paused} onClick={clickPreview} title={control.paused ? actions.help : ui.enlarge}
         className="relative block w-full overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={image} alt={ui.last} className="block h-auto w-full" />

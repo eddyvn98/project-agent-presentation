@@ -1,87 +1,81 @@
-import { createHash, randomUUID } from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
+import { createHash } from "node:crypto";
+import { getMongoAiDb } from "@/services/mongodb/client";
 
 export interface AgentApproval {
   id: string; owner: string; projectId: string; taskId: string; host: string;
   intent: string; state: "pending" | "approved" | "rejected" | "used" | "expired";
   createdAt: string; expiresAt: string; decidedAt?: string;
 }
-const hash = (s: string) => createHash("sha256").update(s).digest("hex");
-const root = () => path.resolve(process.env.PROJECT_AGENT_APPROVALS_DIR ??
-  path.join(process.env.PROJECT_AGENT_SCHEDULES_DIR ?? path.join(process.cwd(), "data", "project-agent"), "_approvals"));
-const folder = (owner: string) => path.join(root(), hash(owner.trim().toLowerCase()));
-const file = (owner: string, id: string) => {
-  if (!/^apa_[a-f0-9]{40}$/.test(id)) throw new Error("Invalid approval ID");
-  return path.join(folder(owner), id + ".json");
-};
-async function save(item: AgentApproval) {
-  const dest = file(item.owner, item.id);
-  const tmp = dest + "." + randomUUID() + ".tmp";
-  try { await fs.writeFile(tmp, JSON.stringify(item), { flag: "wx", mode: 0o600 }); await fs.rename(tmp, dest); }
-  finally { await fs.unlink(tmp).catch(() => {}); }
+interface Stored extends AgentApproval { _id: string; purgeAt?: Date }
+const hash = (v: string) => createHash("sha256").update(v).digest("hex");
+const ownerId = (email: string) => email.trim().toLowerCase();
+const validId = (id: string) => /^apa_[a-f0-9]{40}$/.test(id);
+let indexes: Promise<unknown> | undefined;
+async function coll() {
+  const db = await getMongoAiDb();
+  const collection = db.collection<Stored>("projectAgentApprovals");
+  if (!indexes) indexes = Promise.all([
+    collection.createIndex({ owner: 1, createdAt: -1 }),
+    collection.createIndex({ purgeAt: 1 }, { expireAfterSeconds: 0 }),
+  ]).catch(error => { indexes = undefined; throw error; });
+  await indexes;
+  return collection;
 }
-async function read(owner: string, id: string): Promise<AgentApproval | null> {
-  try {
-    const item = JSON.parse(await fs.readFile(file(owner, id), "utf8")) as AgentApproval;
-    return item.owner === owner.trim().toLowerCase() && item.id === id ? item : null;
-  } catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return null; throw e; }
-}
-async function exclusive<T>(owner: string, id: string, act: () => Promise<T>): Promise<T> {
-  const lock = file(owner, id) + ".lock";
-  await fs.mkdir(lock).catch((e: NodeJS.ErrnoException) => {
-    if (e.code === "EEXIST") throw new Error("Approval busy; retry");
-    throw e;
-  });
-  try { return await act(); } finally { await fs.rmdir(lock).catch(() => {}); }
-}
+const visible = ({ _id: _internal, purgeAt: _purge, ...item }: Stored): AgentApproval => item;
 export async function listAgentApprovals(owner: string): Promise<AgentApproval[]> {
-  const names = await fs.readdir(folder(owner)).catch((e: NodeJS.ErrnoException) => {
-    if (e.code === "ENOENT") return [] as string[];
-    throw e;
-  });
-  const all = await Promise.all(names.filter(n => /^apa_[a-f0-9]{40}\.json$/.test(n))
-    .slice(-150).map(n => read(owner, n.slice(0, -5))));
-  return all.filter((x): x is AgentApproval => !!x)
-    .sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+  const email = ownerId(owner);
+  const rows = await (await coll()).find({ owner: email })
+    .sort({ createdAt: -1 }).limit(150).toArray();
+  return rows.map(visible);
 }
+/** Atomic transition: only the authenticated owner can decide an unexpired pending request. */
 export async function decideAgentApproval(owner: string, id: string, approve: boolean): Promise<AgentApproval> {
-  return exclusive(owner, id, async () => {
-    const item = await read(owner, id);
-    if (!item || item.state !== "pending" || Date.parse(item.expiresAt) <= Date.now())
-      throw new Error("Approval no longer pending");
-    item.state = approve ? "approved" : "rejected";
-    item.decidedAt = new Date().toISOString();
-    await save(item);
-    return item;
-  });
+  if (!validId(id)) throw new Error("Invalid approval ID");
+  const stamp = new Date().toISOString();
+  const row = await (await coll()).findOneAndUpdate({
+    _id: id, owner: ownerId(owner), state: "pending", expiresAt: { $gt: stamp },
+  }, { $set: { state: approve ? "approved" : "rejected", decidedAt: stamp } },
+  { returnDocument: "after" });
+  if (!row) throw new Error("Approval no longer pending");
+  return visible(row);
 }
-/** One-time, exact-action authorization. Never inferred from model or web content. */
 export async function requireAgentApproval(input: {
   owner: string; projectId: string; taskId: string; host: string;
   intent: string; scheduled: boolean;
 }): Promise<{ allowed: boolean; message: string }> {
-  if (input.scheduled) return { allowed: false, message: "Unattended tasks cannot perform high-impact actions" };
-  const owner = input.owner.trim().toLowerCase(), intent = input.intent.trim().slice(0, 350);
-  if (!owner || !input.projectId || !/^[-a-z0-9.]+$/i.test(input.host) || !intent)
-    return { allowed: false, message: "Approval requires a verified task owner, project and web action" };
-  const id = "apa_" + hash(JSON.stringify([owner, input.projectId, input.taskId, input.host, intent])).slice(0, 40);
-  await fs.mkdir(folder(owner), { recursive: true, mode: 0o700 });
-  return exclusive(owner, id, async () => {
-    const existing = await read(owner, id);
-    const now = Date.now();
-    if (existing?.state === "approved" && Date.parse(existing.expiresAt) > now) {
-      await save({ ...existing, state: "used", decidedAt: new Date().toISOString() });
-      return { allowed: true, message: "Approved once" };
-    }
-    if (existing?.state === "pending" && Date.parse(existing.expiresAt) > now)
-      return { allowed: false, message: "Waiting for owner approval in /account/agent-control (ID " + id + "). Ask the user to approve, then retry the action." };
-    if (existing?.state === "rejected" && Date.parse(existing.expiresAt) > now)
-      return { allowed: false, message: "The owner rejected this action" };
-    const entry: AgentApproval = { id, owner, projectId: input.projectId, taskId: input.taskId,
-      host: input.host, intent, state: "pending", createdAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + 15 * 60_000).toISOString() };
-    await save(entry);
-    return { allowed: false, message: "Owner approval required in /account/agent-control (ID " + id + "). Do not repeat until approved." };
-  });
+  if (input.scheduled) return { allowed: false, message: "Unattended tasks cannot approve high-impact actions" };
+  const owner = ownerId(input.owner), intent = input.intent.trim().slice(0, 350);
+  if (!owner.includes("@") || !input.projectId || !input.taskId ||
+    !/^[a-z0-9.-]+$/i.test(input.host) || !intent)
+    return { allowed: false, message: "Approval requires a verified owner and exact browser action" };
+  const host = input.host.toLowerCase();
+  const id = "apa_" + hash(JSON.stringify([owner, input.projectId, input.taskId, host, intent])).slice(0, 40);
+  const collection = await coll(), now = Date.now(), stamp = new Date(now).toISOString();
+  const row = await collection.findOneAndUpdate({
+    _id: id, owner, state: "approved", expiresAt: { $gt: stamp },
+  }, { $set: { state: "used", decidedAt: stamp } }, { returnDocument: "after" });
+  if (row) return { allowed: true, message: "Approved for this single action" };
+  const existing = await collection.findOne({ _id: id, owner });
+  if (existing && Date.parse(existing.expiresAt) > now) {
+    if (existing.state === "pending") return { allowed: false, message: "Waiting for approval in /account/agent-control (ID " + id + ")" };
+    return { allowed: false, message: "This action was rejected or its one-time permission was consumed" };
+  }
+  const entry: Stored = { _id: id, id, owner, projectId: input.projectId,
+    taskId: input.taskId, host, intent, state: "pending", createdAt: stamp,
+    expiresAt: new Date(now + 15 * 60_000).toISOString(), purgeAt: new Date(now + 36 * 60_000) };
+  const replaced = await collection.updateOne({ _id: id, owner,
+    expiresAt: { $lte: stamp } }, { $set: entry });
+  if (replaced.modifiedCount) {
+    void import("./telegram-notifications").then(m =>
+      m.sendTelegramAgentNotice(owner, "approval")).catch(() => {});
+    return { allowed: false, message: "Owner approval required in /account/agent-control (ID " + id + ")" };
+  }
+  try {
+    await collection.insertOne(entry);
+    void import("./telegram-notifications").then(m =>
+      m.sendTelegramAgentNotice(owner, "approval")).catch(() => {});
+  } catch (error) {
+    if ((error as { code?: number }).code !== 11000) throw error;
+  }
+  return { allowed: false, message: "Owner approval required in /account/agent-control (ID " + id + "). Never assume it was approved." };
 }

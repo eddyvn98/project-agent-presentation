@@ -118,6 +118,8 @@ export async function changeHarnessRollout(owner: string, id: string,
     return getHarnessVariant(email, id);
   }
   if (!variant.evidence?.improved) throw new Error("Harness has not passed offline comparison");
+  if (process.env.PROJECT_AGENT_HARNESS_REALWORLD_GATE === "1" && !variant.evidence.browserBench?.passedGate)
+    throw new Error("Harness needs passing isolated browser-model evidence before rollout");
   const allowed = action === "canary" ? ["evaluated"] : ["canary"];
   if (!allowed.includes(variant.status)) throw new Error("This transition is not allowed");
   const competing = await collection.countDocuments({

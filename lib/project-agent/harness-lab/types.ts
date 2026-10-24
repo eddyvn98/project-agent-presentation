@@ -9,6 +9,8 @@ export interface HarnessEvidence {
   cases: HarnessCaseResult[]; basePass: number; candidatePass: number;
   baseTokens: number; candidateTokens: number; improved: boolean;
   completedAt: string; reason: string; modelSelector?: string; baselineReference?: string;
+  browserBench?: { baselinePassed: number; candidatePassed: number; count: number;
+    baselineTokens: number; candidateTokens: number; passedGate: boolean };
 }
 export interface HarnessVariant {
   id: string; ownerEmail: string; domain: string; dimension: HarnessDimension;

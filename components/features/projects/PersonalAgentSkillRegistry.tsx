@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { AgentSkillCatalog } from "./AgentSkillCatalog";
 import type { PersonalAgentSkill } from "@/lib/project-agent/personal-agent-skills";
 export function PersonalAgentSkillRegistry() {
   const [skills, setSkills] = useState<PersonalAgentSkill[]>([]);
@@ -55,6 +56,7 @@ export function PersonalAgentSkillRegistry() {
         {editing && <button type="button" onClick={clear} className="rounded-lg border px-3 py-2 text-sm">Cancel</button>}
       </div>
     </form>
+    <AgentSkillCatalog />
     {skills.map(skill => <article className="space-y-2 rounded-xl border p-3" key={skill.id}>
       <div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-sm">{skill.name}</strong>
         <span className="text-xs text-slate-400">v{skill.version}</span></div>

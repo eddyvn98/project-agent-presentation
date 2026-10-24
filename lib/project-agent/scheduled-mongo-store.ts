@@ -172,14 +172,18 @@ export async function claimScheduleRun(owner: string, id: string, manual = false
   });
 }
 export async function markScheduleRun(owner: string, id: string, occurrence: string, fields: RunFields) {
-  return atomic<void>(owner, id, row => {
+  const notification = await atomic<boolean>(owner, id, row => {
     const run = row.runs.find(r => r.occurrence === occurrence);
-    if (!run) return { record: row, result: undefined };
+    if (!run) return { record: row, result: false };
+    const wasTerminal = ["done","failed"].includes(run.status);
     Object.assign(run, fields);
     if (["done", "failed"].includes(run.status) && row.activeRun === occurrence)
       delete row.activeRun;
-    return { record: row, result: undefined };
+    return { record: row, result: !wasTerminal &&
+      ["done","failed"].includes(run.status) && !run.acknowledgedAt };
   });
+  if (notification) void import("./telegram-notifications").then(m =>
+    m.sendTelegramAgentNotice(owner, fields.status === "failed" ? "failed" : "finished")).catch(() => {});
 }
 export async function setScheduleWatchDigest(owner: string, id: string, digest: string) {
   if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error("Invalid digest");

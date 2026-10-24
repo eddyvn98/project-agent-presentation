@@ -4,7 +4,7 @@ import type { AgentWorkflow, AgentWorkflowRun, AgentWorkflowStep } from "@/lib/p
 type Project = { id: string; name: string };
 const newStep = (): AgentWorkflowStep => ({
   id: "step_" + Math.random().toString(36).slice(2, 9),
-  title: "", prompt: "", requiresApproval: false,
+  title: "", prompt: "", requiresApproval: false, onFailure: "stop",
 });
 export function AgentWorkflowBuilder() {
   const [workflows, setWorkflows] = useState<AgentWorkflow[]>([]);
@@ -40,6 +40,15 @@ export function AgentWorkflowBuilder() {
   }
   function changeStep(index: number, field: keyof AgentWorkflowStep, value: string | boolean) {
     setSteps(old => old.map((s,i) => i === index ? { ...s, [field]: value } : s));
+  }
+  function changeRoute(index: number, field: "contains" | "onMatch" | "onOther", value: string) {
+    setSteps(old => old.map((s,i) => {
+      if (i !== index) return s;
+      if (field === "contains" && !value.trim()) return { ...s, route: undefined };
+      return { ...s, route: { contains: s.route?.contains ?? "",
+        onMatch: s.route?.onMatch ?? "next", onOther: s.route?.onOther ?? "next",
+        [field]: value } };
+    }));
   }
   function move(index: number, diff: number) {
     setSteps(old => { const copy = [...old], target = index + diff;
@@ -92,6 +101,27 @@ export function AgentWorkflowBuilder() {
           onChange={e => changeStep(i,"title",e.target.value)} required/>
         <textarea className={field} placeholder="What should the Agent do?" rows={3} maxLength={2400}
           value={step.prompt} onChange={e => changeStep(i,"prompt",e.target.value)} required/>
+        <label className="block text-xs">On step failure
+          <select className={field} value={step.onFailure ?? "stop"}
+            onChange={e => changeStep(i, "onFailure", e.target.value)}>
+            <option value="stop">Stop workflow</option><option value="next">Continue with next step</option>
+          </select>
+        </label>
+        {i < steps.length-1 && <div className="space-y-2 rounded border p-2">
+          <label className="block text-xs">If successful result includes (optional)
+            <input className={field} maxLength={120} value={step.route?.contains ?? ""}
+              onChange={e => changeRoute(i,"contains",e.target.value)} placeholder="e.g. urgent" />
+          </label>
+          {step.route?.contains && (["onMatch","onOther"] as const).map(field => <label key={field} className="block text-xs">
+            {field === "onMatch" ? "When matched" : "Otherwise"}
+            <select className={field === "onMatch" ? "w-full rounded border p-2 text-sm" : "w-full rounded border p-2 text-sm"}
+              value={step.route?.[field] ?? "next"} onChange={e => changeRoute(i, field, e.target.value)}>
+              <option value="next">Next step</option><option value="stop">Finish</option>
+              {steps.slice(i+1).map((_,j) => <option value={"step_"+(i+j+2)} key={j}>
+                Jump to step {i+j+2}</option>)}
+            </select>
+          </label>)}
+        </div>}
         <label className="flex items-center gap-2 text-xs">
           <input type="checkbox" checked={step.requiresApproval}
             onChange={e => changeStep(i,"requiresApproval",e.target.checked)}/>

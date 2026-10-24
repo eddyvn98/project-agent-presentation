@@ -1,5 +1,7 @@
 export interface AgentWorkflowStep {
   id: string; title: string; prompt: string; requiresApproval: boolean;
+  onFailure?: "stop" | "next";
+  route?: { contains: string; onMatch: "next" | "stop" | string; onOther: "next" | "stop" | string };
 }
 export interface AgentWorkflow {
   id: string; ownerEmail: string; projectId: string; title: string; description: string;
@@ -10,6 +12,7 @@ export interface AgentWorkflowRun {
   steps: AgentWorkflowStep[]; index: number;
   status: "ready" | "dispatching" | "running" | "waiting_approval" | "done" | "failed";
   taskId?: string;
+  transitionCount?: number; previousResult?: string;
   history: Array<{ index: number; title: string; taskId?: string;
     status: "done" | "failed"; completedAt: string; error?: string }>;
   createdAt: string; updatedAt: string; error?: string;

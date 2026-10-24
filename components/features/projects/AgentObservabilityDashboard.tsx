@@ -27,7 +27,8 @@ export function AgentObservabilityDashboard() {
       <div className="grid gap-3 sm:grid-cols-3">
         {[
           ["Completed", data.completed.toLocaleString()], ["Failed", data.failed.toLocaleString()],
-          ["Success rate", data.successRate + "%"], ["Prompt tokens", compact(data.tokens)],
+          ["Success rate", data.successRate + "%"], ["Prompt tokens", compact(data.tokens)], ["Output tokens", compact(data.outputTokens)],
+          ["Est. model cost", data.estimatedCostUsd === null ? "Not configured" : "$" + data.estimatedCostUsd.toFixed(4)],
           ["Avg. duration", data.avgDurationSeconds + " s"], ["Active schedules", String(data.activeSchedules)],
           ["Approvals pending", String(data.pendingApprovals)],
         ].map(([label, value]) => <div key={label} className="rounded-xl border p-3">

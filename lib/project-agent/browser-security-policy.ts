@@ -5,6 +5,11 @@ export interface BrowserSitePolicy {
   id: string; owner: string; hostname: string; mode: BrowserPolicyMode; updatedAt: string;
 }
 interface Stored extends BrowserSitePolicy { _id: string }
+export interface BrowserAuditItem {
+  _id: string; owner: string; taskId: string; projectId: string; hostname: string;
+  action: string; decision: "allow" | "deny" | "approval_required";
+  labelDigest: string; at: Date;
+}
 const user = (s: string) => s.trim().toLowerCase();
 export function policyHost(value: string): string {
   const url = new URL(value.startsWith("https://") ? value : "https://" + value);
@@ -50,10 +55,21 @@ export async function recordBrowserSecurityAudit(input: {
   try {
     const db = await getMongoAiDb();
     const labelDigest = createHash("sha256").update(input.label ?? "").digest("hex").slice(0, 18);
-    await db.collection("projectAgentBrowserAudits").insertOne({
+    const collection = db.collection<BrowserAuditItem>("projectAgentBrowserAudits");
+    await collection.createIndex({ at: 1 }, { expireAfterSeconds: 30 * 86400 });
+    await collection.insertOne({
       _id: randomUUID(), owner: user(input.owner), taskId: input.taskId,
       projectId: input.projectId, hostname: input.hostname, action: input.action,
       decision: input.decision, labelDigest, at: new Date(),
     });
-  } catch { /* Auditing must not create an unapproved browser action. */ }
+  } catch (cause) {
+    if (process.env.PROJECT_AGENT_STRICT_BROWSER_AUDIT === "1") throw cause;
+  }
+}
+
+export async function listBrowserSecurityAudit(owner: string) {
+  const db = await getMongoAiDb();
+  const records = await db.collection<BrowserAuditItem>("projectAgentBrowserAudits")
+    .find({ owner: user(owner) }).sort({ at: -1 }).limit(50).toArray();
+  return records.map(({ _id: _id, ...entry }) => entry);
 }

@@ -1,16 +1,19 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import type { BrowserSitePolicy, BrowserPolicyMode } from "@/lib/project-agent/browser-security-policy";
+type AuditEvent = { hostname: string; action: string; decision: string; at: string };
 export function AgentBrowserPolicyManager() {
   const [policies, setPolicies] = useState<BrowserSitePolicy[]>([]);
   const [host, setHost] = useState("");
+  const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [mode, setMode] = useState<BrowserPolicyMode>("read");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const refresh = useCallback(async () => {
     const r = await fetch("/api/project-agent/browser-policies", { cache: "no-store" });
     if (!r.ok) throw new Error("Browser policies unavailable");
-    setPolicies(((await r.json()) as { policies: BrowserSitePolicy[] }).policies);
+    const data = await r.json() as { policies: BrowserSitePolicy[]; audit: AuditEvent[] };
+    setPolicies(data.policies); setAudit(data.audit ?? []);
   }, []);
   useEffect(() => { void refresh().catch(e => setError(String(e))); }, [refresh]);
   async function apply(domain: string, value: BrowserPolicyMode) {
@@ -40,6 +43,13 @@ export function AgentBrowserPolicyManager() {
       <button type="submit" disabled={busy || !host.trim()}
         className="rounded bg-slate-900 px-3 py-2 text-xs text-white">Save</button>
     </form>
+    <details className="rounded-lg border p-2 text-xs"><summary>Recent security decisions ({audit.length})</summary>
+      <div className="max-h-52 space-y-1 overflow-auto pt-2">
+        {audit.map((item,i) => <p key={i}>
+          {new Date(item.at).toLocaleString()} · {item.hostname} · {item.action} · {item.decision}
+        </p>)}
+      </div>
+    </details>
     {policies.map(p => <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2">
       <strong className="text-sm">{p.hostname}</strong>
       <div className="flex items-center gap-2">

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { listBrowserPolicies, setBrowserPolicy, type BrowserPolicyMode } from "@/lib/project-agent/browser-security-policy";
+import { listBrowserPolicies, listBrowserSecurityAudit, setBrowserPolicy, type BrowserPolicyMode } from "@/lib/project-agent/browser-security-policy";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "private, no-store" };
@@ -15,7 +15,7 @@ function originOK(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const email = await owner(req);
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers });
-  try { return NextResponse.json({ policies: await listBrowserPolicies(email) }, { headers }); }
+  try { return NextResponse.json({ policies: await listBrowserPolicies(email), audit: await listBrowserSecurityAudit(email) }, { headers }); }
   catch { return NextResponse.json({ error: "Policy store unavailable" }, { status: 503, headers }); }
 }
 export async function PUT(req: NextRequest) {
