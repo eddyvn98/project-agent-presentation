@@ -25,6 +25,8 @@ export async function readInsightHistory(): Promise<ProjectAgentTask[]> {
 
 /** Called when a task finishes: appends its summary and refreshes data/project-agent/insights/latest.md so the report is always current while testing. */
 export async function recordFinishedTask(task: ProjectAgentTask): Promise<void> {
+  await import("./harness-lab/rollout").then(m => m.recordHarnessTaskOutcome(task)).catch(() => {});
+  void import("./harness-lab/propose").then(m => m.autoProposeHarness(task)).catch(() => {});
   // Durable, owner-scoped proactive signal must not depend on the local JSONL report.
   await import("./proactive-signals").then(m => m.recordProactiveSignal(task)).catch(() => {});
 	try {

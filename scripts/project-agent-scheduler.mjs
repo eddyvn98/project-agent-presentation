@@ -23,7 +23,7 @@ while (running) {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(45_000),
+      signal: AbortSignal.timeout(300_000),
     });
     if (!response.ok) {
       process.stderr.write(`[scheduler] Tick refused HTTP ${response.status}\n`);

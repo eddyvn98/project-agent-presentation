@@ -6,6 +6,7 @@ const destinations = [
   { href: "/account/agent-workflows", label: "Workflows" },
   { href: "/account/agent-observability", label: "Observability" },
   { href: "/account/agent-skills", label: "Skill Registry" },
+  { href: "/account/agent-harness", label: "Harness Lab" },
   { href: "/account/browser-sessions", label: "Browser Logins" },
 ] as const;
 export type AgentAccountPage = typeof destinations[number]["href"];
