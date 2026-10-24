@@ -26,7 +26,10 @@ export async function GET(req: NextRequest, { params }: Params) {
   const checked = await authorize(req, params.projectId, params.taskId);
   if (checked.response) return checked.response;
   if (req.nextUrl.searchParams.get("image") === "1") {
-    const bytes = browserWatchImage(params.taskId);
+    const rawSequence = req.nextUrl.searchParams.get("sequence");
+    const sequence = rawSequence === null ? undefined : Number(rawSequence);
+    if (sequence !== undefined && (!Number.isSafeInteger(sequence) || sequence < 1)) return new NextResponse(null, { status: 400, headers: HEADERS });
+    const bytes = browserWatchImage(params.taskId, sequence);
     if (!bytes) return new NextResponse(null, { status: 404, headers: HEADERS });
     return new NextResponse(new Uint8Array(bytes), {
       headers: { ...HEADERS, "Content-Type": "image/jpeg", "Content-Disposition": "inline" },
