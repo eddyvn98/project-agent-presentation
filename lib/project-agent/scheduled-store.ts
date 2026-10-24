@@ -163,7 +163,7 @@ export async function claimScheduleRun(owner: string, id: string, manual = false
     item.runs = [...item.runs, run].slice(-MAX_RUNS);
     item.lastRunAt = occurrence;
     if (!manual) {
-      item.nextRunAt = nextScheduledRun(item.spec, Date.parse(occurrence) + 60_000);
+      item.nextRunAt = nextScheduledRun(item.spec, Math.max(Date.parse(occurrence) + 60_000, Date.now()));
       if (!item.nextRunAt) item.status = "completed";
     }
     item.updatedAt = new Date().toISOString();
@@ -180,5 +180,52 @@ export async function markScheduleRun(owner: string, id: string, occurrence: str
     Object.assign(run, fields);
     item.updatedAt = new Date().toISOString();
     await writeSchedule(item);
+  });
+}
+
+/** Includes one-time schedules, which are no longer due but may have unfinished runs. */
+export async function listSchedulesNeedingReconciliation(limit = 150): Promise<ScheduledAgentTask[]> {
+  const directories = await fs.readdir(root(), { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return [] as import("node:fs").Dirent[];
+    throw error;
+  });
+  const found: ScheduledAgentTask[] = [];
+  for (const directory of directories) {
+    if (!directory.isDirectory() || !/^[a-f0-9]{64}$/.test(directory.name)) continue;
+    const names = await fs.readdir(path.join(root(), directory.name));
+    for (const name of names) {
+      if (!/^sat_[a-f0-9-]{36}\.json$/.test(name)) continue;
+      const item = await readFile(path.join(root(), directory.name, name));
+      if (item && hash(item.ownerEmail) === directory.name &&
+        item.runs.some(run => ["queued","running","dispatching"].includes(run.status)))
+        found.push(item);
+      if (found.length >= limit) return found;
+    }
+  }
+  return found;
+}
+/** Single co-operating cron owner across shared POSIX filesystem workers. */
+export async function withSchedulerTickLease<T>(fn: () => Promise<T>): Promise<T | null> {
+  await privateDir(root());
+  const lock = path.join(root(), ".scheduler-tick.lock");
+  try { await fs.mkdir(lock, { mode: 0o700 }); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    const stat = await fs.stat(lock).catch(() => null);
+    if (!stat || Date.now() - stat.mtimeMs < 300_000) return null;
+    await fs.rm(lock, { recursive: true, force: true });
+    try { await fs.mkdir(lock, { mode: 0o700 }); } catch { return null; }
+  }
+  try { return await fn(); }
+  finally { await fs.rm(lock, { recursive: true, force: true }); }
+}
+export async function acknowledgeScheduleRun(owner: string, id: string, occurrence: string) {
+  return locked(owner, id, async () => {
+    const schedule = await getSchedule(owner, id);
+    const run = schedule?.runs.find(r => r.occurrence === occurrence);
+    if (!schedule || !run || !["done","failed"].includes(run.status)) throw new Error("Notification not found");
+    run.acknowledgedAt = new Date().toISOString();
+    await writeSchedule(schedule);
+    return run;
   });
 }

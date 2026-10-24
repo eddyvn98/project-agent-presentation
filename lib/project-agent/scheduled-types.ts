@@ -15,6 +15,10 @@ export interface ScheduleRun {
   error?: string;
   createdAt: string;
   completedAt?: string;
+  acknowledgedAt?: string;
+  resultDigest?: string;
+  changed?: boolean;
+  summary?: string;
 }
 export interface ScheduledAgentTask {
   id: string;
