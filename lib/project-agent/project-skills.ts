@@ -82,7 +82,7 @@ export async function loadProjectSkillSet(skillIds: string[] | undefined, ownerE
 		const context = formatProjectSkills(skills.map((skill) => ({
 			id: skill.id, title: skill.title, description: skill.description, instructions: skill.instructions ?? "",
 			files: skill.packagePayload?.files.map((file) => file.relativePath).filter((path) => TEXT_REFERENCE.test(path)),
-		})));
+		})), request);
 		return { context, read: async (request) => { try { return await readSkill(skills, request); } catch (cause) { return `[Read failed: ${cause instanceof Error ? cause.message : "could not read skill"}]`; } } };
 	} catch (cause) {
 		console.warn("[project-agent] could not load project skills", cause instanceof Error ? cause.message : cause);
