@@ -20,14 +20,16 @@ export async function agentScheduleAction(input: RuntimeInput, action: Action) {
         return { text: "Ask the user for explicit permission before saving a scheduled task", failed: true };
       if (!await projectCap.getProjectAccess(input.projectId, owner))
         return { text: "User has no access to the target Project", failed: true };
-      const spec = action.kind === "interval" ?
+      const spec = action.kind === "watch" ?
+        { kind: "watch" as const, timezone: action.timezone!, everyMinutes: action.everyMinutes, url: action.url } :
+        action.kind === "interval" ?
         { kind: "interval" as const, timezone: action.timezone!, everyMinutes: action.everyMinutes } : action.kind === "once" ?
         { kind: "once" as const, timezone: action.timezone!, runAt: action.runAt } :
         { kind: action.kind!, timezone: action.timezone!, localTime: action.localTime,
           ...(action.kind === "weekly" ? { weekdays: action.weekdays } : {}) };
       const schedule = await createSchedule(owner, { projectId: input.projectId, title: action.title!,
-        prompt: action.prompt!, spec }, true);
-      return { text: "Schedule proposal awaiting user approval: " + JSON.stringify({
+        prompt: action.prompt!, spec }, action.op === "propose");
+      return { text: (action.op === "propose" ? "Schedule proposal awaiting user approval: " : "Schedule created: ") + JSON.stringify({
         id: schedule.id, title: schedule.title, nextRunAt: schedule.nextRunAt,
         timezone: schedule.spec.timezone, projectId: schedule.projectId,
       }) };

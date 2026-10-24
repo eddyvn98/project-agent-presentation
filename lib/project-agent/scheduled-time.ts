@@ -34,13 +34,22 @@ export function parseScheduleSpec(input: unknown): ScheduleSpec {
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("A schedule specification is required");
   const raw = input as Record<string, unknown>;
-  if (!["once", "daily", "weekly", "interval"].includes(String(raw.kind)))
+  if (!["once", "daily", "weekly", "interval", "watch"].includes(String(raw.kind)))
     throw new Error("Use once, daily or weekly");
   if (typeof raw.timezone !== "string" || raw.timezone.length > 80)
     throw new Error("Choose an IANA timezone");
   try { formatter(raw.timezone).format(new Date()); }
   catch { throw new Error("Invalid timezone"); }
   const kind = raw.kind as ScheduleSpec["kind"];
+  if (kind === "watch") {
+    if (!Number.isInteger(raw.everyMinutes) || Number(raw.everyMinutes) < 15 || Number(raw.everyMinutes) > 1440)
+      throw new Error("Website checks run every 15–1440 minutes");
+    if (typeof raw.url !== "string" || raw.url.length > 500) throw new Error("Website URL is required");
+    const url = new URL(raw.url);
+    if (url.protocol !== "https:" || url.username || url.password || !url.hostname.includes("."))
+      throw new Error("Website monitoring requires a public HTTPS URL");
+    return { kind, timezone: raw.timezone, everyMinutes: Number(raw.everyMinutes), url: url.href };
+  }
   if (kind === "interval") {
     if (!Number.isInteger(raw.everyMinutes) || Number(raw.everyMinutes) < 15 || Number(raw.everyMinutes) > 1440)
       throw new Error("Interval must be 15–1440 minutes");
@@ -65,7 +74,7 @@ export function parseScheduleSpec(input: unknown): ScheduleSpec {
 }
 /** The earliest future wall-clock time; skips nonexistent DST minutes, chooses first repeated minute. */
 export function nextScheduledRun(spec: ScheduleSpec, after = Date.now()): string | null {
-  if (spec.kind === "interval") return new Date(after + spec.everyMinutes! * 60000).toISOString();
+  if (spec.kind === "interval" || spec.kind === "watch") return new Date(after + spec.everyMinutes! * 60000).toISOString();
   if (spec.kind === "once") {
     const moment = Date.parse(spec.runAt!);
     return moment > after ? new Date(moment).toISOString() : null;

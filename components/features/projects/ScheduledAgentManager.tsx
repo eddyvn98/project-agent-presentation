@@ -14,6 +14,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
   const [runAt, setRunAt] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [everyMinutes, setEveryMinutes] = useState(60);
+  const [watchUrl, setWatchUrl] = useState("");
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -51,7 +52,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
     let onceAt: string | undefined;
     try { if (kind === "once") onceAt = localScheduleInstant(runAt, timezone); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Invalid scheduled time"); return; }
-    const spec: ScheduleSpec = kind === "interval" ? { kind, timezone, everyMinutes } : kind === "once"
+    const spec: ScheduleSpec = kind === "watch" ? { kind, timezone, everyMinutes, url: watchUrl } : kind === "interval" ? { kind, timezone, everyMinutes } : kind === "once"
       ? { kind, timezone, runAt: onceAt }
       : { kind, timezone, localTime, ...(kind === "weekly" ? { weekdays } : {}) };
     void send(editing ? "PATCH" : "POST", editing ? { id: editing, action: "edit", projectId, title, prompt, spec } : { projectId, title, prompt, spec });
@@ -70,17 +71,18 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
       </select></label>
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="text-sm">Frequency<select className={input} value={kind} onChange={e => setKind(e.target.value as ScheduleSpec["kind"])}>
-          <option value="once">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Monitor at interval</option>
+          <option value="once">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Run at interval</option><option value="watch">When website changes</option>
         </select></label>
         <label className="text-sm">Timezone<input className={input} value={timezone} onChange={e => setTimezone(e.target.value)}/></label>
       </div>
-      {kind === "interval" ? <label className="block text-sm">Interval in minutes (15–1440)<input type="number" min={15} max={1440} step={15} className={input} value={everyMinutes} onChange={e => setEveryMinutes(Number(e.target.value))}/></label> : kind === "once"
+      {kind === "watch" && <label className="block text-sm">Public HTTPS website URL<input type="url" className={input} value={watchUrl} onChange={e => setWatchUrl(e.target.value)} placeholder="https://example.com/updates"/></label>}
+      {kind === "interval" || kind === "watch" ? <label className="block text-sm">Interval in minutes (15–1440)<input type="number" min={15} max={1440} step={15} className={input} value={everyMinutes} onChange={e => setEveryMinutes(Number(e.target.value))}/></label> : kind === "once"
         ? <label className="block text-sm">Date and time<input type="datetime-local" className={input} value={runAt} onChange={e => setRunAt(e.target.value)}/></label>
         : <label className="block text-sm">Local time<input type="time" className={input} value={localTime} onChange={e => setLocalTime(e.target.value)}/></label>}
       {kind === "weekly" && <div className="flex flex-wrap gap-2">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((day,i) =>
         <label className="flex items-center gap-1 text-xs" key={day}><input type="checkbox" checked={weekdays.includes(i)}
           onChange={e => setWeekdays(old => e.target.checked ? [...old,i] : old.filter(n => n !== i))}/>{day}</label>)}</div>}
-      <button type="button" disabled={busy || !title || !prompt || !projectId || (kind === "once" && !runAt)}
+      <button type="button" disabled={busy || !title || !prompt || !projectId || (kind === "once" && !runAt) || (kind === "watch" && !watchUrl)}
         onClick={submit} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? "Save changes" : "Create schedule"}</button>
       {editing && <button type="button" className="ml-2 rounded border px-3 py-2 text-sm" onClick={() => setEditing(null)}>Cancel edit</button>}
     </div>
@@ -96,7 +98,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
           <button disabled={busy} className="rounded border px-2 py-1" onClick={() => {
             setEditing(item.id); setTitle(item.title); setPrompt(item.prompt); setProjectId(item.projectId);
             setKind(item.spec.kind); setTimezone(item.spec.timezone);
-            setLocalTime(item.spec.localTime ?? "08:00"); setEveryMinutes(item.spec.everyMinutes ?? 60); setWeekdays(item.spec.weekdays ?? [1,2,3,4,5]);
+            setLocalTime(item.spec.localTime ?? "08:00"); setWatchUrl(item.spec.url ?? ""); setEveryMinutes(item.spec.everyMinutes ?? 60); setWeekdays(item.spec.weekdays ?? [1,2,3,4,5]);
             setRunAt(item.spec.runAt ? formatLocalScheduleInstant(item.spec.runAt, item.spec.timezone) : "");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}>Edit</button>

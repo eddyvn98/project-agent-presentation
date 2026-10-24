@@ -1,4 +1,4 @@
-export type ScheduleKind = "once" | "daily" | "weekly" | "interval";
+export type ScheduleKind = "once" | "daily" | "weekly" | "interval" | "watch";
 export type ScheduleStatus = "pending" | "active" | "paused" | "completed";
 export interface ScheduleSpec {
   kind: ScheduleKind;
@@ -7,6 +7,7 @@ export interface ScheduleSpec {
   weekdays?: number[];
   runAt?: string;
   everyMinutes?: number;
+  url?: string;
 }
 export interface ScheduleRun {
   occurrence: string;
@@ -17,6 +18,7 @@ export interface ScheduleRun {
   completedAt?: string;
   acknowledgedAt?: string;
   resultDigest?: string;
+  sourceDigest?: string;
   changed?: boolean;
   summary?: string;
 }
@@ -32,6 +34,7 @@ export interface ScheduledAgentTask {
   createdAt: string;
   updatedAt: string;
   lastRunAt?: string;
+  watchDigest?: string;
   runs: ScheduleRun[];
 }
 export type ScheduleCreation = Pick<ScheduledAgentTask, "projectId" | "title" | "prompt" | "spec">;

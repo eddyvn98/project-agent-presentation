@@ -172,7 +172,7 @@ export async function claimScheduleRun(owner: string, id: string, manual = false
   });
 }
 export async function markScheduleRun(owner: string, id: string, occurrence: string,
-  fields: Pick<ScheduleRun, "status"> & Partial<Pick<ScheduleRun, "taskId" | "error" | "completedAt" | "resultDigest" | "changed" | "summary">>) {
+  fields: Pick<ScheduleRun, "status"> & Partial<Pick<ScheduleRun, "taskId" | "error" | "completedAt" | "resultDigest" | "sourceDigest" | "changed" | "summary" | "acknowledgedAt">>) {
   return locked(owner, id, async () => {
     const item = await getSchedule(owner, id);
     const run = item?.runs.find(value => value.occurrence === occurrence);
@@ -227,5 +227,16 @@ export async function acknowledgeScheduleRun(owner: string, id: string, occurren
     run.acknowledgedAt = new Date().toISOString();
     await writeSchedule(schedule);
     return run;
+  });
+}
+
+/** Retain last successfully processed website fingerprint across agent tasks and server restarts. */
+export async function setScheduleWatchDigest(owner: string, id: string, digest: string): Promise<void> {
+  if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error("Invalid watch digest");
+  await locked(owner, id, async () => {
+    const item = await getSchedule(owner, id);
+    if (!item || item.spec.kind !== "watch") return;
+    item.watchDigest = digest; item.updatedAt = new Date().toISOString();
+    await writeSchedule(item);
   });
 }

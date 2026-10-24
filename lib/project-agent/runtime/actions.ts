@@ -179,13 +179,14 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
       const op = String(raw.op);
       if (!["list", "create", "propose", "pause", "resume", "delete"].includes(op)) return { error: "Unknown schedule operation" };
       if ((op === "create" || op === "propose") && (typeof raw.title !== "string" || typeof raw.prompt !== "string" ||
-        !["once", "daily", "weekly", "interval"].includes(String(raw.kind)) || typeof raw.timezone !== "string"))
+        !["once", "daily", "weekly", "interval", "watch"].includes(String(raw.kind)) || typeof raw.timezone !== "string"))
         return { error: "schedule create requires title, prompt, kind and timezone" };
       if (!["create","propose","list"].includes(op) && (typeof raw.id !== "string" || !/^sat_[0-9a-f-]{36}$/.test(raw.id)))
         return { error: "schedule operation requires schedule id" };
       return { action: "schedule", op: op as "list" | "create" | "propose" | "pause" | "resume" | "delete",
         id: typeof raw.id === "string" ? raw.id : undefined, title: typeof raw.title === "string" ? raw.title : undefined,
-        prompt: typeof raw.prompt === "string" ? raw.prompt : undefined, kind: raw.kind as "once" | "daily" | "weekly" | "interval" | undefined,
+        prompt: typeof raw.prompt === "string" ? raw.prompt : undefined, kind: raw.kind as "once" | "daily" | "weekly" | "interval" | "watch" | undefined,
+        url: typeof raw.url === "string" ? raw.url : undefined,
         everyMinutes: typeof raw.everyMinutes === "number" ? raw.everyMinutes : undefined,
         timezone: typeof raw.timezone === "string" ? raw.timezone : undefined,
         localTime: typeof raw.localTime === "string" ? raw.localTime : undefined,

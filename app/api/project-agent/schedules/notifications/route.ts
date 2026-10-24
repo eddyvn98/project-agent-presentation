@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
   try {
     const schedules = await listSchedules(owner);
     const notifications = schedules.flatMap(schedule => schedule.runs
-      .filter(run => ["done", "failed"].includes(run.status) && !run.acknowledgedAt)
+      .filter(run => ["done", "failed"].includes(run.status) && !run.acknowledgedAt &&
+        !(schedule.spec.kind === "watch" && run.changed === false))
       .map(run => ({
         id: schedule.id, title: schedule.title, projectId: schedule.projectId,
         occurrence: run.occurrence, status: run.status,
