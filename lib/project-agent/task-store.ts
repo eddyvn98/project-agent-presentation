@@ -115,6 +115,7 @@ export async function createProjectAgentTask(input: CreateProjectAgentTaskInput)
 		ownerEmail: input.ownerEmail,
 		...(input.scheduleRunId ? { scheduleRunId: input.scheduleRunId } : {}),
     ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+    ...(input.retryOfTaskId ? { retryOfTaskId: input.retryOfTaskId } : {}),
     ...(input.workflowRunId ? { workflowRunId: input.workflowRunId } : {}),
 		projectOwnerEmail: input.projectOwnerEmail,
 		// Sandbox runtime: the chat gets a stable thread id from its first task, so every turn (and every retry) shares one workspace and one chat entry.
