@@ -35,6 +35,7 @@ import { extractAgentSideEffects, hideAgentTags, describeTaskWork, loadRunbookPr
 import { PROJECT_AGENT_BOOT_ID } from "./boot";
 import { loadProjectSkillSet, stripProjectSkillReadRequests } from "./project-skills";
 import { personalMemoryPrompt } from "./personal-agent-memory";
+import { personalSkillsPrompt } from "./personal-agent-skills";
 import { buildReferenceReview } from "./reference-review";
 import { isRuntimeEnabled, runRuntimeAgent } from "./runtime/run-agent";
 import { redactSecrets } from "./runtime/policy";
@@ -111,6 +112,8 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		const skillSet = await loadProjectSkillSet(projectAccess.project.skillIds, projectAccess.ownerEmail);
     const personalMemory = await personalMemoryPrompt(task.ownerEmail);
     if (personalMemory) skillSet.context += "\n\n" + personalMemory;
+    const crossProjectSkills = await personalSkillsPrompt(task.ownerEmail);
+    if (crossProjectSkills) skillSet.context += "\n\n" + crossProjectSkills;
 		let savedSources: AgentWebSource[] = [];
 		const firstCall = {
 			endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] },
