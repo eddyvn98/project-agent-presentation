@@ -72,14 +72,14 @@ export async function submitPersonalLoginField(taskId: string, owner: string) {
   return { ok: true };
 }
 export async function savePersonalLogin(taskId: string, owner: string,
-  mode: BrowserGrantMode, automation: boolean) {
+  mode: BrowserGrantMode, automation: boolean, relatedHosts: string[] = []) {
   const session = requireOwner(taskId, owner);
   if (!isPersonalLoginPreparing(taskId, owner)) throw new Error("Login consent has expired");
   const consent = consents.get(taskId)!;
   if (vaultHost(session.page.url()) !== consent.host)
     throw new Error("Return to the original website before saving its login");
   const state = await withBrowserOp(session, () => session.context.storageState({ indexedDB: true }), false);
-  const grant = await savePersonalBrowserGrant(owner, session.page.url(), state, mode, automation);
+  const grant = await savePersonalBrowserGrant(owner, session.page.url(), state, mode, automation, relatedHosts);
   forgetPersonalLogin(taskId);
   return { grant };
 }

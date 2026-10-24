@@ -40,6 +40,7 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
   const [loginReady, setLoginReady] = useState(false);
   const [loginHost, setLoginHost] = useState("");
   const [allowAutomation, setAllowAutomation] = useState(false);
+  const [ssoHosts, setSsoHosts] = useState("");
   const [grantMode, setGrantMode] = useState<"read" | "interact">("read");
   const ui = LABEL[language], actions = browserAssistText(language);
   const base = "/api/projects/" + encodeURIComponent(projectId) + "/agent/tasks/" + encodeURIComponent(taskId) + "/browser";
@@ -180,8 +181,13 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
                 onChange={(event) => setAllowAutomation(event.target.checked)} />
               Allow reuse by unattended tasks
             </label>
+            <label className="block text-xs">Other SSO identity-provider domains (optional, comma-separated; only grant domains you recognize)
+              <input type="text" value={ssoHosts} onChange={event => setSsoHosts(event.target.value)}
+                placeholder="login.example.com" className="mt-1 w-full rounded-md border px-2 py-1.5 dark:bg-slate-900" />
+            </label>
             <button type="button" disabled={loading} onClick={() => void loginCommand({
               op: "login_save", mode: grantMode, automation: allowAutomation,
+              relatedHosts: ssoHosts.split(",").map(v => v.trim()).filter(Boolean),
             })} className="rounded-md border border-orange-400 px-2 py-1.5 text-xs">
               Save encrypted browser login
             </button>

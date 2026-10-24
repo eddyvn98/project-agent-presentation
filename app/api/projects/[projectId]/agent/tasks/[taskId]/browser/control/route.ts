@@ -37,7 +37,7 @@ export async function POST(req: NextRequest,
       return NextResponse.json({ error: "Take control before login" }, { status: 409, headers: HEADERS });
     if (raw!.op === "login_secret" && (typeof raw!.text !== "string" || raw!.text.length > 2048))
       return NextResponse.json({ error: "Invalid private login entry" }, { status: 400, headers: HEADERS });
-    if (raw!.op === "login_save" && !["read","interact"].includes(String(raw!.mode)))
+    if (raw!.op === "login_save" && (!["read","interact"].includes(String(raw!.mode)) || (raw!.relatedHosts !== undefined && (!Array.isArray(raw!.relatedHosts) || raw!.relatedHosts.length > 4 || raw!.relatedHosts.some((v: unknown) => typeof v !== "string" || v.length > 255)))))
       return NextResponse.json({ error: "Invalid grant mode" }, { status: 400, headers: HEADERS });
     if (raw!.op === "login_revoke" && typeof raw!.url !== "string")
       return NextResponse.json({ error: "Website URL required" }, { status: 400, headers: HEADERS });
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest,
       if (request.op === "login_begin") return NextResponse.json(await beginPersonalLogin(browserId, owner), { headers: HEADERS });
       if (request.op === "login_secret") return NextResponse.json(await enterPersonalLoginSecret(browserId, owner, request.text as string), { headers: HEADERS });
       if (request.op === "login_submit") return NextResponse.json(await submitPersonalLoginField(browserId, owner), { headers: HEADERS });
-      if (request.op === "login_save") return NextResponse.json(await savePersonalLogin(browserId, owner, request.mode as "read" | "interact", request.automation === true), { headers: HEADERS });
+      if (request.op === "login_save") return NextResponse.json(await savePersonalLogin(browserId, owner, request.mode as "read" | "interact", request.automation === true, Array.isArray(request.relatedHosts) ? request.relatedHosts as string[] : []), { headers: HEADERS });
       return NextResponse.json(await revokePersonalLogin(owner, request.url as string), { headers: HEADERS });
     } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Personal login failed" }, { status: 409, headers: HEADERS }); }
   }
