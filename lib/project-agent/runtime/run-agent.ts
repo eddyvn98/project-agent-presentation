@@ -20,7 +20,7 @@ import { initialWorkspacePrompt, runDirectWorkspace } from "./workspace-direct";
 import { newDirectState } from "./workspace-direct-apply";
 import { engineRefusal } from "./engines";
 import { delegateToSubAgent } from "./sub-agent";
-import { hasVerifiedMilestone } from "./progress-evidence"; import { StallGuard, wrapUpQuery } from "./stall-guard"; import { ActionReplayGuard, mayHaveExternalEffects } from "./action-replay-guard"; import { checkHtmlPage, newOutputFiles, storeWorkbookValues } from "./outputs";
+import { uniqueParallelJobs } from "./delegate-batch"; import { hasVerifiedMilestone } from "./progress-evidence"; import { StallGuard, wrapUpQuery } from "./stall-guard"; import { ActionReplayGuard, mayHaveExternalEffects } from "./action-replay-guard"; import { checkHtmlPage, newOutputFiles, storeWorkbookValues } from "./outputs";
 import { isLargePdfOutput, storeLargePdfOutput } from "./large-output";
 import { render } from "./render-action"; import { execInSandbox, resolveWorkspacePath, workspaceDir } from "./sandbox";
 import { recordSources } from "./source-collector";
@@ -221,10 +221,11 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 				metrics.actions.set("delegate", (metrics.actions.get("delegate") ?? 0) + group.length);
 				const started = Date.now();
 				const budget = input.budget ?? (input.budget = { delegates: 0 });
-				const outcomes = await Promise.all(group.map((candidate) => delegateToSubAgent(runRuntimeAgent, input, candidate, budget, MAX_DELEGATES, SUB_AGENT_STEPS)));
+				const unique = uniqueParallelJobs(group);
+				const outcomes = await Promise.all(unique.map(({ job }) => delegateToSubAgent(runRuntimeAgent, input, job, budget, MAX_DELEGATES, SUB_AGENT_STEPS)));
 				metrics.actionMs += Date.now() - started;
 				const prepared = await Promise.all(outcomes.map((outcome) => externalizeActionOutput(input, "delegate", outcome)));
-				for (const [offset, outcome] of prepared.entries()) { turnContext.record(group[offset], outcome); results.push(`[${index + offset + 1}/${actions.length}] ${outcome.text}`); }
+				for (const [offset, outcome] of prepared.entries()) { turnContext.record(unique[offset].job, outcome); results.push(`[${index + unique[offset].index + 1}/${actions.length}] ${outcome.text}`); }
 				continue;
 			}
 			if (action.action === "final" && index > 0) { results.push(`[${index + 1}/${actions.length}] final was not used: it came in the same reply as other actions whose results you had not seen. Check the results above, then send final on its own.`); break; }
