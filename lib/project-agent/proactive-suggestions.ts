@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readInsightHistory } from "./insights-store";
-import { listSchedules } from "./scheduled-store";
+import { listSchedules } from "./scheduled-mongo-store";
 
 export interface AgentProactiveSuggestion {
   id: string; title: string; prompt: string; projectId: string;

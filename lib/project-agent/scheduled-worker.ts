@@ -6,7 +6,7 @@ import { webFetch } from "./runtime/web-fetch";
 import { startProjectAgentTask } from "./task-runner";
 import { launchWorkflow } from "./workflow-runner";
 import { getWorkflowRun } from "./workflow-store";
-import { claimScheduleRun, listDueSchedules, markScheduleRun, getSchedule, setScheduleWatchDigest, listSchedulesNeedingReconciliation, withSchedulerTickLease } from "./scheduled-store";
+import { claimScheduleRun, listDueSchedules, markScheduleRun, getSchedule, setScheduleWatchDigest, listSchedulesNeedingReconciliation, withSchedulerTickLease } from "./scheduled-mongo-store";
 import type { ScheduledAgentTask } from "./scheduled-types";
 import * as projectCap from "@/lib/capabilities/project";
 

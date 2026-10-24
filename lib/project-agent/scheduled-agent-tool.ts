@@ -1,6 +1,6 @@
 import type { RuntimeInput } from "./runtime/run-agent-types";
 import type { RuntimeAction } from "./runtime/actions";
-import { createSchedule, listSchedules, updateSchedule } from "./scheduled-store";
+import { createSchedule, listSchedules, updateSchedule } from "./scheduled-mongo-store";
 import * as projectCap from "@/lib/capabilities/project";
 
 type Action = Extract<RuntimeAction, { action: "schedule" }>;

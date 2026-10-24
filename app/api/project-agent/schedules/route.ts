@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import * as projectCap from "@/lib/capabilities/project";
 import { getAgentWorkflow } from "@/lib/project-agent/workflow-store";
-import { createSchedule, listSchedules, updateSchedule } from "@/lib/project-agent/scheduled-store";
+import { createSchedule, listSchedules, updateSchedule } from "@/lib/project-agent/scheduled-mongo-store";
 import { runScheduleNow } from "@/lib/project-agent/scheduled-worker";
 import type { ScheduleCreation } from "@/lib/project-agent/scheduled-types";
 

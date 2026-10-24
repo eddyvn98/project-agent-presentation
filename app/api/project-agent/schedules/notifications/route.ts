@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { acknowledgeScheduleRun, listSchedules } from "@/lib/project-agent/scheduled-store";
+import { acknowledgeScheduleRun, listSchedules } from "@/lib/project-agent/scheduled-mongo-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
