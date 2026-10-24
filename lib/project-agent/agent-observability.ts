@@ -1,4 +1,5 @@
 import { readInsightHistory } from "./insights-store";
+import { taskIssue } from "./task-issue";
 import { listSchedules } from "./scheduled-store";
 import { listAgentApprovals } from "./agent-approvals";
 
@@ -10,6 +11,7 @@ export interface AgentObservability {
   tokens: number; outputTokens: number; estimatedCostUsd: number | null;
   durationSeconds: number; avgDurationSeconds: number;
   pendingApprovals: number; activeSchedules: number;
+  loopStopped: number; needsReview: number; toolFailures: number;
   days: AgentMetricDay[]; recent: Array<{ id: string; status: string; createdAt: string;
     durationSeconds: number; tokens: number; error?: string }>;
 }
@@ -36,8 +38,13 @@ export async function accountAgentObservability(owner: string): Promise<AgentObs
   }
   let completed = 0, failed = 0, tokens = 0, outputTokens = 0, durationSeconds = 0;
   let estimatedCostUsd = 0, priced = 0;
+  let loopStopped = 0, needsReview = 0, toolFailures = 0;
   for (const task of tasks) {
     const used = tokenCount(task.log ?? []), seconds = duration(task);
+    const issue = taskIssue(task.error ?? "");
+    if (issue?.kind === "loop" || task.log.some(line => /stall_stop|loop_blocked/.test(line))) loopStopped++;
+    if (issue?.needsReview) needsReview++;
+    toolFailures += Number((task.log.findLast(line => line.includes("metrics ::")) ?? "").match(/failed=(\d+)/)?.[1] ?? 0);
     tokens += used; durationSeconds += seconds;
     const metric = task.log.findLast(s => s.includes("metrics ::")) ?? "";
     outputTokens += Number(metric.match(/out_total=(\d+)/)?.[1] ?? 0);
@@ -59,6 +66,7 @@ export async function accountAgentObservability(owner: string): Promise<AgentObs
     tokens, outputTokens, estimatedCostUsd: priced === tasks.length && tasks.length ?
       Math.round(estimatedCostUsd * 1_000_000) / 1_000_000 : null,
     durationSeconds, avgDurationSeconds: finished ? Math.round(durationSeconds / finished) : 0,
+    loopStopped, needsReview, toolFailures,
     pendingApprovals: approvals.filter(a => a.state === "pending" && Date.parse(a.expiresAt) > Date.now()).length,
     activeSchedules: schedules.filter(s => s.status === "active").length,
     days: [...dates.values()],
