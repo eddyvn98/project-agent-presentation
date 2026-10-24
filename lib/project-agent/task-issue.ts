@@ -20,7 +20,7 @@ const patterns: Array<[TaskIssueKind, RegExp]> = [
 const english: Record<TaskIssueKind, string> = {
   review: "This task may have changed external data before it stopped. Check the destination and saved results before retrying; repeated actions could duplicate changes.",
   access: "The task needs permission or approval. Check access rights and pending approvals before continuing.",
-  loop: "The assistant could not find a useful next step. Try again with a different approach or a smaller goal; do not repeat the same action.",
+  loop: "The assistant could not find a useful next step. Press Try again with a different approach or a smaller goal; do not repeat the same action.",
   browser: "The browser session became unavailable. Reopen it, inspect the current page and then continue.",
   service: "The AI service is busy or unreachable right now. Press Try again in a moment after checking whether anything was already saved.",
   timeout: "The task took too long and was stopped. Resume from confirmed results or try a smaller piece first.",
