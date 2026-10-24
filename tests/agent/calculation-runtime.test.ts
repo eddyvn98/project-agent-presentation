@@ -90,7 +90,13 @@ it("carries real SSE wire observations without Dify memory instead of repeating 
         ? { action: "final", answer: `${JSON.parse(calculated.output).exact} VND from app calculator`, files: [] }
         : { action: "calculate", expression: "59*26*47000-72000000" };
     }
-    return new Response(`data: ${JSON.stringify({ event: "message", answer: JSON.stringify(action), conversation_id: "synthetic-chat" })}\n\ndata: {"event":"message_end"}\n\n`, { status: 200 });
+    // Minimal streamed fetch response: jsdom does not guarantee the native Response class.
+    const wire = Buffer.from(`data: ${JSON.stringify({ event: "message", answer: JSON.stringify(action), conversation_id: "synthetic-chat" })}\n\ndata: {"event":"message_end"}\n\n`);
+    let read = false;
+    return { ok: true, status: 200, body: { getReader: () => ({
+      read: async () => read ? { done: true, value: undefined } :
+        (read = true, { done: false, value: wire }),
+    }) } } as unknown as Response;
   }));
   const onStep = vi.fn();
   const result = await runRuntimeAgent({ ...input, maxSteps: 9, onStep });
