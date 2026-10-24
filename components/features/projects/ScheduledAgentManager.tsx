@@ -29,11 +29,16 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
   };
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const suggestionId = params.get("suggestionId");
     const suggestedPrompt = params.get("prompt");
     const destination = params.get("projectId");
-    if (suggestedPrompt && suggestedPrompt.length <= 1000) {
-      setPrompt(suggestedPrompt);
-      setTitle(suggestedPrompt.replace(/\s+/g, " ").slice(0, 90));
+    if (suggestionId && /^[a-f0-9]{16}$/.test(suggestionId)) {
+      void fetch("/api/project-agent/proactive", { cache: "no-store" })
+        .then(r => r.ok ? r.json() : null)
+        .then((data: { suggestions?: { id: string; prompt: string; projectId: string }[] } | null) => {
+          const item = data?.suggestions?.find(entry => entry.id === suggestionId);
+          if (item) { setPrompt(item.prompt); setTitle(item.prompt.slice(0, 90)); setProjectId(item.projectId); }
+        }).catch(() => {});
     }
     if (destination && destination.length < 180) setProjectId(destination);
     void fetch("/api/project-agent/workflows").then(r => r.ok ? r.json() : null)
