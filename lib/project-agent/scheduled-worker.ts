@@ -4,6 +4,8 @@ import { recoverProjectAgentTask } from "./task-recovery";
 import { assertPublicHttpUrl } from "./runtime/web-security";
 import { webFetch } from "./runtime/web-fetch";
 import { startProjectAgentTask } from "./task-runner";
+import { launchWorkflow } from "./workflow-runner";
+import { getWorkflowRun } from "./workflow-store";
 import { claimScheduleRun, listDueSchedules, markScheduleRun, getSchedule, setScheduleWatchDigest, listSchedulesNeedingReconciliation, withSchedulerTickLease } from "./scheduled-store";
 import type { ScheduledAgentTask } from "./scheduled-types";
 import * as projectCap from "@/lib/capabilities/project";
@@ -17,6 +19,16 @@ async function reconcile(item: ScheduledAgentTask) {
       });
   }
   for (const run of item.runs.filter(r => r.status === "queued" || r.status === "running")) {
+    if (run.workflowRunId) {
+      const flow = await getWorkflowRun(item.ownerEmail, run.workflowRunId);
+      if (flow?.status === "done" || flow?.status === "failed")
+        await markScheduleRun(item.ownerEmail, item.id, run.occurrence, {
+          status: flow.status, completedAt: flow.updatedAt,
+          summary: flow.status === "done" ? "Workflow finished" : "Workflow failed",
+          ...(flow.error ? { error: flow.error.slice(0, 180) } : {}),
+        });
+      continue;
+    }
     if (!run.taskId) continue;
     let task = await readProjectAgentTask(run.taskId);
     if (!task) continue;
@@ -50,6 +62,14 @@ export async function executeSchedule(item: ScheduledAgentTask, manual = false) 
   try {
     const project = await projectCap.getProjectAccess(item.projectId, item.ownerEmail);
     if (!project) throw new Error("Project access has expired; scheduled work was blocked");
+    if (item.workflowId) {
+      const launched = await launchWorkflow(item.ownerEmail, item.workflowId);
+      await markScheduleRun(item.ownerEmail, item.id, run.occurrence, {
+        status: "running", workflowRunId: launched.runId,
+        summary: "Workflow started (" + launched.runId + ")",
+      });
+      return { status: "dispatched" as const, workflowRunId: launched.runId };
+    }
     let watchMessage = "";
     if (item.spec.kind === "watch") {
       const url = item.spec.url!;

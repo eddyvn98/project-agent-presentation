@@ -34,8 +34,7 @@ export function getEndpoint(): string {
 import { extractAgentSideEffects, hideAgentTags, describeTaskWork, loadRunbookPrompt, removeAgentWebSources, saveAgentWebSources, saveRunbookNotes, saveTaskWorkLog, type AgentWebSource } from "./agent-sources";
 import { PROJECT_AGENT_BOOT_ID } from "./boot";
 import { loadProjectSkillSet, stripProjectSkillReadRequests } from "./project-skills";
-import { personalMemoryPrompt } from "./personal-agent-memory";
-import { personalSkillsPrompt } from "./personal-agent-skills";
+import { personalMemoryPrompt } from "./personal-agent-memory"; import { personalSkillsPrompt } from "./personal-agent-skills";
 import { buildReferenceReview } from "./reference-review";
 import { isRuntimeEnabled, runRuntimeAgent } from "./runtime/run-agent";
 import { redactSecrets } from "./runtime/policy";
@@ -110,10 +109,8 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		};
 		const classicTurn = (request: DifyCalculatorCall) => callDifyWithCalculator({ ...request, originalRequest: task.userPrompt ?? task.prompt, calculatorEnabled: !projectAccess.project.disabledToolGroups?.includes("code"), onBridgeEvent: (tool, detail) => updateProjectAgentTask(task.id, { logLine: `using tool ${tool} :: ${detail.replace(/\s+/g, " ").slice(0, 200)}` }) });
 		const skillSet = await loadProjectSkillSet(projectAccess.project.skillIds, projectAccess.ownerEmail);
-    const personalMemory = await personalMemoryPrompt(task.ownerEmail);
-    if (personalMemory) skillSet.context += "\n\n" + personalMemory;
-    const crossProjectSkills = await personalSkillsPrompt(task.ownerEmail);
-    if (crossProjectSkills) skillSet.context += "\n\n" + crossProjectSkills;
+    const personalMemory = await personalMemoryPrompt(task.ownerEmail); if (personalMemory) skillSet.context += "\n\n" + personalMemory;
+    const crossProjectSkills = await personalSkillsPrompt(task.ownerEmail); if (crossProjectSkills) skillSet.context += "\n\n" + crossProjectSkills;
 		let savedSources: AgentWebSource[] = [];
 		const firstCall = {
 			endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] },
@@ -126,7 +123,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		const onWorkspaceSaved = workspaceSaveReporter(task.id);
 		const runtimeTurn = async (query: string): Promise<DifyAgentMessage> => {
 			const message = await runRuntimeAgent({
-				workspaceState, sources: runtimeSources, chatId: chatKey, taskId: task.id, projectId: task.projectId, user, ownerEmail: task.ownerEmail, scheduledRun: Boolean(task.scheduleRunId), engines: task.engines, modelSelector: task.modelSelector, recoverChatContext: () => buildChatRecap(task), userPrompt: task.userPrompt ?? task.prompt, onBoard: (boardId) => { void updateProjectAgentTask(task.id, { workspaceBoardId: boardId }).catch(() => {}); }, boardId: task.boardId, onWorkspaceSaved, query, conversationId, signal,
+				workspaceState, sources: runtimeSources, chatId: chatKey, taskId: task.id, projectId: task.projectId, user, ownerEmail: task.ownerEmail, scheduledRun: Boolean(task.scheduleRunId || task.workflowRunId), engines: task.engines, modelSelector: task.modelSelector, recoverChatContext: () => buildChatRecap(task), userPrompt: task.userPrompt ?? task.prompt, onBoard: (boardId) => { void updateProjectAgentTask(task.id, { workspaceBoardId: boardId }).catch(() => {}); }, boardId: task.boardId, onWorkspaceSaved, query, conversationId, signal,
 				onStep: (step) => { void updateProjectAgentTask(task.id, { logLine: step.tool === "model_step" ? `thinking :: ${step.detail}` : step.tool === "metrics" ? `metrics :: ${step.detail}` : step.tool === "trajectory" ? `trajectory :: ${step.detail}` : step.tool === "plan" ? `plan :: ${step.detail.slice(0, 1800)}` : step.tool === "tool_failed" ? `tool failed :: ${step.detail}` : step.tool === "progress_message" ? `progress_message :: ${step.detail.replace(/\s+/g, " ").slice(0, 240)}` : `using tool ${step.tool} :: ${step.detail.replace(/\s+/g, " ").slice(0, 200)}` }).catch(() => {}); },
 				onConversation: (id) => { conversationId = id; void updateProjectAgentTask(task.id, conversationPatch(id)).catch(() => {}); },
 			});

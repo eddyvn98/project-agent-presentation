@@ -3,9 +3,12 @@ import { useEffect, useState } from "react";
 import type { ScheduledAgentTask, ScheduleSpec } from "@/lib/project-agent/scheduled-types";
 import { localScheduleInstant, formatLocalScheduleInstant } from "@/lib/project-agent/scheduled-time";
 type Project = { id: string; name: string };
+type Workflow = { id: string; title: string; enabled: boolean; projectId: string };
 export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?: string }) {
   const [items, setItems] = useState<ScheduledAgentTask[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [workflowId, setWorkflowId] = useState("");
   const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
   const [projectId, setProjectId] = useState(initialProjectId ?? "");
@@ -33,6 +36,8 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
       setTitle(suggestedPrompt.replace(/\s+/g, " ").slice(0, 90));
     }
     if (destination && destination.length < 180) setProjectId(destination);
+    void fetch("/api/project-agent/workflows").then(r => r.ok ? r.json() : null)
+      .then((data: { workflows?: Workflow[] } | null) => setWorkflows(data?.workflows ?? [])).catch(() => {});
     void load().catch(e => setError(String(e)));
     const refresh = setInterval(() => { if (document.visibilityState === "visible") void load().catch(() => {}); }, 15000);
     void fetch("/api/projects").then(r => r.ok ? r.json() : []).then((data: Project[]) => {
@@ -56,14 +61,17 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
     finally { setBusy(false); }
   }
   function submit() {
-    if (!projectId || !title.trim() || !prompt.trim()) return;
+    if (!projectId || !title.trim() || (!workflowId && !prompt.trim())) return;
     let onceAt: string | undefined;
     try { if (kind === "once") onceAt = localScheduleInstant(runAt, timezone); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Invalid scheduled time"); return; }
     const spec: ScheduleSpec = kind === "watch" ? { kind, timezone, everyMinutes, url: watchUrl } : kind === "interval" ? { kind, timezone, everyMinutes } : kind === "once"
       ? { kind, timezone, runAt: onceAt }
       : { kind, timezone, localTime, ...(kind === "weekly" ? { weekdays } : {}) };
-    void send(editing ? "PATCH" : "POST", editing ? { id: editing, action: "edit", projectId, title, prompt, spec } : { projectId, title, prompt, spec });
+    const effectivePrompt = workflowId ? "Launch saved workflow " + (workflows.find(w => w.id === workflowId)?.title ?? "") : prompt;
+    void send(editing ? "PATCH" : "POST", editing ?
+      { id: editing, action: "edit", projectId, title, prompt: effectivePrompt, workflowId, spec } :
+      { projectId, title, prompt: effectivePrompt, workflowId: workflowId || undefined, spec });
   }
   const input = "w-full rounded-lg border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900";
   return <section aria-label="Scheduled Agent Tasks" className="mx-auto max-w-4xl space-y-5 p-4">
@@ -73,7 +81,17 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
     <div className="space-y-3 rounded-xl border p-4">
       <h2 className="font-semibold">{editing ? "Edit scheduled task" : "New scheduled task"}</h2>
       <label className="block text-sm">Title<input className={input} value={title} onChange={e => setTitle(e.target.value)} maxLength={140}/></label>
-      <label className="block text-sm">Agent instructions<textarea rows={3} className={input} value={prompt} onChange={e => setPrompt(e.target.value)} maxLength={6000}/></label>
+      <label className="block text-sm">Work to run
+        <select className={input} value={workflowId} onChange={e => {
+          const id = e.target.value; setWorkflowId(id);
+          const selected = workflows.find(w => w.id === id);
+          if (selected) setProjectId(selected.projectId);
+        }}>
+          <option value="">Run an Agent prompt</option>
+          {workflows.filter(w => w.enabled).map(w => <option key={w.id} value={w.id}>Workflow: {w.title}</option>)}
+        </select>
+      </label>
+      {!workflowId && <label className="block text-sm">Agent instructions<textarea rows={3} className={input} value={prompt} onChange={e => setPrompt(e.target.value)} maxLength={6000}/></label>}
       <label className="block text-sm">Save results to Project<select className={input} value={projectId} onChange={e => setProjectId(e.target.value)}>
         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select></label>
@@ -90,7 +108,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
       {kind === "weekly" && <div className="flex flex-wrap gap-2">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((day,i) =>
         <label className="flex items-center gap-1 text-xs" key={day}><input type="checkbox" checked={weekdays.includes(i)}
           onChange={e => setWeekdays(old => e.target.checked ? [...old,i] : old.filter(n => n !== i))}/>{day}</label>)}</div>}
-      <button type="button" disabled={busy || !title || !prompt || !projectId || (kind === "once" && !runAt) || (kind === "watch" && !watchUrl)}
+      <button type="button" disabled={busy || !title || (!workflowId && !prompt) || !projectId || (kind === "once" && !runAt) || (kind === "watch" && !watchUrl)}
         onClick={submit} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? "Save changes" : "Create schedule"}</button>
       {editing && <button type="button" className="ml-2 rounded border px-3 py-2 text-sm" onClick={() => setEditing(null)}>Cancel edit</button>}
     </div>
@@ -98,14 +116,14 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
       {items.map(item => <article key={item.id} className="space-y-2 rounded-xl border p-3">
         <div className="flex flex-wrap items-center justify-between gap-2"><strong>{item.title}</strong>
           <span className="text-xs text-slate-500">{item.status}</span></div>
-        <p className="whitespace-pre-wrap text-sm">{item.prompt}</p>
+        <p className="whitespace-pre-wrap text-sm">{item.workflowId ? "Workflow: " + (workflows.find(w => w.id === item.workflowId)?.title ?? item.workflowId) : item.prompt}</p>
         <p className="text-xs text-slate-500">{item.spec.kind} · {item.spec.timezone} · Next: {item.nextRunAt ? new Date(item.nextRunAt).toLocaleString() : "none"}</p>
         <div className="flex flex-wrap gap-2 text-xs">
           <button disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: item.status === "pending" ? "approve" : item.status === "active" ? "pause" : "resume" })}>{item.status === "pending" ? "Approve" : item.status === "active" ? "Pause" : "Resume"}</button>
           {item.pendingAction && <><span className="text-xs text-amber-700">Agent requests: {item.pendingAction}</span><button type="button" disabled={busy} className="rounded border border-orange-400 px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: "approve_action" })}>Approve change</button><button type="button" disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: "reject_action" })}>Reject change</button></>}
           {item.status === "pending" && <span className="text-xs text-amber-600">Agent suggestion — requires your approval.</span>}
           <button disabled={busy} className="rounded border px-2 py-1" onClick={() => {
-            setEditing(item.id); setTitle(item.title); setPrompt(item.prompt); setProjectId(item.projectId);
+            setEditing(item.id); setTitle(item.title); setPrompt(item.prompt); setProjectId(item.projectId); setWorkflowId(item.workflowId ?? "");
             setKind(item.spec.kind); setTimezone(item.spec.timezone);
             setLocalTime(item.spec.localTime ?? "08:00"); setWatchUrl(item.spec.url ?? ""); setEveryMinutes(item.spec.everyMinutes ?? 60); setWeekdays(item.spec.weekdays ?? [1,2,3,4,5]);
             setRunAt(item.spec.runAt ? formatLocalScheduleInstant(item.spec.runAt, item.spec.timezone) : "");

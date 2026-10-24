@@ -33,7 +33,7 @@ export function startProjectAgentTask(taskId: string): void {
 				logLine: `failed: ${error}`,
 			}).catch(() => {});
 		})
-		.finally(() => { runningTasks.delete(taskId); controllers.delete(taskId); if (actuallyRan) void afterTaskForGoal(taskId, startProjectAgentTask); });
+		.finally(() => { runningTasks.delete(taskId); controllers.delete(taskId); if (actuallyRan) { void afterTaskForGoal(taskId, startProjectAgentTask); void import("./workflow-runner").then(m => m.afterTaskForWorkflow(taskId)).catch(() => {}); } });
 	runningTasks.set(taskId, run);
 }
 

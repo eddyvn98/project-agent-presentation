@@ -65,7 +65,7 @@ export async function requireAgentApproval(input: {
   const owner = input.owner.trim().toLowerCase(), intent = input.intent.trim().slice(0, 350);
   if (!owner || !input.projectId || !/^[-a-z0-9.]+$/i.test(input.host) || !intent)
     return { allowed: false, message: "Approval requires a verified task owner, project and web action" };
-  const id = "apa_" + hash(JSON.stringify([owner, input.projectId, input.host, intent])).slice(0, 40);
+  const id = "apa_" + hash(JSON.stringify([owner, input.projectId, input.taskId, input.host, intent])).slice(0, 40);
   await fs.mkdir(folder(owner), { recursive: true, mode: 0o700 });
   return exclusive(owner, id, async () => {
     const existing = await read(owner, id);

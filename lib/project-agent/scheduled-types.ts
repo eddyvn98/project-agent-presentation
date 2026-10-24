@@ -13,6 +13,7 @@ export interface ScheduleRun {
   occurrence: string;
   status: "dispatching" | "queued" | "running" | "done" | "failed";
   taskId?: string;
+  workflowRunId?: string;
   error?: string;
   createdAt: string;
   completedAt?: string;
@@ -35,8 +36,9 @@ export interface ScheduledAgentTask {
   updatedAt: string;
   lastRunAt?: string;
   watchDigest?: string;
+  workflowId?: string;
   /** Agent-requested modification that remains inactive until owner approval. */
   pendingAction?: "pause" | "resume" | "delete";
   runs: ScheduleRun[];
 }
-export type ScheduleCreation = Pick<ScheduledAgentTask, "projectId" | "title" | "prompt" | "spec">;
+export type ScheduleCreation = Pick<ScheduledAgentTask, "projectId" | "title" | "prompt" | "spec"> & { workflowId?: string };

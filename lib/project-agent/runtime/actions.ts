@@ -179,7 +179,24 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
 			}
 		case "web_fetch":
 			return typeof raw.url === "string" && raw.url.trim() ? { action: "web_fetch", url: raw.url.trim(), offset: typeof raw.offset === "number" ? raw.offset : undefined, find: typeof raw.find === "string" && raw.find.trim() ? raw.find.trim().slice(0, 120) : undefined, note } : { error: "web_fetch needs a url" };
-		case "schedule": {
+		case "workflow": {
+      if (raw.op === "list") return { action: "workflow", op: "list", note };
+      if (raw.op !== "propose" || typeof raw.title !== "string" || !Array.isArray(raw.steps) ||
+          raw.steps.length < 1 || raw.steps.length > 12)
+        return { error: "Workflow proposal requires a title and 1-12 steps" };
+      if (raw.steps.some(item => !item || typeof item !== "object" || Array.isArray(item)))
+        return { error: "Invalid workflow step" };
+      const steps = raw.steps.map(item => {
+        const s = item as Record<string, unknown>;
+        return { title: s.title, prompt: s.prompt, requiresApproval: s.requiresApproval === true };
+      });
+      if (steps.some(s => typeof s.title !== "string" || typeof s.prompt !== "string"))
+        return { error: "Each workflow step needs title and prompt" };
+      return { action: "workflow", op: "propose", title: raw.title,
+        description: typeof raw.description === "string" ? raw.description : "",
+        steps: steps as Array<{ title: string; prompt: string; requiresApproval: boolean }>, note };
+    }
+    case "schedule": {
       const op = String(raw.op);
       if (!["list", "create", "propose", "pause", "resume", "delete"].includes(op)) return { error: "Unknown schedule operation" };
       if ((op === "create" || op === "propose") && (typeof raw.title !== "string" || typeof raw.prompt !== "string" ||

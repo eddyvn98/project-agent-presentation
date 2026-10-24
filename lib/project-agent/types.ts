@@ -33,6 +33,7 @@ export interface ProjectAgentTask {
   ownerEmail: string;
   /** Run spawned by a saved schedule; cannot modify schedules or grant new rights. */
   scheduleRunId?: string;
+  workflowRunId?: string;
   projectOwnerEmail?: string;
   /** Stable id of the chat (thread) this task belongs to; usually the first Dify conversation id. */
   conversationId?: string;
@@ -85,6 +86,7 @@ export interface CreateProjectAgentTaskInput {
   ownerEmail: string;
   projectOwnerEmail?: string;
   scheduleRunId?: string;
+  workflowRunId?: string;
   engines?: string[];
   /** Picker id or selector; validated when the task is created, ignored when unknown. */
   modelSelector?: string;

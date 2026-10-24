@@ -68,7 +68,9 @@ function sanitize(owner: string, input: ScheduleCreation) {
   if (!title || title.length > 140 || !prompt || prompt.length > 6_000 ||
     !input.projectId || input.projectId.length > 180)
     throw new Error("A title, Project destination and a task prompt are required");
+  if (input.workflowId && !/^awf_[0-9a-f-]{36}$/.test(input.workflowId)) throw new Error("Invalid workflow for schedule");
   const spec = parseScheduleSpec(input.spec);
+  if (input.workflowId && spec.kind === "watch") throw new Error("Website-change schedules cannot directly launch workflows");
   const next = nextScheduledRun(spec);
   if (!next) throw new Error("The requested schedule is already in the past");
   return { title, prompt, spec, next };
@@ -79,12 +81,12 @@ export async function createSchedule(owner: string, input: ScheduleCreation, pen
   const existing = await listSchedules(owner);
   if (existing.length >= MAX_PER_USER) throw new Error("Maximum 100 schedules per account");
   const identical = existing.find(item => item.status === (pending ? "pending" : "active") && item.projectId === input.projectId &&
-    item.prompt === prompt && JSON.stringify(item.spec) === JSON.stringify(spec) &&
+    item.prompt === prompt && item.workflowId === input.workflowId && JSON.stringify(item.spec) === JSON.stringify(spec) &&
     Date.now() - Date.parse(item.createdAt) < 120_000);
   if (identical) return identical; // Prevent retry storms from making duplicate reminders.
   const now = new Date().toISOString();
   const schedule: ScheduledAgentTask = { id: "sat_" + randomUUID(),
-    ownerEmail: owner.trim().toLowerCase(), projectId: input.projectId, title, prompt,
+    ownerEmail: owner.trim().toLowerCase(), projectId: input.projectId, title, prompt, workflowId: input.workflowId,
     spec, nextRunAt: next, status: pending ? "pending" : "active", runs: [], createdAt: now, updatedAt: now };
   await writeSchedule(schedule);
   return schedule;
@@ -104,7 +106,7 @@ async function locked<T>(owner: string, id: string, fn: () => Promise<T>): Promi
 }
 export async function updateSchedule(owner: string, id: string,
   change: { action: "approve" | "approve_action" | "reject_action" | "suggest_pause" | "suggest_resume" | "suggest_delete" | "pause" | "resume" | "delete" | "edit"; title?: string;
-    prompt?: string; spec?: ScheduleCreation["spec"]; projectId?: string }) {
+    prompt?: string; spec?: ScheduleCreation["spec"]; projectId?: string; workflowId?: string }) {
   return locked(owner, id, async () => {
     const item = await getSchedule(owner, id);
     if (!item) throw new Error("Schedule not found");
@@ -140,8 +142,9 @@ export async function updateSchedule(owner: string, id: string,
     if (change.action === "edit") {
       const next = sanitize(owner, { projectId: change.projectId ?? item.projectId,
         title: change.title ?? item.title, prompt: change.prompt ?? item.prompt,
-        spec: change.spec ?? item.spec });
+        spec: change.spec ?? item.spec, workflowId: change.workflowId ?? item.workflowId });
       Object.assign(item, { ...next, nextRunAt: next.next, projectId: change.projectId ?? item.projectId });
+      if (change.workflowId !== undefined) item.workflowId = change.workflowId || undefined;
       item.status = "active";
     }
     item.updatedAt = new Date().toISOString();
@@ -190,7 +193,7 @@ export async function claimScheduleRun(owner: string, id: string, manual = false
   });
 }
 export async function markScheduleRun(owner: string, id: string, occurrence: string,
-  fields: Pick<ScheduleRun, "status"> & Partial<Pick<ScheduleRun, "taskId" | "error" | "completedAt" | "resultDigest" | "sourceDigest" | "changed" | "summary" | "acknowledgedAt">>) {
+  fields: Pick<ScheduleRun, "status"> & Partial<Pick<ScheduleRun, "taskId" | "workflowRunId" | "error" | "completedAt" | "resultDigest" | "sourceDigest" | "changed" | "summary" | "acknowledgedAt">>) {
   return locked(owner, id, async () => {
     const item = await getSchedule(owner, id);
     const run = item?.runs.find(value => value.occurrence === occurrence);

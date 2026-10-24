@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import * as projectCap from "@/lib/capabilities/project";
+import { getAgentWorkflow } from "@/lib/project-agent/workflow-store";
 import { createSchedule, listSchedules, updateSchedule } from "@/lib/project-agent/scheduled-store";
 import { runScheduleNow } from "@/lib/project-agent/scheduled-worker";
 import type { ScheduleCreation } from "@/lib/project-agent/scheduled-types";
@@ -31,6 +32,11 @@ export async function POST(req: NextRequest) {
   if (!body || typeof body.projectId !== "string") return NextResponse.json({ error: "Invalid schedule" }, { status: 400, headers: HEADERS });
   const project = await projectCap.getProjectAccess(body.projectId, owner);
   if (!project) return NextResponse.json({ error: "Project not accessible" }, { status: 403, headers: HEADERS });
+  if (body.workflowId) {
+    const flow = await getAgentWorkflow(owner, body.workflowId);
+    if (!flow || !flow.enabled || flow.projectId !== body.projectId)
+      return NextResponse.json({ error: "Workflow is not enabled for this Project" }, { status: 403, headers: HEADERS });
+  }
   try { return NextResponse.json({ schedule: await createSchedule(owner, body) }, { status: 201, headers: HEADERS }); }
   catch (cause) { return NextResponse.json({ error: cause instanceof Error ? cause.message : "Invalid schedule" }, { status: 400, headers: HEADERS }); }
 }
@@ -45,6 +51,11 @@ export async function PATCH(req: NextRequest) {
     if (body.action === "run") return NextResponse.json(await runScheduleNow(owner, body.id), { headers: HEADERS });
     if (body.action === "edit" && typeof body.projectId === "string") {
       if (!await projectCap.getProjectAccess(body.projectId, owner)) throw new Error("Project not accessible");
+    }
+    if (body.action === "edit" && typeof body.workflowId === "string" && body.workflowId) {
+      const flow = await getAgentWorkflow(owner, body.workflowId);
+      if (!flow || !flow.enabled || (typeof body.projectId === "string" && flow.projectId !== body.projectId))
+        throw new Error("Scheduled workflow is not accessible");
     }
     const schedule = await updateSchedule(owner, body.id, body as Parameters<typeof updateSchedule>[2]);
     return NextResponse.json({ schedule }, { headers: HEADERS });
