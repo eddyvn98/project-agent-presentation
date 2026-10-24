@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-vi.mock("../../services/mongodb/client", () => ({ getMongoAiDb: vi.fn() }));
-import { getMongoAiDb } from "../../services/mongodb/client";
-import { assertActiveTaskLease, runWithLeaseFence } from "../../lib/project-agent/lease-fence";
+vi.mock("@/services/mongodb/client", () => ({ getMongoAiDb: vi.fn() }));
+import { getMongoAiDb } from "@/services/mongodb/client";
+import { assertActiveTaskLease, runWithLeaseFence } from "@/lib/project-agent/lease-fence";
 afterEach(() => vi.resetAllMocks());
 describe("P5 Mongo lease fencing", () => {
   it("keeps queue-disabled tasks unchanged", async () => {
