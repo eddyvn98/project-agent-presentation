@@ -8,6 +8,7 @@ import { browserAssistText } from "@/lib/project-agent/browser-assist-labels";
 
 type Preview = {
   watching: boolean; sequence: number; updatedAt: number;
+  history: Array<{ sequence: number; action: string; updatedAt: number; location: string; marker?: { x: number; y: number; kind: "agent" | "human" } }>;
   action: string; location: string; hasImage: boolean; finished: boolean;
 };
 const LABEL: Record<ActivityLanguage, { watch: string; stop: string; waiting: string; last: string; enlarge: string; close: string; privacy: string }> = {
@@ -32,6 +33,7 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [selected, setSelected] = useState<number | null>(null);
   const [control, setControl] = useState({ paused: false, revision: 0 });
   const [entry, setEntry] = useState("");
   const ui = LABEL[language], actions = browserAssistText(language);
@@ -80,11 +82,15 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     finally { setLoading(false); }
   };
   const clickPreview = (event: React.MouseEvent<HTMLButtonElement>) => {
-    if (!control.paused) { setExpanded(true); return; }
+    if (!control.paused || (shown && shown.sequence !== preview?.sequence)) { setExpanded(true); return; }
     const rect = event.currentTarget.getBoundingClientRect();
+    setSelected(null);
     void command({ op: "click", x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height });
   };
-  const image = base + "?image=1&v=" + (preview?.sequence ?? 0);
+  const history = preview?.history ?? [];
+  const shown = history.find((step) => step.sequence === selected) ?? history.at(-1);
+  const marker = shown?.marker;
+  const image = base + "?image=1" + (shown ? "&sequence=" + shown.sequence : "") + "&v=" + (shown?.sequence ?? 0);
   if (!running && !preview?.watching) return null;
   return <section aria-label={ui.watch} className="not-prose my-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-900/40">
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -106,10 +112,19 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
       </div>}
       <p role="status" className="text-xs text-slate-500">{preview.hasImage ? ui.last + ": " + browserActionLabel(preview.action, language) : ui.waiting}</p>
       {preview.location && <p className="truncate text-xs text-slate-400" title={preview.location}>{preview.location}</p>}
+      {history.length > 1 && <div aria-label="Browser step history" className="flex gap-1.5 overflow-x-auto pb-1">
+        {history.map((step) => <button type="button" key={step.sequence} disabled={control.paused}
+          onClick={() => setSelected(step.sequence)}
+          aria-current={shown?.sequence === step.sequence ? "step" : undefined}
+          className={`shrink-0 rounded-md border px-2 py-1 text-[11px] ${shown?.sequence === step.sequence ? "border-orange-500 text-orange-700" : "border-slate-300 text-slate-500"}`}>
+          {step.sequence} · {browserActionLabel(step.action, language)}
+        </button>)}
+      </div>}
       {preview.hasImage && <button type="button" disabled={loading && control.paused} onClick={clickPreview} title={control.paused ? actions.help : ui.enlarge}
         className="relative block w-full overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={image} alt={ui.last} className="block h-auto w-full" />
+        {marker && <span aria-hidden="true" className="pointer-events-none absolute z-10 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-orange-500/50 shadow-[0_0_0_2px_#f97316]" style={{ left: (marker.x * 100) + "%", top: (marker.y * 100) + "%" }} />}
         {!control.paused && <Expand className="absolute right-2 top-2 h-5 w-5 rounded bg-slate-900/70 p-1 text-white" />}
       </button>}
       {control.paused && <div className="space-y-2">
