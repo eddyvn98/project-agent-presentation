@@ -117,8 +117,10 @@ async function stagedUpload(input: RuntimeInput, action: BrowserAction, session:
   if (process.env.PROJECT_AGENT_ALLOW_UPLOADS !== "1") throw new Error("Browser uploads are disabled by deployment policy.");
   const host = new URL(session.page.url()).hostname;
   if (needsConfirmation(input, session, "upload")) throw new Error("Uploading to this site requires explicit user approval.");
-  const original = path.join(workspaceDir(input.chatId), "inputs");
+  const workspace = await fs.realpath(workspaceDir(input.chatId));
+  const original = path.join(workspace, "inputs");
   const root = await fs.realpath(original);
+  if (!root.startsWith(workspace + path.sep)) throw new Error("Staged input directory must remain inside the task workspace.");
   const given = action.path!.slice("/work/inputs/".length);
   const candidate = path.resolve(root, given);
   if (!candidate.startsWith(root + path.sep)) throw new Error("Upload file is outside staged inputs.");
