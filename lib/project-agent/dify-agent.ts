@@ -103,7 +103,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			})).then(() => {}).catch(() => {});
 		};
 		const classicTurn = (request: DifyCalculatorCall) => callDifyWithCalculator({ ...request, originalRequest: task.userPrompt ?? task.prompt, calculatorEnabled: !projectAccess.project.disabledToolGroups?.includes("code"), onBridgeEvent: (tool, detail) => updateProjectAgentTask(task.id, { logLine: `using tool ${tool} :: ${detail.replace(/\s+/g, " ").slice(0, 200)}` }) });
-		const skillSet = await loadProjectSkillSet(projectAccess.project.skillIds, projectAccess.ownerEmail);
+		const skillSet = await loadProjectSkillSet(projectAccess.project.skillIds, projectAccess.ownerEmail, task.userPrompt ?? task.prompt);
     const personalMemory = await personalMemoryPrompt(task.ownerEmail); if (personalMemory) skillSet.context += "\n\n" + personalMemory;
     const crossProjectSkills = await personalSkillsPrompt(task.ownerEmail); if (crossProjectSkills) skillSet.context += "\n\n" + crossProjectSkills;
 		let savedSources: AgentWebSource[] = [];
