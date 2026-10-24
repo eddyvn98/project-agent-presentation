@@ -1,4 +1,5 @@
 import { createProjectAgentTask, readProjectAgentTask } from "./task-store";
+import { deterministicAgentTaskId } from "./task-idempotency";
 import { createHash } from "node:crypto";
 import { recoverProjectAgentTask } from "./task-recovery";
 import { assertPublicHttpUrl } from "./runtime/web-security";
@@ -12,6 +13,15 @@ import * as projectCap from "@/lib/capabilities/project";
 
 async function reconcile(item: ScheduledAgentTask) {
   for (const run of item.runs.filter(r => r.status === "dispatching")) {
+    const key = "schedule:" + item.id + ":" + run.occurrence;
+    const found = await readProjectAgentTask(deterministicAgentTaskId(item.ownerEmail, key));
+    if (found?.scheduleRunId === item.id + ":" + run.occurrence &&
+      found.ownerEmail === item.ownerEmail) {
+      await markScheduleRun(item.ownerEmail, item.id, run.occurrence,
+        { status: "queued", taskId: found.id });
+      if (found.status === "queued") startProjectAgentTask(found.id);
+      continue;
+    }
     if (Date.now() - Date.parse(run.createdAt) > 600_000)
       await markScheduleRun(item.ownerEmail, item.id, run.occurrence, {
         status: "failed", completedAt: new Date().toISOString(),
@@ -96,6 +106,7 @@ export async function executeSchedule(item: ScheduledAgentTask, manual = false) 
     const task = await createProjectAgentTask({
       projectId: item.projectId, ownerEmail: item.ownerEmail, projectOwnerEmail: project.ownerEmail,
       scheduleRunId: item.id + ":" + run.occurrence,
+      idempotencyKey: "schedule:" + item.id + ":" + run.occurrence,
       prompt, userPrompt: item.prompt,
     });
     await markScheduleRun(item.ownerEmail, item.id, run.occurrence, { status: "queued", taskId: task.id });

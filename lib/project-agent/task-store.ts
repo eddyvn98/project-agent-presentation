@@ -18,6 +18,7 @@ import { getKnowledgeOriginalPath, readKnowledgeImage } from "@/lib/capabilities
 import { recordFinishedTask } from "./insights-store";
 import { scoreLessonTrials } from "./learning/global-lessons";
 import { normalizeProjectAgentModelSelector } from "./model-selector";
+import { deterministicAgentTaskId } from "./task-idempotency";
 
 const TASKS_DIR = path.join(process.cwd(), "data", "project-agent", "tasks");
 const FILES_DIR = path.join(process.cwd(), "data", "project-agent", "files");
@@ -93,7 +94,19 @@ async function copyProjectSourceInput(taskId: string, fileId: string, sourceId: 
 
 export async function createProjectAgentTask(input: CreateProjectAgentTaskInput): Promise<ProjectAgentTask> {
 	const now = new Date().toISOString();
-	const id = `pat_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+	const id = input.idempotencyKey
+    ? deterministicAgentTaskId(input.ownerEmail, input.idempotencyKey)
+    : `pat_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+  if (input.idempotencyKey) {
+    const existing = await findProjectAgentTask(id);
+    if (existing) {
+      if (existing.ownerEmail !== input.ownerEmail ||
+        existing.idempotencyKey !== input.idempotencyKey ||
+        existing.projectId !== input.projectId)
+        throw new Error("Idempotency task identity collision");
+      return existing;
+    }
+  }
 	const inputFiles = input.inputFiles?.map(({ bytes: _bytes, projectSourceId: _source, ...file }) => ({ ...file })) ?? [];
 	const modelSelector = normalizeProjectAgentModelSelector(input.modelSelector);
 	const task: ProjectAgentTask = {
@@ -101,6 +114,7 @@ export async function createProjectAgentTask(input: CreateProjectAgentTaskInput)
 		projectId: input.projectId,
 		ownerEmail: input.ownerEmail,
 		...(input.scheduleRunId ? { scheduleRunId: input.scheduleRunId } : {}),
+    ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
     ...(input.workflowRunId ? { workflowRunId: input.workflowRunId } : {}),
 		projectOwnerEmail: input.projectOwnerEmail,
 		// Sandbox runtime: the chat gets a stable thread id from its first task, so every turn (and every retry) shares one workspace and one chat entry.
@@ -143,6 +157,13 @@ export async function createProjectAgentTask(input: CreateProjectAgentTaskInput)
 		throw error;
 	}
 	cleanupOldTasks().catch((error) => console.error("[project-agent] task cleanup failed", error));
+  if (input.idempotencyKey) {
+    const persisted = await findProjectAgentTask(id);
+    if (persisted && (persisted.idempotencyKey !== input.idempotencyKey ||
+      persisted.ownerEmail !== input.ownerEmail))
+      throw new Error("Task identity collision after concurrent insert");
+    return persisted ?? task;
+  }
 	return task;
 }
 

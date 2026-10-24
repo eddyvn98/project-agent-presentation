@@ -1,5 +1,6 @@
 import * as projectCap from "@/lib/capabilities/project";
 import { createProjectAgentTask, readProjectAgentTask } from "./task-store";
+import { deterministicAgentTaskId } from "./task-idempotency";
 import { startProjectAgentTask } from "./task-runner";
 import { createWorkflowRun, getAgentWorkflow, getWorkflowRun,
   listRecoverableWorkflowRuns, updateWorkflowRun } from "./workflow-store";
@@ -27,6 +28,7 @@ export async function dispatchWorkflowStep(owner: string, runId: string) {
     const task = await createProjectAgentTask({
       projectId: claimed.projectId, ownerEmail: owner, projectOwnerEmail: access.ownerEmail,
       workflowRunId: claimed.id,
+      idempotencyKey: "workflow:" + claimed.id + ":" + claimed.index,
       prompt: step.prompt + "\n\nThis is a user-approved workflow step. Work only on this step. Do not create another workflow or schedule. Follow browser permission and safety gates.",
       userPrompt: step.prompt,
     });
@@ -106,6 +108,21 @@ export async function tickWorkflowRuns(limit = 40) {
       const child = await readProjectAgentTask(run.taskId);
       if (child && ["done","failed"].includes(child.status)) {
         await advanceWorkflowForTask(child); resumed++;
+      }
+    }
+    if (run.status === "dispatching") {
+      const key = "workflow:" + run.id + ":" + run.index;
+      const found = await readProjectAgentTask(deterministicAgentTaskId(run.ownerEmail, key));
+      if (found?.idempotencyKey === key && found.workflowRunId === run.id) {
+        await updateWorkflowRun(run.ownerEmail, run.id, current => {
+          if (current.status !== "dispatching" || current.index !== run.index) return;
+          current.taskId = found.id; current.status = "running";
+        });
+        if (found.status === "queued") startProjectAgentTask(found.id);
+        if (found.status === "done" || found.status === "failed")
+          await advanceWorkflowForTask(found);
+        resumed++;
+        continue;
       }
     }
     if (run.status === "dispatching" && Date.now() - Date.parse(run.updatedAt) > 10 * 60_000) {
