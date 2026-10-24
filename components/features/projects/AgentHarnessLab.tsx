@@ -106,6 +106,7 @@ export function AgentHarnessLab() {
           <p className="text-xs text-slate-500">{variant.domain} · {variant.dimension} · {variant.id} · v{variant.version}</p>
           <p className="max-h-24 overflow-y-auto whitespace-pre-wrap text-sm">{variant.guidance}</p>
           {variant.evidence && <div className="text-xs">
+            <p>Comparison: {variant.evidence.baselineReference ? "parent "+variant.evidence.baselineReference : "default harness"}</p>
             <p>Offline pass: baseline {variant.evidence.basePass}/{variant.evidence.cases.length},
               candidate {variant.evidence.candidatePass}/{variant.evidence.cases.length} ·
               Tokens: {variant.evidence.baseTokens} → {variant.evidence.candidateTokens}</p>

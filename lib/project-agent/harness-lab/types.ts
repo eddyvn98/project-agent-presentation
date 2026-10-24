@@ -8,7 +8,7 @@ export interface HarnessCaseResult {
 export interface HarnessEvidence {
   cases: HarnessCaseResult[]; basePass: number; candidatePass: number;
   baseTokens: number; candidateTokens: number; improved: boolean;
-  completedAt: string; reason: string; modelSelector?: string;
+  completedAt: string; reason: string; modelSelector?: string; baselineReference?: string;
 }
 export interface HarnessVariant {
   id: string; ownerEmail: string; domain: string; dimension: HarnessDimension;

@@ -2,7 +2,7 @@ import { callRuntimeModel } from "../runtime/model";
 import { validateHarnessGuidance, harnessAddendum } from "./guard";
 import { probeSet, scoreProbe } from "./probes";
 import type { HarnessEvidence, HarnessVariant, HarnessCaseResult } from "./types";
-import { claimHarnessEvaluation, completeHarnessEvaluation, failHarnessEvaluation } from "./store";
+import { claimHarnessEvaluation, completeHarnessEvaluation, failHarnessEvaluation, getHarnessVariant } from "./store";
 
 const MAX_SECONDS = 45;
 const MAX_TESTS = 5;
@@ -25,13 +25,19 @@ async function ask(variant: HarnessVariant, caseId: string, prompt: string,
 }
 export async function evaluateHarnessVariant(variant: HarnessVariant): Promise<HarnessEvidence> {
   const guidance = validateHarnessGuidance(variant.guidance);
+  const parent = variant.baselineId
+    ? await getHarnessVariant(variant.ownerEmail,variant.baselineId) : null;
+  if (variant.baselineId && (!parent || parent.domain !== variant.domain ||
+    parent.dimension !== variant.dimension || !parent.evidence))
+    throw new Error("A sequential comparison requires an evaluated parent revision");
+  const baselineGuidance = parent?.guidance ?? "";
   const cases = probeSet(variant.domain).slice(0, MAX_TESTS);
   if (cases.length < 3) throw new Error("Harness domain lacks enough synthetic probes");
   const results: HarnessCaseResult[] = [];
   // All trials use identical fixtures and the same model selector; separate model conversations.
   const user = "harness-lab-" + variant.id;
   for (const fixture of cases) {
-    const baseline = await ask(variant, fixture.id, fixture.prompt, "", user);
+    const baseline = await ask(variant, fixture.id, fixture.prompt, baselineGuidance, user);
     const candidate = await ask(variant, fixture.id, fixture.prompt, guidance, user);
     const baseScore = scoreProbe(fixture, baseline.answer);
     const trialScore = scoreProbe(fixture, candidate.answer);
@@ -50,8 +56,9 @@ export async function evaluateHarnessVariant(variant: HarnessVariant): Promise<H
     (baseTokens > 0 && candidateTokens > 0 && candidateTokens <= baseTokens*0.9);
   const improved = noRegression && improvement;
   return { cases: results, basePass, candidatePass, baseTokens, candidateTokens,
+    ...(parent ? { baselineReference: parent.id } : {}),
     improved, completedAt: new Date().toISOString(),
-    reason: !noRegression ? "Regression or insufficient correctness on synthetic held-out cases"
+    reason: !noRegression ? "Regression or insufficient correctness on the fixed synthetic fixtures"
       : improvement ? "Candidate improved correctness or reduced tokens without correctness regression"
       : "No measured improvement; keep baseline",
     modelSelector: process.env.PROJECT_AGENT_HARNESS_EVAL_MODEL || "default",
