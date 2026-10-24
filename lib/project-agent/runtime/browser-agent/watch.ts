@@ -5,6 +5,7 @@ const EXPIRES_MS = 5 * 60_000;
 const MAX_IMAGE_BYTES = 750_000;
 const MAX_HISTORY_BYTES = 4 * 1024 * 1024;
 const MAX_HISTORY_STEPS = 12;
+const MAX_WATCH_TASKS = 16;
 const frames = new Map<string, BrowserFrame>();
 
 export interface BrowserClickMarker { x: number; y: number; kind: "agent" | "human" }
@@ -36,6 +37,10 @@ function publicLocation(raw: string): string {
 export function setBrowserWatch(taskId: string, watching: boolean) {
   prune();
   if (!watching) { frames.delete(taskId); return; }
+  if (!frames.has(taskId) && frames.size >= MAX_WATCH_TASKS) {
+    const oldest = [...frames].sort((a, b) => a[1].updatedAt - b[1].updatedAt)[0];
+    if (oldest) frames.delete(oldest[0]);
+  }
   const previous = frames.get(taskId);
   frames.set(taskId, previous ? { ...previous, watching: true, updatedAt: Date.now() }
     : { watching: true, sequence: 0, updatedAt: Date.now(), action: "Preparing browser",
