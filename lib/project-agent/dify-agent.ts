@@ -108,7 +108,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
     const crossProjectSkills = await personalSkillsPrompt(task.ownerEmail); if (crossProjectSkills) skillSet.context += "\n\n" + crossProjectSkills;
 		let savedSources: AgentWebSource[] = [];
 		const priorRetry = task.retryOfTaskId ? await readProjectAgentTask(task.retryOfTaskId).catch(() => null) : null;
-		const retryBrief = priorRetry?.ownerEmail === task.ownerEmail && priorRetry?.projectId === task.projectId ? retryContext(priorRetry) : "";
+		const retryBrief = priorRetry && priorRetry.ownerEmail === task.ownerEmail && priorRetry.projectId === task.projectId ? retryContext(priorRetry) : "";
 		const firstCall = {
 			endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] },
 			query: buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory, personalChats, inputReadback, skillSet.context, await loadRunbookPrompt(task.projectId, projectOwnerEmail), false, hindsightMemory, xerjContext) + (retryBrief ? "\n\n" + retryBrief : ""),
