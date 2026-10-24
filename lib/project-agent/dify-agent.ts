@@ -135,7 +135,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory.slice(0, 3_000), personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true, hindsightMemory, xerjContext)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
 			void updateProjectAgentTask(task.id, { logLine: `context :: query_chars=${firstCall.query.length} knowledge=${knowledge.length} project_chats=${projectChats.length} default_memory=${personalChats.length} agent_history=${projectAgentHistory.length} readback=${inputReadback.length} skills=${skillSet.context.length} runbook=${String(runbookText ?? "").length}` }).catch(() => {});
 		}
-    if (retryBrief && runtime) firstCall.query += "\\n\\n" + retryBrief;
+    if (retryBrief && runtime) firstCall.query += "\n\n" + retryBrief;
     firstCall.query = await attachHarnessToQuery(task, firstCall.query,
       line => updateProjectAgentTask(task.id, { logLine: line }));
 		await updateProjectAgentTask(task.id, { logLine: "app_stage :: processing_request" });
