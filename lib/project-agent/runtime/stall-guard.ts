@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 const intEnv = (name: string, fallback: number) => Number(process.env[name]) > 0 ? Number(process.env[name]) : fallback;
 
 export interface StallLimits {
@@ -28,29 +29,45 @@ export interface StallVerdict { nudge?: string; stop?: string }
  * answer that says what is done and what is blocked (the caller gives the model a couple of steps to write it).
  */
 export class StallGuard {
-	private readonly seen = new Map<string, number>();
+	private readonly seen = new Map<string, { count: number; digest: string }>();
+	private readonly milestones = new Set<string>();
+	private lastMilestoneStep = -Infinity;
 	private failStreak = 0;
 	private nudged = new Set<string>();
 
 	constructor(private readonly limits: StallLimits = stallLimits()) {}
 
-	noteAction(key: string, failed: boolean): void {
-		this.seen.set(key, (this.seen.get(key) ?? 0) + 1);
+	noteAction(key: string, failed: boolean, output?: string): void {
+		const digest = output === undefined ? "" : createHash("sha256").update(output.slice(0, 2000)).digest("hex");
+		const previous = this.seen.get(key);
+		this.seen.set(key, { digest, count: previous?.digest === digest ? previous.count + 1 : 1 });
 		this.failStreak = failed ? this.failStreak + 1 : 0;
+	}
+	/** Only distinct successful artifacts/mutations extend work; never clock or prose alone. */
+	noteMilestone(step: number, actionKey: string): void {
+		if (this.milestones.has(actionKey)) return;
+		this.milestones.add(actionKey);
+		this.lastMilestoneStep = step;
+	}
+	/** Default lead task can earn at most 30 extra turns, only while progress is recent. */
+	additionalSteps(step: number): number {
+		return step - this.lastMilestoneStep <= 12 ? Math.min(30, this.milestones.size * 5) : 0;
 	}
 
 	check(state: StallState): StallVerdict {
 		const { limits } = this;
 		const worked = state.elapsedMs - state.waitedMs;
-		const maxRepeat = Math.max(0, ...this.seen.values());
+		const maxRepeat = Math.max(0, ...[...this.seen.values()].map(item => item.count));
+		const recentProgress = state.step - this.lastMilestoneStep <= 12;
+		const workingLimit = limits.hardMs + (recentProgress ? Math.min(8, this.milestones.size * 2) * 60_000 : 0);
 		if (maxRepeat >= limits.repeatStop) return { stop: `the same action was sent ${maxRepeat} times` };
 		if (this.failStreak >= limits.failStop) return { stop: `${this.failStreak} actions failed in a row` };
-		if (worked >= limits.hardMs) return { stop: `${Math.round(worked / 60_000)} minutes of work` };
+		if (worked >= workingLimit) return { stop: `${Math.round(worked / 60_000)} minutes of work` };
 		if (state.tokens >= limits.hardTokens) return { stop: `${Math.round(state.tokens / 1000)}k new tokens used` };
 		if ((state.resentTokens ?? 0) >= limits.hardResentTokens) return { stop: `${(state.resentTokens! / 1e6).toFixed(1)}M prompt tokens sent in total` };
 		if (maxRepeat >= limits.repeatNudge) return { nudge: this.once("repeat", `You have sent the same action ${maxRepeat} times. Repeating it will not change the result: use a different approach, or send final saying what is blocked.`) };
 		if (this.failStreak >= limits.failNudge) return { nudge: this.once("fail", `${this.failStreak} actions in a row failed. Read the errors again and change the approach (a different tool, smaller steps, or check the input), or send final saying what is blocked.`) };
-		if (worked >= limits.softMs || state.tokens >= limits.softTokens || state.step >= limits.softSteps) {
+		if (!recentProgress && (worked >= limits.softMs || state.tokens >= limits.softTokens || state.step >= limits.softSteps)) {
 			return { nudge: this.once("budget", `You have used ${state.step} steps and ${Math.round(worked / 60_000)} minutes. Unless the goal is within reach, deliver what you have now and state plainly what is not done. Do not polish or retry variants of what already works.`) };
 		}
 		return {};
@@ -58,7 +75,7 @@ export class StallGuard {
 
 	/** Each message is sent once per kind until its counter moves on, so the model is not nagged every step. */
 	private once(kind: string, text: string): string | undefined {
-		const key = `${kind}:${kind === "repeat" ? Math.max(...this.seen.values()) : kind === "fail" ? this.failStreak : 0}`;
+		const key = `${kind}:${kind === "repeat" ? Math.max(0, ...[...this.seen.values()].map(item => item.count)) : kind === "fail" ? this.failStreak : 0}`;
 		if (this.nudged.has(key)) return undefined;
 		this.nudged.add(key);
 		return text;
