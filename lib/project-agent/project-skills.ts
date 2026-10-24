@@ -1,3 +1,4 @@
+import { rankTaskSkills } from "./skill-ranking";
 import { listSkillsForUser } from "@/lib/skills/skillsStore";
 import { createSkillsOssClient } from "@/lib/skills/ossClient";
 import type { Skill } from "@/types/skill-library.types";
@@ -16,11 +17,11 @@ const clean = (value: string, max: number) => value.replace(/["<>\r\n]/g, " ").s
  * Builds the query block for the skills a project owner switched on. Short skills are inlined; longer ones are
  * listed by name so the agent reads the full text (or a reference file) on demand with <project_skill_read>.
  */
-export function formatProjectSkills(skills: ProjectSkillText[]): string {
+export function formatProjectSkills(skills: ProjectSkillText[], request = ""): string {
 	const inline: string[] = [];
 	const indexed: string[] = [];
 	let budget = INLINE_TOTAL_CHARS;
-	for (const skill of skills) {
+	for (const skill of rankTaskSkills(skills, request)) {
 		const body = skill.instructions.trim();
 		if (!body && !skill.files?.length) continue;
 		if (body && body.length <= INLINE_SKILL_CHARS && body.length <= budget && !skill.files?.length) {
@@ -70,7 +71,7 @@ async function readSkill(skills: Skill[], request: ProjectSkillReadRequest): Pro
 	return `[Skill: ${skill.title}; file: ${entry.relativePath}]\n${content.toString("utf-8").slice(0, MAX_READ_CHARS)}`;
 }
 
-export async function loadProjectSkillSet(skillIds: string[] | undefined, ownerEmail: string): Promise<ProjectSkillSet> {
+export async function loadProjectSkillSet(skillIds: string[] | undefined, ownerEmail: string, request = ""): Promise<ProjectSkillSet> {
 	const none: ProjectSkillSet = { context: "", read: async (request) => `[Read failed: skill ${request.skillId} is not enabled in this Project.]` };
 	if (!skillIds?.length) return none;
 	try {
