@@ -141,12 +141,13 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 	const id = input.taskId ?? input.chatId;
 	if (action.op === "close") { finishBrowserWatch(input.taskId ?? id); const session = await getBrowserSession(id, input.signal, input.ownerEmail); await session.close(); return { text: "Browser session closed." }; }
 	let session: BrowserSession;
-	try { session = await getBrowserSession(id, input.signal); } catch (cause) { return { text: cause instanceof Error ? cause.message : "Could not start browser", failed: true }; }
+	try { session = await getBrowserSession(id, input.signal, input.ownerEmail); } catch (cause) { return { text: cause instanceof Error ? cause.message : "Could not start browser", failed: true }; }
 	const refDetail = action.ref ? snapshotRefLine(session.lastSnapshot, action.ref).replace(/\[ref=[^\]]+\]/, "").trim() : "";
 	const stepId = action.op === "screenshot" ? `render-${step}` : `browser-${step}`;
 	input.onStep?.({ tool: `browser_${action.op} #${stepId}`, detail: action.note || action.url || refDetail || action.ref || "" } satisfies RuntimeStep);
 	try {
 		let marker: BrowserClickMarker | undefined;
+		await assertPersonalBrowserPermission(session, action.op);
 		if (session.authMode === "read" && ["click", "type", "press", "select", "upload", "drag", "visual_click", "visual_type"].includes(action.op))
 			return { text: "Personal login is read-only. Grant interaction access before changing the website.", failed: true };
 		const result = await withBrowserOp(session, async () => {

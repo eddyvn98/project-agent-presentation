@@ -67,7 +67,7 @@ export async function getBrowserSession(id: string, signal?: AbortSignal, owner?
 	const existing = sessions.get(id);
 	if (existing) { if (owner && existing.owner && existing.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); if (owner && !existing.owner) existing.owner = owner.trim().toLowerCase(); existing.lastUsed = Date.now(); return existing; }
 	const pending = pendingSessions.get(id);
-	if (pending) return pending;
+	if (pending) { const result = await pending; if (owner && result.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); return result; }
 	const creating = createBrowserSession(id, signal, owner);
 	pendingSessions.set(id, creating);
 	try { return await creating; } finally { pendingSessions.delete(id); }
@@ -90,7 +90,7 @@ async function createBrowserSession(id: string, signal?: AbortSignal, owner?: st
 				if (closed) return;
 				closed = true;
 				sessions.delete(id);
-				await context!.close();
+				await session!.context.close();
 				occupiedSlots -= 1;
 				waiters.shift()?.();
 				if (occupiedSlots === 0) {

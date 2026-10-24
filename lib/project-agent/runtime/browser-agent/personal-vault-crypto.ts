@@ -28,3 +28,17 @@ export function unseal(value: SealedPayload, key: Buffer, aad: string): Buffer {
   cipher.setAuthTag(tag);
   return Buffer.concat([cipher.update(bytes(value.data)), cipher.final()]);
 }
+
+/** Old master keys are allowed for decryption only; rewrap the per-user key with the current key. */
+export function legacyVaultKeys(): Buffer[] {
+  const source = process.env.PROJECT_AGENT_SESSION_VAULT_PREVIOUS_KEYS;
+  if (!source) return [];
+  const values: unknown = JSON.parse(source);
+  if (!Array.isArray(values) || values.length > 4 || values.some(v => typeof v !== "string"))
+    throw new Error("Invalid previous Vault keys configuration");
+  return values.map(v => {
+    const key = Buffer.from(v, "base64");
+    if (key.length !== 32) throw new Error("A previous Vault master key is invalid");
+    return key;
+  });
+}
