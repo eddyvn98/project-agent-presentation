@@ -8,6 +8,16 @@ export class ActionReplayGuard {
   private recent: Observation[] = [];
   private attemptedEffects = new Set<string>();
   private progressOnly = 0;
+  private blockedKeys = new Map<string, number>();
+  /** Reserve a state-changing operation before calling it; timeouts may have committed remotely. */
+  markAttempt(key: string, effectful: boolean): void {
+    if (effectful) this.attemptedEffects.add(key);
+  }
+  noteBlocked(key: string): number {
+    const count = (this.blockedKeys.get(key) ?? 0) + 1;
+    this.blockedKeys.set(key, count);
+    return count;
+  }
   /** Blocks exact replays before the next external mutation can occur. */
   before(action: string, key: string, effectful = false): string | null {
     if (effectful && this.attemptedEffects.has(key))
