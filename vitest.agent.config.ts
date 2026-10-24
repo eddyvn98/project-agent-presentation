@@ -22,6 +22,7 @@ export default defineConfig({
   test: { environment: "jsdom", include: ["tests/agent/**/*.test.{ts,tsx}",
     "__tests__/project-agent/client.test.ts", "__tests__/project-agent/conversations.test.ts",
     "__tests__/project-agent/conversation-session.test.ts", "__tests__/project-agent/runtime-engines.test.ts",
+    "__tests__/project-agent/task-error-notice.test.tsx",
     "__tests__/project-agent/task-pagination.test.ts", "__tests__/project-agent/wait-action.test.ts", "__tests__/project-agent/runtime-actions.test.ts"],
     setupFiles: ["./tests/setup.ts", "./tests/agent/setup.ts"],
   },
