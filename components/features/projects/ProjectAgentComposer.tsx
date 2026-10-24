@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from "react";
-import { ArrowUp, Check, Globe, Loader2, Mic, Paperclip, Plus, X } from "lucide-react";
+import { ArrowUp, CalendarClock, Check, Globe, Loader2, Mic, Paperclip, Plus, X } from "lucide-react";
 import { useAgentComposerStore } from "@/stores/useAgentComposerStore";
 import { useDictation } from "./useDictation";
 import { ProjectAgentModelPicker } from "./ProjectAgentModelPicker";
 
 type Props = {
+  projectId?: string;
 	value: string;
 	onChange: (value: string) => void;
 	onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -30,7 +31,7 @@ type Props = {
 
 const menuItem = "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800";
 
-export function ProjectAgentComposer({ value, onChange, onSubmit, onAttach, onFiles, placeholder, ariaLabel, formRef, attachments, meter, footnote, attachLabel = "Add files and images", sendLabel = "Send to Project Agent", disabled = false, busy = false, allowEmptyValue = false }: Props) {
+export function ProjectAgentComposer({ projectId, value, onChange, onSubmit, onAttach, onFiles, placeholder, ariaLabel, formRef, attachments, meter, footnote, attachLabel = "Add files and images", sendLabel = "Send to Project Agent", disabled = false, busy = false, allowEmptyValue = false }: Props) {
 	const menuId = useId();
 	const menuButtonRef = useRef<HTMLButtonElement>(null);
 	const menuRef = useRef<HTMLDivElement>(null);
@@ -109,7 +110,8 @@ export function ProjectAgentComposer({ value, onChange, onSubmit, onAttach, onFi
 					items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
 				}} className="absolute bottom-full left-0 z-30 mb-2 w-72 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
 					<button type="button" role="menuitem" onClick={() => { setMenu(null); onAttach(); menuButtonRef.current?.focus(); }} className={menuItem}><Paperclip className="h-4 w-4 text-slate-500" /><span>{attachLabel}</span><span className="ml-auto text-xs text-slate-400">Photos, screenshots, documents</span></button>
-					<button type="button" role="menuitemcheckbox" aria-checked={webSearch} onClick={() => { setWebSearch(!webSearch); setMenu(null); menuButtonRef.current?.focus(); }} className={menuItem}><Globe className="h-4 w-4 text-sky-500" /><span>Web search</span><span className="ml-auto text-xs text-slate-400">Find current info</span>{webSearch ? <Check className="h-4 w-4" /> : null}</button>
+					<button type="button" role="menuitem" onClick={() => { window.location.href = "/account/scheduled-tasks"; }} className={menuItem}><CalendarClock className="h-4 w-4 text-orange-500" /><span>Scheduled tasks</span></button>
+          <button type="button" role="menuitemcheckbox" aria-checked={webSearch} onClick={() => { setWebSearch(!webSearch); setMenu(null); menuButtonRef.current?.focus(); }} className={menuItem}><Globe className="h-4 w-4 text-sky-500" /><span>Web search</span><span className="ml-auto text-xs text-slate-400">Find current info</span>{webSearch ? <Check className="h-4 w-4" /> : null}</button>
 				</div> : null}
 			</div>
 		</div>

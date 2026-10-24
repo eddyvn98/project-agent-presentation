@@ -175,7 +175,24 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
 			}
 		case "web_fetch":
 			return typeof raw.url === "string" && raw.url.trim() ? { action: "web_fetch", url: raw.url.trim(), offset: typeof raw.offset === "number" ? raw.offset : undefined, find: typeof raw.find === "string" && raw.find.trim() ? raw.find.trim().slice(0, 120) : undefined, note } : { error: "web_fetch needs a url" };
-		case "browser":
+		case "schedule": {
+      const op = String(raw.op);
+      if (!["list", "create", "pause", "resume", "delete"].includes(op)) return { error: "Unknown schedule operation" };
+      if (op === "create" && (typeof raw.title !== "string" || typeof raw.prompt !== "string" ||
+        !["once", "daily", "weekly"].includes(String(raw.kind)) || typeof raw.timezone !== "string"))
+        return { error: "schedule create requires title, prompt, kind and timezone" };
+      if (!["create","list"].includes(op) && (typeof raw.id !== "string" || !/^sat_[0-9a-f-]{36}$/.test(raw.id)))
+        return { error: "schedule operation requires schedule id" };
+      return { action: "schedule", op: op as "list" | "create" | "pause" | "resume" | "delete",
+        id: typeof raw.id === "string" ? raw.id : undefined, title: typeof raw.title === "string" ? raw.title : undefined,
+        prompt: typeof raw.prompt === "string" ? raw.prompt : undefined, kind: raw.kind as "once" | "daily" | "weekly" | undefined,
+        timezone: typeof raw.timezone === "string" ? raw.timezone : undefined,
+        localTime: typeof raw.localTime === "string" ? raw.localTime : undefined,
+        runAt: typeof raw.runAt === "string" ? raw.runAt : undefined,
+        weekdays: Array.isArray(raw.weekdays) ? raw.weekdays.filter((v): v is number => typeof v === "number") : undefined,
+        note };
+    }
+    case "browser":
 			return parseBrowserAction({ ...raw, note });
 		case "pdf":
 			return parsePdfAction({ ...raw, note });

@@ -1,0 +1,178 @@
+import { createHash, randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { nextScheduledRun, parseScheduleSpec } from "./scheduled-time";
+import type { ScheduledAgentTask, ScheduleCreation, ScheduleRun } from "./scheduled-types";
+
+const MAX_PER_USER = 100, MAX_RUNS = 20;
+const hash = (email: string) => createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+const validId = (id: string) => /^sat_[0-9a-f-]{36}$/.test(id);
+function root() {
+  const dir = path.resolve(process.env.PROJECT_AGENT_SCHEDULES_DIR ??
+    path.join(process.cwd(), "data", "project-agent", "schedules"));
+  const workspace = path.resolve(process.cwd(), "data", "project-agent", "workspaces");
+  if (dir === workspace || dir.startsWith(workspace + path.sep) ||
+    workspace.startsWith(dir + path.sep) || dir === process.cwd())
+    throw new Error("Schedules directory must be isolated from sandbox workspaces");
+  if (process.env.NODE_ENV === "production" && !process.env.PROJECT_AGENT_SCHEDULES_DIR)
+    throw new Error("Configure a shared durable PROJECT_AGENT_SCHEDULES_DIR");
+  return dir;
+}
+function userDir(owner: string) { return path.join(root(), hash(owner)); }
+function scheduleFile(owner: string, id: string) {
+  if (!validId(id)) throw new Error("Invalid schedule ID");
+  return path.join(userDir(owner), id + ".json");
+}
+async function privateDir(dir: string) {
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  const stat = await fs.lstat(dir);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("Invalid schedule directory");
+}
+async function writeSchedule(item: ScheduledAgentTask) {
+  const dest = scheduleFile(item.ownerEmail, item.id);
+  const tmp = dest + "." + randomUUID() + ".tmp";
+  try {
+    await fs.writeFile(tmp, JSON.stringify(item), { flag: "wx", mode: 0o600 });
+    await fs.rename(tmp, dest);
+  } finally { await fs.unlink(tmp).catch(() => {}); }
+}
+async function readFile(file: string): Promise<ScheduledAgentTask | null> {
+  try {
+    const entry = JSON.parse(await fs.readFile(file, "utf8")) as ScheduledAgentTask;
+    if (!validId(entry.id) || !entry.ownerEmail) return null;
+    return entry;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+}
+export async function getSchedule(owner: string, id: string) {
+  if (!validId(id)) return null;
+  const item = await readFile(scheduleFile(owner, id));
+  return item?.ownerEmail.toLowerCase() === owner.trim().toLowerCase() ? item : null;
+}
+export async function listSchedules(owner: string): Promise<ScheduledAgentTask[]> {
+  const dir = userDir(owner);
+  const files = await fs.readdir(dir).catch((e: NodeJS.ErrnoException) => {
+    if (e.code === "ENOENT") return [] as string[];
+    throw e;
+  });
+  const all = await Promise.all(files.filter(name => /^sat_[0-9a-f-]{36}\.json$/.test(name))
+    .slice(0, MAX_PER_USER + 1).map(name => readFile(path.join(dir, name))));
+  return all.filter((item): item is ScheduledAgentTask =>
+    Boolean(item && item.ownerEmail.toLowerCase() === owner.trim().toLowerCase()))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+function sanitize(owner: string, input: ScheduleCreation) {
+  const title = input.title?.trim(), prompt = input.prompt?.trim();
+  if (!title || title.length > 140 || !prompt || prompt.length > 6_000 ||
+    !input.projectId || input.projectId.length > 180)
+    throw new Error("A title, Project destination and a task prompt are required");
+  const spec = parseScheduleSpec(input.spec);
+  const next = nextScheduledRun(spec);
+  if (!next) throw new Error("The requested schedule is already in the past");
+  return { title, prompt, spec, next };
+}
+export async function createSchedule(owner: string, input: ScheduleCreation) {
+  const { title, prompt, spec, next } = sanitize(owner, input);
+  await privateDir(root()); await privateDir(userDir(owner));
+  const existing = await listSchedules(owner);
+  if (existing.length >= MAX_PER_USER) throw new Error("Maximum 100 schedules per account");
+  const identical = existing.find(item => item.projectId === input.projectId &&
+    item.prompt === prompt && JSON.stringify(item.spec) === JSON.stringify(spec) &&
+    Date.now() - Date.parse(item.createdAt) < 120_000);
+  if (identical) return identical; // Prevent retry storms from making duplicate reminders.
+  const now = new Date().toISOString();
+  const schedule: ScheduledAgentTask = { id: "sat_" + randomUUID(),
+    ownerEmail: owner.trim().toLowerCase(), projectId: input.projectId, title, prompt,
+    spec, nextRunAt: next, status: "active", runs: [], createdAt: now, updatedAt: now };
+  await writeSchedule(schedule);
+  return schedule;
+}
+async function locked<T>(owner: string, id: string, fn: () => Promise<T>): Promise<T> {
+  const dir = scheduleFile(owner, id) + ".lock";
+  try { await fs.mkdir(dir, { mode: 0o700 }); }
+  catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+    const st = await fs.stat(dir).catch(() => null);
+    if (!st || Date.now() - st.mtimeMs < 120_000) throw new Error("Schedule is busy");
+    await fs.rm(dir, { recursive: true, force: true });
+    await fs.mkdir(dir, { mode: 0o700 });
+  }
+  try { return await fn(); }
+  finally { await fs.rm(dir, { recursive: true, force: true }); }
+}
+export async function updateSchedule(owner: string, id: string,
+  change: { action: "pause" | "resume" | "delete" | "edit"; title?: string;
+    prompt?: string; spec?: ScheduleCreation["spec"]; projectId?: string }) {
+  return locked(owner, id, async () => {
+    const item = await getSchedule(owner, id);
+    if (!item) throw new Error("Schedule not found");
+    if (change.action === "delete") { await fs.unlink(scheduleFile(owner, id)); return null; }
+    if (change.action === "pause") item.status = "paused";
+    if (change.action === "resume") {
+      item.nextRunAt = nextScheduledRun(item.spec);
+      item.status = item.nextRunAt ? "active" : "completed";
+    }
+    if (change.action === "edit") {
+      const next = sanitize(owner, { projectId: change.projectId ?? item.projectId,
+        title: change.title ?? item.title, prompt: change.prompt ?? item.prompt,
+        spec: change.spec ?? item.spec });
+      Object.assign(item, { ...next, nextRunAt: next.next, projectId: change.projectId ?? item.projectId });
+      item.status = "active";
+    }
+    item.updatedAt = new Date().toISOString();
+    await writeSchedule(item);
+    return item;
+  });
+}
+export async function listDueSchedules(at = Date.now(), limit = 20) {
+  const dirs = await fs.readdir(root(), { withFileTypes: true }).catch((e: NodeJS.ErrnoException) => {
+    if (e.code === "ENOENT") return [] as import("node:fs").Dirent[];
+    throw e;
+  });
+  const due: ScheduledAgentTask[] = [];
+  for (const dir of dirs) {
+    if (!dir.isDirectory() || !/^[0-9a-f]{64}$/.test(dir.name)) continue;
+    const files = await fs.readdir(path.join(root(), dir.name));
+    for (const name of files) {
+      if (!/^sat_[0-9a-f-]{36}\.json$/.test(name)) continue;
+      const item = await readFile(path.join(root(), dir.name, name));
+      if (item && hash(item.ownerEmail) === dir.name && item.status === "active" &&
+        item.nextRunAt && Date.parse(item.nextRunAt) <= at) due.push(item);
+      if (due.length >= limit) return due.sort((a,b) => a.nextRunAt!.localeCompare(b.nextRunAt!));
+    }
+  }
+  return due.sort((a,b) => a.nextRunAt!.localeCompare(b.nextRunAt!));
+}
+export async function claimScheduleRun(owner: string, id: string, manual = false) {
+  return locked(owner, id, async () => {
+    const item = await getSchedule(owner, id);
+    if (!item || item.status !== "active" || (!manual &&
+      (!item.nextRunAt || Date.parse(item.nextRunAt) > Date.now()))) return null;
+    if (item.runs.some(r => r.status === "dispatching" || r.status === "queued" || r.status === "running"))
+      return null; // No concurrent run of the same automation.
+    const occurrence = manual ? new Date().toISOString() : item.nextRunAt!;
+    const run: ScheduleRun = { occurrence, status: "dispatching", createdAt: new Date().toISOString() };
+    item.runs = [...item.runs, run].slice(-MAX_RUNS);
+    item.lastRunAt = occurrence;
+    if (!manual) {
+      item.nextRunAt = nextScheduledRun(item.spec, Date.parse(occurrence) + 3_600_000);
+      if (!item.nextRunAt) item.status = "completed";
+    }
+    item.updatedAt = new Date().toISOString();
+    await writeSchedule(item);
+    return { item, run };
+  });
+}
+export async function markScheduleRun(owner: string, id: string, occurrence: string,
+  fields: Pick<ScheduleRun, "status"> & Partial<Pick<ScheduleRun, "taskId" | "error" | "completedAt">>) {
+  return locked(owner, id, async () => {
+    const item = await getSchedule(owner, id);
+    const run = item?.runs.find(value => value.occurrence === occurrence);
+    if (!item || !run) return;
+    Object.assign(run, fields);
+    item.updatedAt = new Date().toISOString();
+    await writeSchedule(item);
+  });
+}
