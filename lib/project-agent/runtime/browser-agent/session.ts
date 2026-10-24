@@ -2,6 +2,7 @@ import type { Browser, BrowserContext, Page } from "playwright-core";
 import { launchChromium } from "../browser-launcher";
 import { guardedRequest } from "../guarded-fetch";
 import { assertPublicWebSocketUrl, bindAbort } from "./safety";
+import { readPersonalBrowserGrant, vaultHost } from "./personal-vault";
 
 const MAX_CONTEXTS = 3;
 const OP_TIMEOUT_MS = 30_000;
@@ -15,6 +16,9 @@ let browserIdleTimer: ReturnType<typeof setTimeout> | undefined;
 
 export interface BrowserSession {
 	browser: Browser;
+	owner?: string;
+	authHost?: string;
+	authMode?: "read" | "interact";
 	context: BrowserContext;
 	page: Page;
 	lastSnapshot: string;
@@ -59,17 +63,17 @@ async function acquireSlot(): Promise<void> {
 	occupiedSlots += 1;
 }
 
-export async function getBrowserSession(id: string, signal?: AbortSignal): Promise<BrowserSession> {
+export async function getBrowserSession(id: string, signal?: AbortSignal, owner?: string): Promise<BrowserSession> {
 	const existing = sessions.get(id);
-	if (existing) { existing.lastUsed = Date.now(); return existing; }
+	if (existing) { if (owner && existing.owner && existing.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); if (owner && !existing.owner) existing.owner = owner.trim().toLowerCase(); existing.lastUsed = Date.now(); return existing; }
 	const pending = pendingSessions.get(id);
 	if (pending) return pending;
-	const creating = createBrowserSession(id, signal);
+	const creating = createBrowserSession(id, signal, owner);
 	pendingSessions.set(id, creating);
 	try { return await creating; } finally { pendingSessions.delete(id); }
 }
 
-async function createBrowserSession(id: string, signal?: AbortSignal): Promise<BrowserSession> {
+async function createBrowserSession(id: string, signal?: AbortSignal, owner?: string): Promise<BrowserSession> {
 	let session: BrowserSession | undefined;
 	await acquireSlot();
 	let context: BrowserContext | undefined;
@@ -81,7 +85,7 @@ async function createBrowserSession(id: string, signal?: AbortSignal): Promise<B
 		const page = await context.newPage();
 		let closed = false;
 		session = {
-			browser, context, page, refs: new Map(), snapshotUrl: "", lastSnapshot: "", lastUsed: Date.now(), operationCount: 0, console: [], network: [],
+			browser, context, page, owner: owner?.trim().toLowerCase(), refs: new Map(), snapshotUrl: "", lastSnapshot: "", lastUsed: Date.now(), operationCount: 0, console: [], network: [],
 			close: async () => {
 				if (closed) return;
 				closed = true;
@@ -133,4 +137,32 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
 
 export function scheduleIdleClose(session: BrowserSession, id: string): void {
 	setTimeout(() => { if (Date.now() - session.lastUsed >= IDLE_CLOSE_MS) void closeBrowserSession(id); }, IDLE_CLOSE_MS).unref?.();
+}
+
+/** Restore only an owner's granted host, not their whole browsing profile. */
+export async function restorePersonalBrowserSession(session: BrowserSession, url: string): Promise<void> {
+  if (!session.owner) return;
+  let host: string;
+  try { host = vaultHost(url); } catch { return; }
+  if (session.authHost === host) return;
+  const record = await readPersonalBrowserGrant(session.owner, url);
+  if (!record) { session.authHost = undefined; session.authMode = undefined; return; }
+  await session.context.addCookies(record.state.cookies);
+  if (record.state.origins.length) {
+    const existing = record.state.origins.find((origin) => origin.origin === new URL(url).origin);
+    if (existing?.localStorage.length) {
+      await session.context.addInitScript(({ host: allowed, pairs }) => {
+        if (location.hostname !== allowed) return;
+        for (const { name, value } of pairs) localStorage.setItem(name, value);
+      }, { host, pairs: existing.localStorage });
+    }
+  }
+  session.authHost = host;
+  session.authMode = record.grant.mode;
+}
+
+export async function closeBrowserSessionsForOwnerHost(owner: string, host: string): Promise<void> {
+  await Promise.all([...sessions.values()].filter((session) => session.owner === owner.trim().toLowerCase() &&
+    (session.authHost === host || (() => { try { return new URL(session.page.url()).hostname === host; } catch { return false; } })()))
+    .map((session) => session.close()));
 }

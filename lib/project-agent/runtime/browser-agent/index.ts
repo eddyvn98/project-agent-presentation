@@ -10,7 +10,7 @@ import { isCaptchaPage, isSensitiveField, requiresUserConfirmation, resolveSafeR
 import { workspaceDir } from "../sandbox";
 import type { RuntimeInput, RuntimeStep } from "../run-agent";
 import type { BrowserAction } from "./action-parser";
-import { getBrowserSession, scheduleIdleClose, withBrowserOp, type BrowserSession } from "./session";
+import { getBrowserSession, scheduleIdleClose, withBrowserOp, restorePersonalBrowserSession, type BrowserSession } from "./session";
 import { captureBrowserWatch, finishBrowserWatch, type BrowserClickMarker } from "./watch";
 import { invalidateVisualFrame, observeVisualFrame, visualClick, visualType } from "./visual";
 
@@ -139,7 +139,7 @@ async function stagedUpload(input: RuntimeInput, action: BrowserAction, session:
 export async function runBrowserAction(input: RuntimeInput, action: BrowserAction, step: number): Promise<{ text: string; image?: DifyChatFile; failed?: boolean }> {
 	if (process.env.PROJECT_AGENT_BROWSER_AGENT !== "1") return { text: "Browser agent is disabled. Set PROJECT_AGENT_BROWSER_AGENT=1 to enable it.", failed: true };
 	const id = input.taskId ?? input.chatId;
-	if (action.op === "close") { finishBrowserWatch(input.taskId ?? id); const session = await getBrowserSession(id, input.signal); await session.close(); return { text: "Browser session closed." }; }
+	if (action.op === "close") { finishBrowserWatch(input.taskId ?? id); const session = await getBrowserSession(id, input.signal, input.ownerEmail); await session.close(); return { text: "Browser session closed." }; }
 	let session: BrowserSession;
 	try { session = await getBrowserSession(id, input.signal); } catch (cause) { return { text: cause instanceof Error ? cause.message : "Could not start browser", failed: true }; }
 	const refDetail = action.ref ? snapshotRefLine(session.lastSnapshot, action.ref).replace(/\[ref=[^\]]+\]/, "").trim() : "";
@@ -147,6 +147,8 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 	input.onStep?.({ tool: `browser_${action.op} #${stepId}`, detail: action.note || action.url || refDetail || action.ref || "" } satisfies RuntimeStep);
 	try {
 		let marker: BrowserClickMarker | undefined;
+		if (session.authMode === "read" && ["click", "type", "press", "select", "upload", "drag", "visual_click", "visual_type"].includes(action.op))
+			return { text: "Personal login is read-only. Grant interaction access before changing the website.", failed: true };
 		const result = await withBrowserOp(session, async () => {
 			if (!["visual_click", "visual_type", "visual_observe"].includes(action.op)) invalidateVisualFrame(session);
 			if (action.op !== "open") {
@@ -160,7 +162,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 				case "visual_type": await visualType(session, action.text!); break;
 			}
 			switch (action.op) {
-				case "open": await assertPublicHttpUrl(action.url!); await session.page.goto(action.url!, { waitUntil: "domcontentloaded", timeout: 20_000 }); break;
+				case "open": await assertPublicHttpUrl(action.url!); await restorePersonalBrowserSession(session, action.url!); await session.page.goto(action.url!, { waitUntil: "domcontentloaded", timeout: 20_000 }); break;
 				case "back": await session.page.goBack({ timeout: 20_000 }).catch(() => null); break;
 				case "snapshot": break;
 				case "click": {
