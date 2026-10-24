@@ -78,7 +78,7 @@ export async function createSchedule(owner: string, input: ScheduleCreation, pen
   await privateDir(root()); await privateDir(userDir(owner));
   const existing = await listSchedules(owner);
   if (existing.length >= MAX_PER_USER) throw new Error("Maximum 100 schedules per account");
-  const identical = existing.find(item => item.projectId === input.projectId &&
+  const identical = existing.find(item => item.status === (pending ? "pending" : "active") && item.projectId === input.projectId &&
     item.prompt === prompt && JSON.stringify(item.spec) === JSON.stringify(spec) &&
     Date.now() - Date.parse(item.createdAt) < 120_000);
   if (identical) return identical; // Prevent retry storms from making duplicate reminders.
@@ -127,7 +127,9 @@ export async function updateSchedule(owner: string, id: string,
     if (change.action === "delete") { await fs.unlink(scheduleFile(owner, id)); return null; }
     if (change.action === "approve") {
       if (item.status !== "pending") throw new Error("This schedule is not awaiting approval");
-      item.status = "active"; item.nextRunAt = nextScheduledRun(item.spec);
+      const next = nextScheduledRun(item.spec);
+      if (!next) throw new Error("The proposed run time has expired; edit this schedule first");
+      item.status = "active"; item.nextRunAt = next;
     }
     if (change.action === "pause") item.status = "paused";
     if (change.action === "resume") {

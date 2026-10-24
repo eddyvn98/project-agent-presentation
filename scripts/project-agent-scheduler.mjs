@@ -8,7 +8,8 @@ import { setTimeout as sleep } from "node:timers/promises";
 const url = process.env.PROJECT_AGENT_SCHEDULER_URL;
 const secret = process.env.PROJECT_AGENT_SCHEDULER_SECRET;
 const interval = Math.max(15_000, Math.min(300_000, Number(process.env.PROJECT_AGENT_SCHEDULER_TICK_MS) || 60_000));
-if (!url || !secret || secret.length < 32 || !/^https?:\/\//i.test(url)) {
+if (!url || !secret || secret.length < 32 ||
+  !(/^https:\/\//i.test(url) || /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(url))) {
   process.stderr.write("[scheduler] Missing URL or 32+ character secret\n");
   process.exit(1);
 }

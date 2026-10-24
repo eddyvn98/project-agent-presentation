@@ -44,7 +44,7 @@ export function ProjectAgentScheduleApproval({ projectId }: { projectId: string 
       <p className="mt-1 text-xs">{s.pendingAction ? "The proposed modification has not been applied." : "Not active until you approve."}</p>
       <div className="mt-2 flex gap-2">
         <button type="button" disabled={busy === s.id} onClick={() => void decide(s, s.pendingAction ? "approve_action" : "approve")}
-          className="rounded-md bg-orange-600 px-3 py-1.5 text-xs text-white">Approve schedule</button>
+          className="rounded-md bg-orange-600 px-3 py-1.5 text-xs text-white">{s.pendingAction ? "Approve " + s.pendingAction : "Approve schedule"}</button>
         <button type="button" disabled={busy === s.id} onClick={() => void decide(s, s.pendingAction ? "reject_action" : "delete")}
           className="rounded-md border px-3 py-1.5 text-xs">Dismiss</button>
         <a href="/account/scheduled-tasks" className="rounded-md px-2 py-1.5 text-xs underline">Review details</a>

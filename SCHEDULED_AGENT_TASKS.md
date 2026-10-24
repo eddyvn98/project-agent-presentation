@@ -32,3 +32,6 @@ Branch: `gpt/full-project-agent`.
 
 ## Deferred acceptance (requested by user)
 No CI, test suite, typecheck, Next.js build, live Chromium or production deployment was run. Later QA must check: type safety, Windows and Linux mounts, owner isolation, persistence after host restarts, busy/stale locks, duplicate cron ticks, Mongo write/recovery race, intervals and DST, multilingual proposals, approval/rejection, website-change baseline, authenticated browser session, revocation, notification read receipts, host lifecycle and multi-worker failover. Always perform these checks before claiming production readiness.
+
+## User-owned browser confirmation (source integration)
+A human who takes over Browser Watch can click a potentially high-impact control only after a second explicit confirmation. The confirmation ticket expires after 45 seconds and is bound to the current screenshot sequence and click coordinates. This permission is not available to unattended Agent actions. Read-only saved sessions additionally block HTTP mutations at the browser request boundary. Deleting a sandbox closes its borrowed task browser contexts, without deleting the encrypted account Vault.
