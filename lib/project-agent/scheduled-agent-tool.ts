@@ -12,6 +12,7 @@ export async function agentScheduleAction(input: RuntimeInput, action: Action) {
     return { text: JSON.stringify(schedules.map(({ id, title, prompt, projectId, spec, status, nextRunAt }) =>
       ({ id, title, prompt, projectId, spec, status, nextRunAt }))) };
   }
+  if (input.scheduledRun && action.op !== "list") return { text: "Unattended runs cannot change schedules", failed: true };
   if (input.readOnly || input.depth) return { text: "Only the primary Agent can manage scheduled tasks", failed: true };
   try {
     if (action.op === "create" || action.op === "propose") {
@@ -25,8 +26,8 @@ export async function agentScheduleAction(input: RuntimeInput, action: Action) {
         { kind: action.kind!, timezone: action.timezone!, localTime: action.localTime,
           ...(action.kind === "weekly" ? { weekdays: action.weekdays } : {}) };
       const schedule = await createSchedule(owner, { projectId: input.projectId, title: action.title!,
-        prompt: action.prompt!, spec });
-      return { text: "Schedule saved: " + JSON.stringify({
+        prompt: action.prompt!, spec }, true);
+      return { text: "Schedule proposal awaiting user approval: " + JSON.stringify({
         id: schedule.id, title: schedule.title, nextRunAt: schedule.nextRunAt,
         timezone: schedule.spec.timezone, projectId: schedule.projectId,
       }) };

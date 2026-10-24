@@ -73,7 +73,7 @@ function sanitize(owner: string, input: ScheduleCreation) {
   if (!next) throw new Error("The requested schedule is already in the past");
   return { title, prompt, spec, next };
 }
-export async function createSchedule(owner: string, input: ScheduleCreation) {
+export async function createSchedule(owner: string, input: ScheduleCreation, pending = false) {
   const { title, prompt, spec, next } = sanitize(owner, input);
   await privateDir(root()); await privateDir(userDir(owner));
   const existing = await listSchedules(owner);
@@ -85,7 +85,7 @@ export async function createSchedule(owner: string, input: ScheduleCreation) {
   const now = new Date().toISOString();
   const schedule: ScheduledAgentTask = { id: "sat_" + randomUUID(),
     ownerEmail: owner.trim().toLowerCase(), projectId: input.projectId, title, prompt,
-    spec, nextRunAt: next, status: "active", runs: [], createdAt: now, updatedAt: now };
+    spec, nextRunAt: next, status: pending ? "pending" : "active", runs: [], createdAt: now, updatedAt: now };
   await writeSchedule(schedule);
   return schedule;
 }
@@ -103,14 +103,19 @@ async function locked<T>(owner: string, id: string, fn: () => Promise<T>): Promi
   finally { await fs.rm(dir, { recursive: true, force: true }); }
 }
 export async function updateSchedule(owner: string, id: string,
-  change: { action: "pause" | "resume" | "delete" | "edit"; title?: string;
+  change: { action: "approve" | "pause" | "resume" | "delete" | "edit"; title?: string;
     prompt?: string; spec?: ScheduleCreation["spec"]; projectId?: string }) {
   return locked(owner, id, async () => {
     const item = await getSchedule(owner, id);
     if (!item) throw new Error("Schedule not found");
     if (change.action === "delete") { await fs.unlink(scheduleFile(owner, id)); return null; }
+    if (change.action === "approve") {
+      if (item.status !== "pending") throw new Error("This schedule is not awaiting approval");
+      item.status = "active"; item.nextRunAt = nextScheduledRun(item.spec);
+    }
     if (change.action === "pause") item.status = "paused";
     if (change.action === "resume") {
+      if (item.status === "pending") throw new Error("Approve the proposal first");
       item.nextRunAt = nextScheduledRun(item.spec);
       item.status = item.nextRunAt ? "active" : "completed";
     }

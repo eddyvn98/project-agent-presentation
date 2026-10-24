@@ -1,5 +1,5 @@
 export type ScheduleKind = "once" | "daily" | "weekly" | "interval";
-export type ScheduleStatus = "active" | "paused" | "completed";
+export type ScheduleStatus = "pending" | "active" | "paused" | "completed";
 export interface ScheduleSpec {
   kind: ScheduleKind;
   timezone: string;
