@@ -11,7 +11,8 @@ import { workspaceDir } from "../sandbox";
 import type { RuntimeInput, RuntimeStep } from "../run-agent";
 import type { BrowserAction } from "./action-parser";
 import { getBrowserSession, scheduleIdleClose, withBrowserOp, type BrowserSession } from "./session";
-import { captureBrowserWatch, finishBrowserWatch } from "./watch";
+import { captureBrowserWatch, finishBrowserWatch, type BrowserClickMarker } from "./watch";
+import { invalidateVisualFrame, observeVisualFrame, visualClick, visualType } from "./visual";
 
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 function snapshotRefLine(snapshot: string, ref: string): string {
@@ -145,12 +146,19 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 	const stepId = action.op === "screenshot" ? `render-${step}` : `browser-${step}`;
 	input.onStep?.({ tool: `browser_${action.op} #${stepId}`, detail: action.note || action.url || refDetail || action.ref || "" } satisfies RuntimeStep);
 	try {
+		let marker: BrowserClickMarker | undefined;
 		const result = await withBrowserOp(session, async () => {
+			if (!["visual_click", "visual_type", "visual_observe"].includes(action.op)) invalidateVisualFrame(session);
 			if (action.op !== "open") {
 				const challenge = await checkCaptcha(session);
 				if (challenge) { await session.close(); return { text: challenge, failed: true }; }
 			}
 			let extra = "";
+			switch (action.op) {
+				case "visual_observe": return await observeVisualFrame(input, session);
+				case "visual_click": marker = await visualClick(session, action.frame!, action.x!, action.y!); break;
+				case "visual_type": await visualType(session, action.text!); break;
+			}
 			switch (action.op) {
 				case "open": await assertPublicHttpUrl(action.url!); await session.page.goto(action.url!, { waitUntil: "domcontentloaded", timeout: 20_000 }); break;
 				case "back": await session.page.goBack({ timeout: 20_000 }).catch(() => null); break;
@@ -159,6 +167,8 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 					const line = snapshotRefLine(session.lastSnapshot, action.ref!);
 					if (!line) return { text: "That ref is not in the latest browser snapshot. Take a snapshot and use a current ref.", failed: true };
 					if (requiresUserConfirmation(line, input.userPrompt ?? "", new URL(session.page.url()).hostname)) return { text: "This action needs the user's confirmation. Ask before proceeding.", failed: true };
+					const bounds = await locatorForRef(session, action.ref!).boundingBox();
+					if (bounds) { const viewport = session.page.viewportSize() ?? { width: 1280, height: 800 }; marker = { x: Math.max(0, Math.min(1, (bounds.x + bounds.width / 2) / viewport.width)), y: Math.max(0, Math.min(1, (bounds.y + bounds.height / 2) / viewport.height)), kind: "agent" }; }
 					await locatorForRef(session, action.ref!).click(); break;
 				}
 				case "type": {
@@ -247,13 +257,20 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			const currentSnapshot = await snapshot(session);
 			return { text: extra ? `${extra}\n\n${currentSnapshot}` : currentSnapshot };
 		});
-		if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op);
+		if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op, marker);
 		scheduleIdleClose(session, id);
 		return result;
 	} catch (cause) {
 		if (cause instanceof Error && /timed out after 30 seconds/.test(cause.message)) await session.close();
 		const failureText = cause instanceof Error ? cause.message : "unknown error";
-		const refreshed = /ref|locator|element|stale|not attached/i.test(failureText) ? await snapshot(session).catch(() => "") : "";
-		return { text: "Browser " + action.op + " failed: " + failureText + (refreshed ? "\nFresh page snapshot for recovery:\n" + refreshed : ""), failed: true };
+		const domFailure = ["click", "type", "select", "drag"].includes(action.op) &&
+			/ref|locator|element|stale|not attached|timeout/i.test(failureText) &&
+			!/captcha|password|sensitive|confirm|policy|permission|blocked/i.test(failureText);
+		const refreshed = domFailure ? await snapshot(session).catch(() => "") : "";
+		const observed = domFailure ? await observeVisualFrame(input, session).catch(() => null) : null;
+		return { text: "Browser " + action.op + " failed: " + failureText +
+			(refreshed ? "\\nFresh DOM snapshot:\\n" + refreshed : "") +
+			(observed ? "\\nDOM recovery unavailable: visual observation attached; use fresh DOM ref or frame-bound visual_click." : ""),
+			...(observed?.image ? { image: observed.image } : {}), failed: true };
 	}
 }
