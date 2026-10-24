@@ -42,7 +42,7 @@ export function parseScheduleSpec(input: unknown): ScheduleSpec {
   catch { throw new Error("Invalid timezone"); }
   const kind = raw.kind as ScheduleSpec["kind"];
   if (kind === "watch") {
-    if (!Number.isInteger(raw.everyMinutes) || Number(raw.everyMinutes) < 15 || Number(raw.everyMinutes) > 1440)
+    if ((typeof raw.everyMinutes !== "number" || !Number.isInteger(raw.everyMinutes)) || Number(raw.everyMinutes) < 15 || Number(raw.everyMinutes) > 1440)
       throw new Error("Website checks run every 15–1440 minutes");
     if (typeof raw.url !== "string" || raw.url.length > 500) throw new Error("Website URL is required");
     const url = new URL(raw.url);
@@ -51,7 +51,7 @@ export function parseScheduleSpec(input: unknown): ScheduleSpec {
     return { kind, timezone: raw.timezone, everyMinutes: Number(raw.everyMinutes), url: url.href };
   }
   if (kind === "interval") {
-    if (!Number.isInteger(raw.everyMinutes) || Number(raw.everyMinutes) < 15 || Number(raw.everyMinutes) > 1440)
+    if ((typeof raw.everyMinutes !== "number" || !Number.isInteger(raw.everyMinutes)) || Number(raw.everyMinutes) < 15 || Number(raw.everyMinutes) > 1440)
       throw new Error("Interval must be 15–1440 minutes");
     return { kind, timezone: raw.timezone, everyMinutes: Number(raw.everyMinutes) };
   }

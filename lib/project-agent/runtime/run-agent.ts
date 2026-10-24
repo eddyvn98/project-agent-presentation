@@ -56,8 +56,7 @@ async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { a
 	const step = loopStep + (input.depth ? 100 * ((input.slot ?? 0) + 1) : 0);
 	if (!input.depth && action.note && action.action !== "progress") input.onStep?.({ tool: "progress_message", detail: redactSecrets(action.note).replace(/\s+/g, " ").trim().slice(0, 200) });
 	if (action.action === "progress") { if (!input.depth) input.onStep?.({ tool: "progress_message", detail: redactSecrets(action.message) }); return { text: "Progress note shown to user; continue with the actions needed for the request." }; }
-	if (action.action === "calculate") return runCalculationStep(action.expression, input.onStep);
-  if (action.action === "schedule") return agentScheduleAction(input, action);
+	if (action.action === "calculate") return runCalculationStep(action.expression, input.onStep); if (action.action === "schedule") return agentScheduleAction(input, action);
 	if (action.action === "search_output" || action.action === "read_output") return contextOutputAction(input, action); if (action.action === "xerj_search" || action.action === "xerj_read") return runXerjAction(input, action);
 	if (action.action === "shell") {
 		input.onStep?.({ tool: "sandbox_shell", detail: action.note || action.command });
