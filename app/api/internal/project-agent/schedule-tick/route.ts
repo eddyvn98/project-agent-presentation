@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { migrateLegacyTaskQueue } from "@/lib/project-agent/durable-queue-migration";
 import { migrateLegacyScheduleFiles } from "@/lib/project-agent/scheduled-migration";
 import { dispatchDueSchedules } from "@/lib/project-agent/scheduled-worker";
+import { migrateProactiveInsightHistory } from "@/lib/project-agent/proactive-migration";
 import { discoverProactiveOpportunities } from "@/lib/project-agent/proactive-store";
 import { tickDurableTasks } from "@/lib/project-agent/task-runner";
 import { tickWorkflowRuns } from "@/lib/project-agent/workflow-runner";
@@ -23,11 +24,13 @@ export async function POST(req: NextRequest) {
       ? await migrateLegacyScheduleFiles() : undefined;
     const queueMigration = process.env.PROJECT_AGENT_MIGRATE_FILE_QUEUE === "1"
       ? await migrateLegacyTaskQueue() : undefined;
+    const signalMigration = process.env.PROJECT_AGENT_MIGRATE_INSIGHT_HISTORY === "1"
+      ? await migrateProactiveInsightHistory() : undefined;
     const result = await dispatchDueSchedules();
     const queue = await tickDurableTasks();
     const workflows = await tickWorkflowRuns();
     const proactive = await discoverProactiveOpportunities().catch(() => null);
     return NextResponse.json({ dispatched: result.filter(r => r.status === "dispatched").length,
-      attempted: result.length, queue, workflows, proactive, ...(migration ? { migration } : {}), ...(queueMigration ? { queueMigration } : {}) });
+      attempted: result.length, queue, workflows, proactive, ...(migration ? { migration } : {}), ...(queueMigration ? { queueMigration } : {}), ...(signalMigration ? { signalMigration } : {}) });
   } catch { return NextResponse.json({ error: "Scheduler unavailable" }, { status: 503 }); }
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import * as projectCap from "@/lib/capabilities/project";
 import { getAgentWorkflow } from "@/lib/project-agent/workflow-store";
-import { createSchedule, listSchedules, updateSchedule } from "@/lib/project-agent/scheduled-mongo-store";
+import { createSchedule, listSchedules, getSchedule, updateSchedule } from "@/lib/project-agent/scheduled-mongo-store";
 import { runScheduleNow } from "@/lib/project-agent/scheduled-worker";
 import type { ScheduleCreation } from "@/lib/project-agent/scheduled-types";
 
@@ -52,10 +52,16 @@ export async function PATCH(req: NextRequest) {
     if (body.action === "edit" && typeof body.projectId === "string") {
       if (!await projectCap.getProjectAccess(body.projectId, owner)) throw new Error("Project not accessible");
     }
-    if (body.action === "edit" && typeof body.workflowId === "string" && body.workflowId) {
-      const flow = await getAgentWorkflow(owner, body.workflowId);
-      if (!flow || !flow.enabled || (typeof body.projectId === "string" && flow.projectId !== body.projectId))
-        throw new Error("Scheduled workflow is not accessible");
+    if (body.action === "edit") {
+      const existing = await getSchedule(owner, body.id);
+      if (!existing) throw new Error("Schedule unavailable");
+      const destination = typeof body.projectId === "string" ? body.projectId : existing.projectId;
+      const workflowId = typeof body.workflowId === "string" ? body.workflowId : existing.workflowId;
+      if (workflowId) {
+        const flow = await getAgentWorkflow(owner, workflowId);
+        if (!flow || !flow.enabled || flow.projectId !== destination)
+          throw new Error("Workflow and schedule must belong to the same Project");
+      }
     }
     const schedule = await updateSchedule(owner, body.id, body as Parameters<typeof updateSchedule>[2]);
     return NextResponse.json({ schedule }, { headers: HEADERS });
