@@ -34,6 +34,8 @@ export interface ProjectAgentTask {
   /** Run spawned by a saved schedule; cannot modify schedules or grant new rights. */
   scheduleRunId?: string;
   idempotencyKey?: string;
+  /** Exact prior task for a retry; never grants cross-owner access. */
+  retryOfTaskId?: string;
   workflowRunId?: string;
   projectOwnerEmail?: string;
   /** Stable id of the chat (thread) this task belongs to; usually the first Dify conversation id. */
@@ -99,6 +101,8 @@ export interface CreateProjectAgentTaskInput {
   workspaceTurnId?: string;
 	/** `projectSourceId`: the bytes are copied from that Project source instead of a separate upload. */
 	inputFiles?: Array<ProjectAgentTaskInputFile & { bytes?: Uint8Array; projectSourceId?: string }>;
+	/** Source of explicit retry context (validated in the authenticated route). */
+  retryOfTaskId?: string;
 	/** Retry of this task: its stored attachments are copied into the new task instead of being uploaded again. */
 	reuseInputsFrom?: string;
 }
