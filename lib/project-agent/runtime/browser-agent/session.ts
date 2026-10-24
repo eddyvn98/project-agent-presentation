@@ -31,6 +31,7 @@ export interface BrowserSession {
 	owner?: string;
 	authHost?: string;
 	authMode?: "read" | "interact";
+	authVersion?: string;
 	context: BrowserContext;
 	page: Page;
 	lastSnapshot: string;
@@ -159,23 +160,41 @@ export async function restorePersonalBrowserSession(session: BrowserSession, url
   try { host = vaultHost(url); } catch { return; }
   if (session.authHost === host) return;
   const record = await readPersonalBrowserGrant(session.owner, url);
-  if (!record || !record.grant.automation) { session.authHost = undefined; session.authMode = undefined; return; }
-  await session.context.addCookies(record.state.cookies);
-  if (record.state.origins.length) {
-    const existing = record.state.origins.find((origin) => origin.origin === new URL(url).origin);
-    if (existing?.localStorage.length) {
-      await session.context.addInitScript(({ host: allowed, pairs }) => {
-        if (location.hostname !== allowed) return;
-        for (const { name, value } of pairs) localStorage.setItem(name, value);
-      }, { host, pairs: existing.localStorage });
-    }
-  }
+  if (!record || !record.grant.automation) { session.authHost = undefined; session.authMode = undefined; session.authVersion = undefined; return; }
+  // Install full cookies, localStorage and IndexedDB before the first navigation.
+  const next = await session.browser.newContext({
+    viewport: { width: 1280, height: 800 }, acceptDownloads: true,
+    serviceWorkers: "block", storageState: record.state,
+  });
+  try {
+    await routeGuard(next);
+    const page = await next.newPage();
+    const previous = session.context;
+    session.context = next; session.page = page;
+    session.refs.clear(); session.snapshotUrl = ""; session.lastSnapshot = "";
+    await previous.close();
+  } catch (error) { await next.close().catch(() => {}); throw error; }
   session.authHost = host;
   session.authMode = record.grant.mode;
+  session.authVersion = record.grant.version;
 }
 
 export async function closeBrowserSessionsForOwnerHost(owner: string, host: string): Promise<void> {
   await Promise.all([...sessions.values()].filter((session) => session.owner === owner.trim().toLowerCase() &&
     (session.authHost === host || (() => { try { return new URL(session.page.url()).hostname === host; } catch { return false; } })()))
     .map((session) => session.close()));
+}
+
+/** A freshly revoked grant cannot authorize a subsequent browser tool call. */
+export async function assertPersonalBrowserPermission(session: BrowserSession, op: string): Promise<void> {
+  if (!session.authHost || !session.owner) return;
+  const record = await readPersonalBrowserGrant(session.owner, "https://" + session.authHost).catch(() => null);
+  if (!record || !record.grant.automation || record.grant.version !== session.authVersion) {
+    await session.close();
+    throw new Error("Saved website access was revoked or changed");
+  }
+  const readOnly = ["open","back","snapshot","screenshot","extract","console","network","wait",
+    "tabs","switch_tab","visual_observe","close"];
+  if (record.grant.mode === "read" && !readOnly.includes(op))
+    throw new Error("This website is authorized for read-only Agent access");
 }

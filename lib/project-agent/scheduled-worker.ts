@@ -27,6 +27,7 @@ export async function executeSchedule(item: ScheduledAgentTask, manual = false) 
     const prompt = item.prompt + "\n\nThis is a previously authorized scheduled Agent run. Do not create another schedule unless the user explicitly requested it. Respect existing permission and confirmation policy.";
     const task = await createProjectAgentTask({
       projectId: item.projectId, ownerEmail: item.ownerEmail, projectOwnerEmail: project.ownerEmail,
+      scheduleRunId: item.id + ":" + run.occurrence,
       prompt, userPrompt: item.prompt,
     });
     await markScheduleRun(item.ownerEmail, item.id, run.occurrence, { status: "queued", taskId: task.id });

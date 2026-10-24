@@ -1,4 +1,4 @@
-export type ScheduleKind = "once" | "daily" | "weekly";
+export type ScheduleKind = "once" | "daily" | "weekly" | "interval";
 export type ScheduleStatus = "active" | "paused" | "completed";
 export interface ScheduleSpec {
   kind: ScheduleKind;
@@ -6,6 +6,7 @@ export interface ScheduleSpec {
   localTime?: string;
   weekdays?: number[];
   runAt?: string;
+  everyMinutes?: number;
 }
 export interface ScheduleRun {
   occurrence: string;

@@ -100,6 +100,7 @@ export async function createProjectAgentTask(input: CreateProjectAgentTaskInput)
 		id,
 		projectId: input.projectId,
 		ownerEmail: input.ownerEmail,
+		...(input.scheduleRunId ? { scheduleRunId: input.scheduleRunId } : {}),
 		projectOwnerEmail: input.projectOwnerEmail,
 		// Sandbox runtime: the chat gets a stable thread id from its first task, so every turn (and every retry) shares one workspace and one chat entry.
 		conversationId: input.conversationId ?? (process.env.PROJECT_AGENT_RUNTIME === "sandbox" ? id : undefined),

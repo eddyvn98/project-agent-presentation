@@ -14,12 +14,13 @@ export async function agentScheduleAction(input: RuntimeInput, action: Action) {
   }
   if (input.readOnly || input.depth) return { text: "Only the primary Agent can manage scheduled tasks", failed: true };
   try {
-    if (action.op === "create") {
-      if (!/(schedule|remind|every|daily|weekly|tomorrow|at\s+\d|đặt lịch|hẹn giờ|mỗi ngày|mỗi tuần|hàng ngày|hàng tuần|nhắc tôi|ngày mai|vào lúc)/iu.test(input.userPrompt ?? input.query))
+    if (action.op === "create" || action.op === "propose") {
+      if (action.op === "create" && !/(schedule|remind|every|daily|weekly|tomorrow|at\s+\d|đặt lịch|hẹn giờ|mỗi ngày|mỗi tuần|hàng ngày|hàng tuần|nhắc tôi|ngày mai|vào lúc)/iu.test(input.userPrompt ?? input.query))
         return { text: "Ask the user for explicit permission before saving a scheduled task", failed: true };
       if (!await projectCap.getProjectAccess(input.projectId, owner))
         return { text: "User has no access to the target Project", failed: true };
-      const spec = action.kind === "once" ?
+      const spec = action.kind === "interval" ?
+        { kind: "interval" as const, timezone: action.timezone!, everyMinutes: action.everyMinutes } : action.kind === "once" ?
         { kind: "once" as const, timezone: action.timezone!, runAt: action.runAt } :
         { kind: action.kind!, timezone: action.timezone!, localTime: action.localTime,
           ...(action.kind === "weekly" ? { weekdays: action.weekdays } : {}) };

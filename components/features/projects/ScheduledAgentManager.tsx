@@ -12,6 +12,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
   const [localTime, setLocalTime] = useState("08:00");
   const [runAt, setRunAt] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [everyMinutes, setEveryMinutes] = useState(60);
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Ho_Chi_Minh");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,7 +45,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
   }
   function submit() {
     if (!projectId || !title.trim() || !prompt.trim()) return;
-    const spec: ScheduleSpec = kind === "once"
+    const spec: ScheduleSpec = kind === "interval" ? { kind, timezone, everyMinutes } : kind === "once"
       ? { kind, timezone, runAt: new Date(runAt).toISOString() }
       : { kind, timezone, localTime, ...(kind === "weekly" ? { weekdays } : {}) };
     void send(editing ? "PATCH" : "POST", editing ? { id: editing, action: "edit", projectId, title, prompt, spec } : { projectId, title, prompt, spec });
@@ -63,11 +64,11 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
       </select></label>
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="text-sm">Frequency<select className={input} value={kind} onChange={e => setKind(e.target.value as ScheduleSpec["kind"])}>
-          <option value="once">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option>
+          <option value="once">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Monitor at interval</option>
         </select></label>
         <label className="text-sm">Timezone<input className={input} value={timezone} onChange={e => setTimezone(e.target.value)}/></label>
       </div>
-      {kind === "once"
+      {kind === "interval" ? <label className="block text-sm">Interval in minutes (15–1440)<input type="number" min={15} max={1440} step={15} className={input} value={everyMinutes} onChange={e => setEveryMinutes(Number(e.target.value))}/></label> : kind === "once"
         ? <label className="block text-sm">Date and time<input type="datetime-local" className={input} value={runAt} onChange={e => setRunAt(e.target.value)}/></label>
         : <label className="block text-sm">Local time<input type="time" className={input} value={localTime} onChange={e => setLocalTime(e.target.value)}/></label>}
       {kind === "weekly" && <div className="flex flex-wrap gap-2">{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((day,i) =>
@@ -84,15 +85,16 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
         <p className="whitespace-pre-wrap text-sm">{item.prompt}</p>
         <p className="text-xs text-slate-500">{item.spec.kind} · {item.spec.timezone} · Next: {item.nextRunAt ? new Date(item.nextRunAt).toLocaleString() : "none"}</p>
         <div className="flex flex-wrap gap-2 text-xs">
-          <button disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: item.status === "active" ? "pause" : "resume" })}>{item.status === "active" ? "Pause" : "Resume"}</button>
+          <button disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: item.status === "pending" ? "approve" : item.status === "active" ? "pause" : "resume" })}>{item.status === "pending" ? "Review" : item.status === "active" ? "Pause" : "Resume"}</button>
+          {item.status === "pending" && <span className="text-xs text-amber-600">Agent suggestion — requires your approval.</span>}
           <button disabled={busy} className="rounded border px-2 py-1" onClick={() => {
             setEditing(item.id); setTitle(item.title); setPrompt(item.prompt); setProjectId(item.projectId);
             setKind(item.spec.kind); setTimezone(item.spec.timezone);
-            setLocalTime(item.spec.localTime ?? "08:00"); setWeekdays(item.spec.weekdays ?? [1,2,3,4,5]);
+            setLocalTime(item.spec.localTime ?? "08:00"); setEveryMinutes(item.spec.everyMinutes ?? 60); setWeekdays(item.spec.weekdays ?? [1,2,3,4,5]);
             setRunAt(item.spec.runAt ? item.spec.runAt.slice(0,16) : "");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}>Edit</button>
-          <button disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: "run" })}>Run now</button>
+          <button disabled={busy || item.status !== "active"} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: "run" })}>Run now</button>
           <button disabled={busy} className="rounded border px-2 py-1 text-red-600" onClick={() => {
             if (window.confirm("Delete this schedule?")) void send("PATCH", { id: item.id, action: "delete" });
           }}>Delete</button>

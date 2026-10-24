@@ -10,7 +10,7 @@ import { isCaptchaPage, isSensitiveField, requiresUserConfirmation, resolveSafeR
 import { workspaceDir } from "../sandbox";
 import type { RuntimeInput, RuntimeStep } from "../run-agent";
 import type { BrowserAction } from "./action-parser";
-import { getBrowserSession, scheduleIdleClose, withBrowserOp, restorePersonalBrowserSession, type BrowserSession } from "./session";
+import { getBrowserSession, scheduleIdleClose, withBrowserOp, restorePersonalBrowserSession, assertPersonalBrowserPermission, type BrowserSession } from "./session";
 import { captureBrowserWatch, finishBrowserWatch, type BrowserClickMarker } from "./watch";
 import { invalidateVisualFrame, observeVisualFrame, visualClick, visualType } from "./visual";
 
