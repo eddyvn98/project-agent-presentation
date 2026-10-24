@@ -13,6 +13,18 @@ const waiters: Array<() => void> = [];
 let occupiedSlots = 0;
 let sharedBrowser: Promise<Browser> | null = null;
 let browserIdleTimer: ReturnType<typeof setTimeout> | undefined;
+const vaultMonitor = setInterval(() => {
+  for (const session of sessions.values()) {
+    if (!session.authHost || !session.owner || !session.authVersion) continue;
+    void readPersonalBrowserGrant(session.owner, "https://" + session.authHost)
+      .then(record => {
+        if (!record || !record.grant.automation || record.grant.version !== session.authVersion)
+          return session.close();
+      })
+      .catch(() => session.close()); // Vault unavailable: fail closed for authenticated browsers.
+  }
+}, 1000);
+vaultMonitor.unref?.();
 
 export interface BrowserSession {
 	browser: Browser;
