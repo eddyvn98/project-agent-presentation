@@ -3,6 +3,7 @@ import { launchChromium } from "../browser-launcher";
 import { guardedRequest } from "../guarded-fetch";
 import { assertPublicWebSocketUrl, bindAbort } from "./safety";
 import { readPersonalBrowserGrant, vaultHost } from "./personal-vault";
+import { checkBrowserSitePolicy } from "../../browser-security-policy";
 
 const MAX_CONTEXTS = 3;
 const OP_TIMEOUT_MS = 30_000;
@@ -75,6 +76,8 @@ async function routeGuard(context: BrowserContext, current: () => BrowserSession
 		try {
 			const req = route.request();
       const active = current();
+      if (active?.owner && (req.isNavigationRequest() || !["GET","HEAD","OPTIONS"].includes(req.method().toUpperCase())))
+        await checkBrowserSitePolicy(active.owner, req.url(), req.isNavigationRequest() ? "open" : "submit");
       if (active?.authMode === "read" && !["GET","HEAD","OPTIONS"].includes(req.method().toUpperCase())) {
         await route.abort("blockedbyclient").catch(() => {});
         return;

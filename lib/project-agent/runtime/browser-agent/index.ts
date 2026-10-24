@@ -8,6 +8,7 @@ import { guardedRequest } from "../guarded-fetch";
 import { assertPublicHttpUrl } from "../web-security";
 import { isCaptchaPage, isSensitiveField, resolveSafeRedirect, IRREVERSIBLE_PATTERN } from "./safety";
 import { requireAgentApproval } from "../../agent-approvals";
+import { checkAgentBrowserPolicy } from "./policy-hook"; import { sensitiveScreenshotMask } from "./privacy";
 import { checkSavedBrowserHealth } from "./browser-session-health";
 import { workspaceDir } from "../sandbox";
 import type { RuntimeInput, RuntimeStep } from "../run-agent";
@@ -154,6 +155,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 	try {
 		let marker: BrowserClickMarker | undefined;
 		await assertPersonalBrowserPermission(session, action.op);
+    await checkAgentBrowserPolicy(input, session, action.op, action.url);
 		if (session.authMode === "read" && ["click", "type", "press", "select", "upload", "drag", "visual_click", "visual_type"].includes(action.op))
 			return { text: "Personal login is read-only. Grant interaction access before changing the website.", failed: true };
 		const result = await withBrowserOp(session, async () => {
@@ -246,7 +248,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 				}
 				case "scroll": await session.page.evaluate((direction) => window.scrollBy(0, direction === "down" ? innerHeight * 0.8 : -innerHeight * 0.8), action.direction ?? "down"); break;
 				case "screenshot": {
-					const sensitive = session.page.locator('input,textarea,select,[contenteditable="true"],[data-private],[data-sensitive]');
+					const sensitive = sensitiveScreenshotMask(session.page);
           const bytes = await session.page.screenshot({ type: "jpeg", quality: 75, animations: "disabled",
             mask: [sensitive], maskColor: "#64748b" });
 					if (input.taskId) await writeProjectAgentFile(input.taskId, renderFileId(step), bytes).catch(() => {});

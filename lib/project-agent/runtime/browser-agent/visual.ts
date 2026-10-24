@@ -1,4 +1,5 @@
 import type { BrowserSession } from "./session";
+import { sensitiveScreenshotMask } from "./privacy";
 import type { RuntimeInput } from "../run-agent-types";
 import { uploadRuntimeImage } from "../model";
 import { IRREVERSIBLE_PATTERN, SENSITIVE_PATTERN } from "./safety";
@@ -13,7 +14,7 @@ export function invalidateVisualFrame(session: BrowserSession): void { frames.de
 export async function observeVisualFrame(input: RuntimeInput, session: BrowserSession) {
   invalidateVisualFrame(session);
   const page = session.page;
-  const mask = page.locator('input,textarea,select,[contenteditable="true"],[data-private],[data-sensitive]');
+  const mask = sensitiveScreenshotMask(page);
   const bytes = await page.screenshot({
     type: "jpeg", quality: 65, animations: "disabled",
     mask: [mask], maskColor: "#64748b", timeout: 4_000,

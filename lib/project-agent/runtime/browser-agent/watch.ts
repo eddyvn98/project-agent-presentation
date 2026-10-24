@@ -1,4 +1,5 @@
 import type { Page } from "playwright-core";
+import { sensitiveScreenshotMask } from "./privacy";
 
 const EXPIRES_MS = 5 * 60_000;
 const MAX_IMAGE_BYTES = 750_000;
@@ -67,7 +68,7 @@ export async function captureBrowserWatch(taskId: string, page: Page, action: st
   const before = frames.get(taskId);
   if (!before?.watching || before.finished) return;
   try {
-    const mask = page.locator('input,textarea,select,[contenteditable="true"],[data-private],[data-sensitive]');
+    const mask = sensitiveScreenshotMask(page);
     const screenshot = await page.screenshot({
       type: "jpeg", quality: 55, animations: "disabled",
       mask: [mask], maskColor: "#64748b", timeout: 4_000,
