@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { readProjectAgentTask } from "./task-store";
+import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
 
 export type QueueState = "queued" | "running" | "done" | "failed" | "needs_review";
 export interface QueueReceipt {
@@ -100,6 +100,11 @@ export async function scanDurableQueue(limit = 100): Promise<{ queued: string[];
         await persist({ ...entry, state: task?.status === "done" ? "done" : "needs_review",
           completedAt: new Date().toISOString(),
           error: "Worker lease expired; review side effects before retry" });
+        if (task && (task.status === "queued" || task.status === "running")) {
+          await updateProjectAgentTask(id, { status: "failed", completedAt: new Date().toISOString(),
+            error: "Worker lease expired; inspect external side effects before retrying.",
+            logLine: "failed: durable queue needs human review" }).catch(() => {});
+        }
         uncertain++;
       }
     }
