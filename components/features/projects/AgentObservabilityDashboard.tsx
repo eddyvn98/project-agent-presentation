@@ -21,7 +21,7 @@ export function AgentObservabilityDashboard() {
   const compact = (n: number) => new Intl.NumberFormat(undefined, { notation: "compact" }).format(n);
   return <section className="mx-auto max-w-5xl space-y-5 p-4" aria-label="Agent observability dashboard">
     <header><h1 className="text-xl font-semibold">Agent Observability</h1>
-      <p className="text-sm text-slate-500">Your account's task execution, token consumption, failures, and scheduled activity over the last 30 days.</p></header>
+      <p className="text-sm text-slate-500">Your account's execution, progress stalls, human-review needs and scheduled activity over the last 30 days.</p></header>
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
     {data && <>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -31,6 +31,8 @@ export function AgentObservabilityDashboard() {
           ["Est. model cost", data.estimatedCostUsd === null ? "Not configured" : "$" + data.estimatedCostUsd.toFixed(4)],
           ["Avg. duration", data.avgDurationSeconds + " s"], ["Active schedules", String(data.activeSchedules)],
           ["Approvals pending", String(data.pendingApprovals)],
+          ["Loop stops", String(data.loopStopped ?? 0)], ["Requires review", String(data.needsReview ?? 0)],
+          ["Tool failures", String(data.toolFailures ?? 0)],
         ].map(([label, value]) => <div key={label} className="rounded-xl border p-3">
           <p className="text-xs text-slate-500">{label}</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
@@ -46,7 +48,7 @@ export function AgentObservabilityDashboard() {
             {day.failed > 0 && <div className="w-full bg-orange-500" style={{ height: Math.max(3, day.failed / max * 125) }}/>}
           </div>)}
         </div>
-        <p className="mt-2 text-xs text-slate-500">Dark: completed · Orange: failed. Token counts are based on recorded prompt-token metrics, not a billing estimate.</p>
+        <p className="mt-2 text-xs text-slate-500">Dark: completed · Orange: failed. Technical loop stops and review counts reflect recorded task data. Token counts are not a spending limit.</p>
       </div>
       <div className="overflow-auto rounded-xl border p-3"><h2 className="mb-3 font-semibold">Recent task runs</h2>
         <table className="w-full text-left text-xs">
