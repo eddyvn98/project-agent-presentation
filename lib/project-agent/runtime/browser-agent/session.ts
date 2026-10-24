@@ -67,8 +67,12 @@ function trackPageTraffic(session: BrowserSession, page: Page): void {
 }
 async function getSharedBrowser(): Promise<Browser> {
 	if (browserIdleTimer) clearTimeout(browserIdleTimer);
-	if (!sharedBrowser) sharedBrowser = launchChromium().catch((error) => { sharedBrowser = null; throw error; });
-	return sharedBrowser;
+	if (sharedBrowser) {
+    const live = await sharedBrowser.catch(() => null);
+    if (!live?.isConnected()) { sharedBrowser = null; await closeAllBrowserSessions(); }
+  }
+  if (!sharedBrowser) sharedBrowser = launchChromium().catch((error) => { sharedBrowser = null; throw error; });
+  return sharedBrowser;
 }
 
 async function routeGuard(context: BrowserContext, current: () => BrowserSession | undefined): Promise<void> {
@@ -100,7 +104,7 @@ async function routeGuard(context: BrowserContext, current: () => BrowserSession
 
 export async function getBrowserSession(id: string, signal?: AbortSignal, owner?: string): Promise<BrowserSession> {
 	const existing = sessions.get(id);
-	if (existing) { if (existing.page.isClosed()) { await existing.close(); return getBrowserSession(id, signal, owner); } if (owner && existing.owner && existing.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); if (owner && !existing.owner) existing.owner = owner.trim().toLowerCase(); existing.lastUsed = Date.now(); return existing; }
+	if (existing) { if (existing.page.isClosed() || !existing.browser.isConnected()) { await existing.close(); return getBrowserSession(id, signal, owner); } if (owner && existing.owner && existing.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); if (owner && !existing.owner) existing.owner = owner.trim().toLowerCase(); existing.lastUsed = Date.now(); return existing; }
 	const pending = pendingSessions.get(id);
 	if (pending) { const result = await pending; if (owner && result.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); return result; }
 	const creating = createBrowserSession(id, signal, owner);
