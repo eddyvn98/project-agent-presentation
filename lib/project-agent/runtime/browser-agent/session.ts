@@ -1,4 +1,5 @@
 import type { Browser, BrowserContext, Page } from "playwright-core";
+import { BrowserSlotPool } from "./slot-pool";
 import { launchChromium } from "../browser-launcher";
 import { guardedRequest } from "../guarded-fetch";
 import { assertPublicWebSocketUrl, bindAbort } from "./safety";
@@ -10,8 +11,7 @@ const OP_TIMEOUT_MS = 30_000;
 const IDLE_CLOSE_MS = 5 * 60_000;
 const sessions = new Map<string, BrowserSession>();
 const pendingSessions = new Map<string, Promise<BrowserSession>>();
-const waiters: Array<() => void> = [];
-let occupiedSlots = 0;
+const slots = new BrowserSlotPool(MAX_CONTEXTS);
 let sharedBrowser: Promise<Browser> | null = null;
 let browserIdleTimer: ReturnType<typeof setTimeout> | undefined;
 const vaultMonitor = setInterval(() => {
@@ -48,18 +48,22 @@ export interface BrowserSession {
 }
 
 function trackPageTraffic(session: BrowserSession, page: Page): void {
+  const append = (items: string[], value: string) => {
+    items.push(value.slice(0, 500));
+    if (items.length > 100) items.splice(0, items.length - 100);
+  };
   page.on("console", message => {
     if (!session.authHost && ["error", "warning"].includes(message.type()))
-      session.console.push(`${message.type()}: ${message.text()}`);
+      append(session.console, `${message.type()}: ${message.text()}`);
   });
   const redactedUrl = (raw: string) => {
     try { const u = new URL(raw); return u.origin + u.pathname.slice(0, 140); }
     catch { return "[unavailable]"; }
   };
   page.on("requestfailed", request =>
-    session.network.push(`FAILED ${request.method()} ${redactedUrl(request.url())}`));
+    append(session.network, `FAILED ${request.method()} ${redactedUrl(request.url())}`));
   page.on("response", response =>
-    session.network.push(`${response.status()} ${response.request().method()} ${redactedUrl(response.url())}`));
+    append(session.network, `${response.status()} ${response.request().method()} ${redactedUrl(response.url())}`));
 }
 async function getSharedBrowser(): Promise<Browser> {
 	if (browserIdleTimer) clearTimeout(browserIdleTimer);
@@ -94,15 +98,9 @@ async function routeGuard(context: BrowserContext, current: () => BrowserSession
 	});
 }
 
-async function acquireSlot(): Promise<void> {
-	if (occupiedSlots < MAX_CONTEXTS) { occupiedSlots += 1; return; }
-	await new Promise<void>((resolve) => waiters.push(resolve));
-	occupiedSlots += 1;
-}
-
 export async function getBrowserSession(id: string, signal?: AbortSignal, owner?: string): Promise<BrowserSession> {
 	const existing = sessions.get(id);
-	if (existing) { if (owner && existing.owner && existing.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); if (owner && !existing.owner) existing.owner = owner.trim().toLowerCase(); existing.lastUsed = Date.now(); return existing; }
+	if (existing) { if (existing.page.isClosed()) { await existing.close(); return getBrowserSession(id, signal, owner); } if (owner && existing.owner && existing.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); if (owner && !existing.owner) existing.owner = owner.trim().toLowerCase(); existing.lastUsed = Date.now(); return existing; }
 	const pending = pendingSessions.get(id);
 	if (pending) { const result = await pending; if (owner && result.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); return result; }
 	const creating = createBrowserSession(id, signal, owner);
@@ -112,7 +110,7 @@ export async function getBrowserSession(id: string, signal?: AbortSignal, owner?
 
 async function createBrowserSession(id: string, signal?: AbortSignal, owner?: string): Promise<BrowserSession> {
 	let session: BrowserSession | undefined;
-	await acquireSlot();
+	const releaseSlot = await slots.acquire(signal);
 	let context: BrowserContext | undefined;
 	try {
 		if (signal?.aborted) throw new Error("Browser task was stopped");
@@ -127,10 +125,9 @@ async function createBrowserSession(id: string, signal?: AbortSignal, owner?: st
 				if (closed) return;
 				closed = true;
 				sessions.delete(id);
-				await session!.context.close();
-				occupiedSlots -= 1;
-				waiters.shift()?.();
-				if (occupiedSlots === 0) {
+				await session!.context.close().catch(() => {});
+				releaseSlot();
+				if (slots.active === 0) {
 					browserIdleTimer = setTimeout(() => { const current = sharedBrowser; sharedBrowser = null; void current?.then((instance) => instance.close()).catch(() => {}); }, 30_000);
 					browserIdleTimer.unref?.();
 				}
@@ -142,8 +139,7 @@ async function createBrowserSession(id: string, signal?: AbortSignal, owner?: st
 		return session;
 	} catch (cause) {
 		await context?.close().catch(() => {});
-		occupiedSlots -= 1;
-		waiters.shift()?.();
+		releaseSlot();
 		throw cause;
 	}
 }
@@ -161,13 +157,18 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
 	const current = new Promise<void>((resolve) => { unlock = resolve; });
 	operationLocks.set(session, preceding.then(() => current));
 	await preceding;
+	if (session.page.isClosed()) { unlock(); throw new Error("Browser session is closed"); }
 	if (countAgentAction) session.operationCount += 1;
 	if (countAgentAction && session.operationCount > 60) { unlock(); throw new Error("Browser action limit (60) reached for this task"); }
 	session.lastUsed = Date.now();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
 		return await Promise.race([fn(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Browser operation timed out after 30 seconds")), OP_TIMEOUT_MS); })]);
-	} finally { if (timer) clearTimeout(timer); unlock(); }
+	} catch (error) {
+    if (error instanceof Error && error.message === "Browser operation timed out after 30 seconds")
+      await session.close().catch(() => {});
+    throw error;
+  } finally { if (timer) clearTimeout(timer); unlock(); }
 }
 
 export function scheduleIdleClose(session: BrowserSession, id: string): void {
