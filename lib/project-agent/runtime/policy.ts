@@ -25,7 +25,7 @@ function uploadsFiles(command: string): boolean {
 export function denyReason(context: PolicyContext, action: RuntimeAction): string | null {
 	if (context.readOnly) {
 		if (action.action === "write_file" || action.action === "generate_image") return "You are a reviewer: you may not write files or generate images. Report what should change instead.";
-		if (action.action === "browser" && !["open", "back", "snapshot", "extract", "screenshot", "console", "network", "wait", "tabs", "new_tab", "switch_tab", "close_tab"].includes(action.op)) return "You are a reviewer: browser sessions are read-only. Report what should change instead.";
+		if (action.action === "browser" && !["open", "back", "snapshot", "visual_observe", "extract", "screenshot", "console", "network", "wait", "tabs", "new_tab", "switch_tab", "close_tab"].includes(action.op)) return "You are a reviewer: browser sessions are read-only. Report what should change instead.";
 		if (action.action === "pdf" && !["info", "text", "search", "health"].includes(action.op)) return "You are a reviewer: you may not change PDFs. Report what should change instead.";
 	}
 	// A wait's check command is a shell command like any other.
