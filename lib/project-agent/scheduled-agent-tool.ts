@@ -15,7 +15,7 @@ export async function agentScheduleAction(input: RuntimeInput, action: Action) {
   if (input.readOnly || input.depth) return { text: "Only the primary Agent can manage scheduled tasks", failed: true };
   try {
     if (action.op === "create") {
-      if (!/\b(schedule|remind|every|daily|weekly|tomorrow|at \d|đặt lịch|hẹn giờ|mỗi ngày|mỗi tuần|hàng ngày|hàng tuần|nhắc tôi|ngày mai|vào lúc)\b/i.test(input.userPrompt ?? input.query))
+      if (!/(schedule|remind|every|daily|weekly|tomorrow|at\s+\d|đặt lịch|hẹn giờ|mỗi ngày|mỗi tuần|hàng ngày|hàng tuần|nhắc tôi|ngày mai|vào lúc)/iu.test(input.userPrompt ?? input.query))
         return { text: "Ask the user for explicit permission before saving a scheduled task", failed: true };
       if (!await projectCap.getProjectAccess(input.projectId, owner))
         return { text: "User has no access to the target Project", failed: true };
@@ -32,7 +32,7 @@ export async function agentScheduleAction(input: RuntimeInput, action: Action) {
     }
     // Destructive schedule changes need a direct user instruction; never self-modify while running.
     const request = input.userPrompt ?? input.query;
-    if (!/\b(pause|resume|delete|cancel|stop schedule|tạm dừng|tiếp tục|xóa lịch|huỷ lịch|hủy lịch)\b/i.test(request))
+    if (!/(pause|resume|delete|cancel|stop schedule|tạm dừng|tiếp tục|xóa lịch|huỷ lịch|hủy lịch)/iu.test(request))
       return { text: "Ask the user before modifying a saved schedule", failed: true };
     const schedule = await updateSchedule(owner, action.id!, { action: action.op });
     return { text: "Schedule updated: " + JSON.stringify(schedule ?
