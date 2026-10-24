@@ -10,13 +10,10 @@ import { buildProjectAgentQuery, getProjectAgentKnowledgeText } from "./dify-que
 import { fulfillLargeProjectSourceRequests } from "./large-source-agent-loop";
 import { stripProjectSourceReadRequests } from "./large-source-reader";
 import { loadDefaultMemoryContext, loadProjectChatContext } from "./project-chat-context";
-import { loadProjectAgentTaskContext } from "./task-context";
-import type { ProjectAgentTask, ProjectAgentTaskSource } from "./types";
+import { loadProjectAgentTaskContext } from "./task-context"; import type { ProjectAgentTask, ProjectAgentTaskSource } from "./types";
 import { resolveDifyConversationId } from "./conversation";
-import { autoCompactIfNeeded } from "./auto-compact";
-import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
-import { routeModelSelector } from "./runtime/usage-pricing";
-import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
+import { autoCompactIfNeeded } from "./auto-compact"; import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
+import { routeModelSelector } from "./runtime/usage-pricing"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
 import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
 const MAX_VISUAL_REVIEW_PASSES = 4;
 export function projectAgentDifyUser(ownerEmail: string, projectId: string): string {
@@ -111,11 +108,10 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
     const crossProjectSkills = await personalSkillsPrompt(task.ownerEmail); if (crossProjectSkills) skillSet.context += "\n\n" + crossProjectSkills;
 		let savedSources: AgentWebSource[] = [];
 		const priorRetry = task.retryOfTaskId ? await readProjectAgentTask(task.retryOfTaskId).catch(() => null) : null;
-		const retryBrief = priorRetry && priorRetry.ownerEmail === task.ownerEmail && priorRetry.projectId === task.projectId
-			? retryContext(priorRetry) : "";
+		const retryBrief = priorRetry?.ownerEmail === task.ownerEmail && priorRetry?.projectId === task.projectId ? retryContext(priorRetry) : "";
 		const firstCall = {
 			endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] },
-			query: buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory, personalChats, inputReadback, skillSet.context, await loadRunbookPrompt(task.projectId, projectOwnerEmail), false, hindsightMemory, xerjContext) + (retryBrief ? "\\n\\n" + retryBrief : ""),
+			query: buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory, personalChats, inputReadback, skillSet.context, await loadRunbookPrompt(task.projectId, projectOwnerEmail), false, hindsightMemory, xerjContext) + (retryBrief ? "\n\n" + retryBrief : ""),
 			files: attached.files,
 		};
 		// PROJECT_AGENT_RUNTIME=sandbox: the app runs the agent loop in a Docker sandbox; Dify only supplies the model step.
