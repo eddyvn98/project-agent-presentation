@@ -17,7 +17,7 @@ import { autoCompactIfNeeded } from "./auto-compact";
 import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
 import { routeModelSelector } from "./runtime/usage-pricing";
 import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
-import { buildChatRecap } from "./chat-recap";
+import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
 const MAX_VISUAL_REVIEW_PASSES = 4;
 export function projectAgentDifyUser(ownerEmail: string, projectId: string): string {
 	return `project_${createHash("sha256").update(`${ownerEmail.trim().toLowerCase()}:${projectId}`).digest("hex").slice(0, 24)}`;
@@ -110,9 +110,12 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
     const personalMemory = await personalMemoryPrompt(task.ownerEmail); if (personalMemory) skillSet.context += "\n\n" + personalMemory;
     const crossProjectSkills = await personalSkillsPrompt(task.ownerEmail); if (crossProjectSkills) skillSet.context += "\n\n" + crossProjectSkills;
 		let savedSources: AgentWebSource[] = [];
+		const priorRetry = task.retryOfTaskId ? await readProjectAgentTask(task.retryOfTaskId).catch(() => null) : null;
+		const retryBrief = priorRetry && priorRetry.ownerEmail === task.ownerEmail && priorRetry.projectId === task.projectId
+			? retryContext(priorRetry) : "";
 		const firstCall = {
 			endpoint, apiKey, user, signal, onPartial, editSources: { taskId: task.id, files: task.inputFiles ?? [] },
-			query: buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory, personalChats, inputReadback, skillSet.context, await loadRunbookPrompt(task.projectId, projectOwnerEmail), false, hindsightMemory, xerjContext),
+			query: buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory, personalChats, inputReadback, skillSet.context, await loadRunbookPrompt(task.projectId, projectOwnerEmail), false, hindsightMemory, xerjContext) + (retryBrief ? "\\n\\n" + retryBrief : ""),
 			files: attached.files,
 		};
 		// PROJECT_AGENT_RUNTIME=sandbox: the app runs the agent loop in a Docker sandbox; Dify only supplies the model step.
@@ -136,6 +139,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory.slice(0, 3_000), personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true, hindsightMemory, xerjContext)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
 			void updateProjectAgentTask(task.id, { logLine: `context :: query_chars=${firstCall.query.length} knowledge=${knowledge.length} project_chats=${projectChats.length} default_memory=${personalChats.length} agent_history=${projectAgentHistory.length} readback=${inputReadback.length} skills=${skillSet.context.length} runbook=${String(runbookText ?? "").length}` }).catch(() => {});
 		}
+    if (retryBrief && runtime) firstCall.query += "\\n\\n" + retryBrief;
     firstCall.query = await attachHarnessToQuery(task, firstCall.query,
       line => updateProjectAgentTask(task.id, { logLine: line }));
 		await updateProjectAgentTask(task.id, { logLine: "app_stage :: processing_request" });
