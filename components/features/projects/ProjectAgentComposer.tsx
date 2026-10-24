@@ -7,7 +7,6 @@ import { useDictation } from "./useDictation";
 import { ProjectAgentModelPicker } from "./ProjectAgentModelPicker";
 
 type Props = {
-  projectId?: string;
 	value: string;
 	onChange: (value: string) => void;
 	onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -31,7 +30,7 @@ type Props = {
 
 const menuItem = "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800";
 
-export function ProjectAgentComposer({ projectId, value, onChange, onSubmit, onAttach, onFiles, placeholder, ariaLabel, formRef, attachments, meter, footnote, attachLabel = "Add files and images", sendLabel = "Send to Project Agent", disabled = false, busy = false, allowEmptyValue = false }: Props) {
+export function ProjectAgentComposer({ value, onChange, onSubmit, onAttach, onFiles, placeholder, ariaLabel, formRef, attachments, meter, footnote, attachLabel = "Add files and images", sendLabel = "Send to Project Agent", disabled = false, busy = false, allowEmptyValue = false }: Props) {
 	const menuId = useId();
 	const menuButtonRef = useRef<HTMLButtonElement>(null);
 	const menuRef = useRef<HTMLDivElement>(null);
