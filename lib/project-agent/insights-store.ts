@@ -9,11 +9,11 @@ const LATEST = path.join(DIR, "latest.md");
 const REPORT_TASKS = 500;
 const KEEP_LINES = 5000;
 
-const KEPT_LOG = /metrics ::|context ::|learned ::|trajectory ::|using tool (?:evaluator_verdict|policy_denied)/;
+const KEPT_LOG = /metrics ::|context ::|learned ::|trajectory ::|stall_stop|loop_blocked|using tool (?:evaluator_verdict|policy_denied)/;
 
 /** Task history that survives the 24 hour task cleanup: one trimmed line per finished task. */
 function trimmed(task: ProjectAgentTask): Pick<ProjectAgentTask, "id" | "projectId" | "ownerEmail" | "scheduleRunId" | "workflowRunId" | "status" | "error" | "createdAt" | "updatedAt" | "prompt" | "userPrompt" | "log" | "files" | "feedback"> {
-	return { id: task.id, projectId: task.projectId, ownerEmail: task.ownerEmail, scheduleRunId: task.scheduleRunId, workflowRunId: task.workflowRunId, status: task.status, error: task.error, createdAt: task.createdAt, updatedAt: task.updatedAt, prompt: task.prompt.slice(0, 200), userPrompt: task.userPrompt?.slice(0, 200), log: task.log.filter((line) => KEPT_LOG.test(line)).slice(-4), files: task.files?.map((file) => ({ ...file })), feedback: task.feedback };
+	return { id: task.id, projectId: task.projectId, ownerEmail: task.ownerEmail, scheduleRunId: task.scheduleRunId, workflowRunId: task.workflowRunId, status: task.status, error: task.error, createdAt: task.createdAt, updatedAt: task.updatedAt, prompt: task.prompt.slice(0, 200), userPrompt: task.userPrompt?.slice(0, 200), log: task.log.filter((line) => KEPT_LOG.test(line)).slice(-12), files: task.files?.map((file) => ({ ...file })), feedback: task.feedback };
 }
 
 export async function readInsightHistory(): Promise<ProjectAgentTask[]> {
