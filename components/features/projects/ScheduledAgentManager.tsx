@@ -25,10 +25,12 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
   };
   useEffect(() => {
     void load().catch(e => setError(String(e)));
+    const refresh = setInterval(() => { if (document.visibilityState === "visible") void load().catch(() => {}); }, 15000);
     void fetch("/api/projects").then(r => r.ok ? r.json() : []).then((data: Project[]) => {
       if (!Array.isArray(data)) return;
       setProjects(data); setProjectId(old => old || data[0]?.id || "");
     }).catch(() => {});
+    return () => clearInterval(refresh);
   }, []);
   async function send(method: "POST" | "PATCH", body: object) {
     setBusy(true); setError("");
@@ -104,7 +106,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
           }}>Delete</button>
         </div>
         {item.runs.length > 0 && <details className="text-xs"><summary>Execution history</summary>
-          {item.runs.slice().reverse().map(run => <p key={run.occurrence}>{new Date(run.occurrence).toLocaleString()} · {run.status} {run.taskId || ""} {run.error || ""}</p>)}
+          {item.runs.slice().reverse().map(run => <p key={run.occurrence}>{new Date(run.occurrence).toLocaleString()} · {run.status} {run.summary || run.taskId || ""} {run.error || ""}{run.changed ? " · Changed" : ""}</p>)}
         </details>}
       </article>)}
     </div>

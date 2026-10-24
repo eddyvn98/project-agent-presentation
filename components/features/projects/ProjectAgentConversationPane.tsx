@@ -34,6 +34,7 @@ import { useProjectAgentSubmit } from "./useProjectAgentSubmit";
 import { ProjectAgentTaskAnswer } from "./ProjectAgentTaskAnswer";
 import { ProjectAgentBrowserPreview } from "./ProjectAgentBrowserPreview";
 import { ProjectAgentScheduleApproval } from "./ProjectAgentScheduleApproval";
+import { ProjectAgentScheduleNotifications } from "./ProjectAgentScheduleNotifications";
 
 export function ProjectAgentConversationPane() {
 	const projectId = useProjectStore((state) => state.activeProjectId);
@@ -188,7 +189,7 @@ export function ProjectAgentConversationPane() {
 		<ProjectAgentSelectionAsk containerRef={conversationRef} onRevise={(text, instruction, title) => { setQuotes([{ text, note: `Revise only this passage of the draft${title ? ` "${title}"` : ""}: ${instruction}. Keep everything else unchanged and return the complete updated draft as a new Writing block.` }]); setReviseSend(true); }} onQuote={(text, note) => { setQuotes((current) => [...current, { text, note }].slice(-6)); window.requestAnimationFrame(() => formRef.current?.querySelector("textarea")?.focus()); }} />
 		<header className="sticky top-0 z-10 shrink-0 border-b border-slate-200/80 bg-white/90 px-5 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
 			<div className="mx-auto flex max-w-3xl items-center gap-3">
-				<button type="button" onClick={() => clearProjectAgentView(projectId)} aria-label="Back to Project chats" title="Back to Project chats" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"><ArrowLeft className="h-4 w-4" /></button><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-300"><Sparkles className="h-4 w-4" /></div><div className="min-w-0"><p className="truncate text-xs text-slate-500">{projectName}</p><p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100" title={chatTitle}>{visibleHeaderTitle || "Project Agent"}</p></div><ProjectAgentHeaderMenu projectId={projectId!} tasks={orderedTasks} fileUrl={fileHref} />
+				<button type="button" onClick={() => clearProjectAgentView(projectId)} aria-label="Back to Project chats" title="Back to Project chats" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"><ArrowLeft className="h-4 w-4" /></button><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-300"><Sparkles className="h-4 w-4" /></div><div className="min-w-0"><p className="truncate text-xs text-slate-500">{projectName}</p><p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100" title={chatTitle}>{visibleHeaderTitle || "Project Agent"}</p></div><ProjectAgentScheduleNotifications /><ProjectAgentHeaderMenu projectId={projectId!} tasks={orderedTasks} fileUrl={fileHref} />
 			</div>
 		</header>
 		<div ref={conversationRef} data-selectable-chat onScroll={(event) => { const element = event.currentTarget; shouldFollowRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 120; }} className="min-h-0 flex-1 overflow-y-auto px-4 py-8 sm:px-8">
