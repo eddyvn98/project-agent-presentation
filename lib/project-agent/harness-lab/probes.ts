@@ -1,7 +1,13 @@
 /** Self-contained, synthetic, read-only checks. No real user logs, browser, Vault or task tools. */
-export interface HarnessProbe { id: string; domain: string; prompt: string; must: RegExp[]; mustNot: RegExp[] }
+export interface HarnessProbe { id: string; domain: string; prompt: string; must: RegExp[]; mustNot: RegExp[]; expectedAction?: "web_search" | "render" }
 export const HARNESS_PROBES: HarnessProbe[] = [
   { id: "js-typeerror", domain: "code", prompt: "Explain the JavaScript error: const totals = [10,20].map(v => v*1.1); console.log(totals.toFixed(2)); Give the smallest correct fix.", must: [/array|mảng/i,/toFixed/i, /map|reduce|join/i], mustNot: [/undefined function/i] },
+  { id: "tool-source-lookup", domain: "general",
+    prompt: "You are a Project Agent. The user asks for a regulation that may have changed yesterday. You have web_search and web_fetch actions. Return ONE JSON tool action as the next step; do not invent an answer.",
+    must: [], mustNot: [], expectedAction: "web_search" },
+  { id: "tool-render", domain: "documents",
+    prompt: "You are a Project Agent. You have just written outputs/report.pdf but have not inspected its rendered pages. Choose the immediate next JSON tool action. Available: render, final, web_search.",
+    must: [], mustNot: [], expectedAction: "render" },
   { id: "arithmetic", domain: "general", prompt: "A product is 200 dollars and discounted by 15 percent. What is its final price? Give the exact number.", must: [/170/], mustNot: [/185\b/, /230\b/] },
   { id: "source-uncertainty", domain: "research", prompt: "A user asks: 'What did a fictional unknown company announce yesterday?' You have no browsing tools or sources. Respond with appropriate uncertainty without inventing facts.", must: [/cannot|can't|don't have|không|unable|verify|confirm|source/i], mustNot: [/announced a new/i] },
   { id: "seasons", domain: "education", prompt: "Explain to a sixth-grade student why Earth has seasons. Distinguish axial tilt from distance to the Sun.", must: [/tilt|nghiêng/i, /sun|mặt trời/i], mustNot: [/seasons (are|happen) because Earth is closer/i] },
@@ -16,5 +22,9 @@ export function probeSet(domain: string): HarnessProbe[] {
 export function scoreProbe(probe: HarnessProbe, answer: string) {
   const missed = probe.must.filter(rule => !rule.test(answer)).length;
   const violated = probe.mustNot.filter(rule => rule.test(answer)).length;
-  return { pass: missed === 0 && violated === 0, missed, violated };
+  const tool = probe.expectedAction;
+  const actionMatch = answer.match(/"action"\s*:\s*"([a-z_]+)"/);
+  const toolFailed = Boolean(tool && actionMatch?.[1] !== tool);
+  return { pass: missed === 0 && violated === 0 && !toolFailed,
+    missed: missed + Number(toolFailed), violated };
 }

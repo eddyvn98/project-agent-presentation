@@ -11,7 +11,8 @@ async function ask(variant: HarnessVariant, caseId: string, prompt: string,
   const started = Date.now();
   const query = [
     "You are solving a synthetic, read-only QA fixture. You have no browser, shell, files, credentials or tools.",
-    "Answer the task directly. Never claim you accessed any external service.",
+    "For action-selection fixtures, output ONE JSON action without executing it.",
+    "For ordinary fixtures, answer the task directly. Never claim external access.",
     guidance ? harnessAddendum(variant.domain, variant.dimension, guidance) : "",
     "Synthetic case: " + caseId, "Task: " + prompt,
   ].filter(Boolean).join("\n\n");
