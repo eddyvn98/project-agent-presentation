@@ -2,7 +2,7 @@ import { runProjectAgentTask } from "./dify-agent";
 import { updateProjectAgentTask } from "./task-store";
 import { autoTitleProjectAgentConversation } from "./chat-title";
 import { afterTaskForGoal } from "./goal-hook";
-import { enqueueDurableTask, withDurableTaskLease, scanDurableQueue } from "./durable-queue";
+import { enqueueDurableTask, withDurableTaskLease, scanDurableQueue } from "./durable-mongo-queue";
 
 import { PROJECT_AGENT_BOOT_ID, runningProjectAgentTasks as runningTasks } from "./boot";
 
@@ -16,7 +16,7 @@ export function startProjectAgentTask(taskId: string): void {
 	controllers.set(taskId, controller);
 	let actuallyRan = false;
 	const run = (async () => {
-		if (process.env.PROJECT_AGENT_DURABLE_QUEUE !== "1") { actuallyRan = true; return runProjectAgentTask(taskId, controller.signal); }
+		if (process.env.PROJECT_AGENT_DURABLE_QUEUE === "0") { actuallyRan = true; return runProjectAgentTask(taskId, controller.signal); }
 		await enqueueDurableTask(taskId);
 		actuallyRan = await withDurableTaskLease(taskId, async () => {
 			await runProjectAgentTask(taskId, controller.signal);
@@ -47,7 +47,7 @@ export function stopProjectAgentTask(taskId: string): boolean {
 
 /** Cron replays only durable jobs that were queued and never claimed. Uncertain side effects require review. */
 export async function tickDurableTasks(limit = 12): Promise<{ enqueued: number; uncertain: number }> {
-	if (process.env.PROJECT_AGENT_DURABLE_QUEUE !== "1") return { enqueued: 0, uncertain: 0 };
+	if (process.env.PROJECT_AGENT_DURABLE_QUEUE === "0") return { enqueued: 0, uncertain: 0 };
 	const found = await scanDurableQueue(limit);
 	for (const taskId of found.queued) startProjectAgentTask(taskId);
 	return { enqueued: found.queued.length, uncertain: found.uncertain };
