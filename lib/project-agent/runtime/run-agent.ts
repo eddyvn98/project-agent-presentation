@@ -31,6 +31,7 @@ import { newDirectState } from "./workspace-direct-apply";
 import { engineRefusal } from "./engines";
 import { delegateToSubAgent } from "./sub-agent";
 import { StallGuard, wrapUpQuery } from "./stall-guard";
+import { ActionReplayGuard, mayHaveExternalEffects } from "./action-replay-guard";
 import { checkHtmlPage, newOutputFiles, storeWorkbookValues } from "./outputs";
 import { isLargePdfOutput, storeLargePdfOutput } from "./large-output";
 import { render } from "./render-action";
@@ -163,6 +164,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 	const imageCalls = { value: 0 };
 	const maxSteps = input.maxSteps ?? MAX_STEPS;
 	const guard = new StallGuard();
+	const replay = new ActionReplayGuard();
 	const turnContext = new RuntimeTurnContext(input.userPrompt ?? input.query);
 	let wrapReason: string | null = null, wrapLeft = 1;
 	for (let step = 1; step <= maxSteps; step += 1) {
@@ -274,12 +276,22 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 				if (input.projectId) await saveScriptsOut(input.projectId, input.chatId).catch(() => 0);
 				return { answer: action.answer, conversationId, inlineFiles: files, promptTokens: totalPromptTokens ? estimateContextTokens(totalPromptTokens, rounds) : undefined, iterations: rounds, sources: input.sources };
 			}
+			const replayKey = spanKey(action.action, JSON.stringify({ ...action, note: undefined }));
+			const effectful = mayHaveExternalEffects(action);
+			const blocked = replay.before(action.action, replayKey, effectful);
+			if (blocked) {
+				input.onStep?.({ tool: "loop_blocked", detail: blocked });
+				results.push(blocked + " Change approach or return a partial final answer.");
+				guard.noteAction(replayKey, true);
+				break;
+			}
 			metrics.actions.set(action.action, (metrics.actions.get(action.action) ?? 0) + 1);
 			const actionStarted = Date.now();
 			const raw = await withPolicy(input, action, () => runAction(input, action, step, imageCalls, input.budget ?? (input.budget = { delegates: 0 }))) as Awaited<ReturnType<typeof runAction>>;
 			const outcome = action.action === "search_output" || action.action === "read_output" ? raw : await externalizeActionOutput(input, action.action, raw);
 			if (!input.depth && input.taskId) await recordContextCheckpoint(input, { taskId: input.taskId, step, action: action.action, failed: Boolean(outcome.failed), observation: outcome.text }).catch(() => {});
 			turnContext.record(action, outcome);
+			replay.record(action.action, replayKey, outcome.text, effectful);
 			metrics.actionMs += Date.now() - actionStarted;
 			if (action.action !== "wait" && action.action !== "plan") guard.noteAction(spanKey(action.action, JSON.stringify({ ...action, note: undefined })), Boolean(outcome.failed));
 			else guard.noteAction(`${action.action}:${step}`, Boolean(outcome.failed));
