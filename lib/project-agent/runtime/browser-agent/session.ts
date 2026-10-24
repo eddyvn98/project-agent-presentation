@@ -111,9 +111,10 @@ async function createBrowserSession(id: string, signal?: AbortSignal, owner?: st
 				}
 			},
 		};
-		page.on("console", (message) => { if (["error", "warning"].includes(message.type())) session!.console.push(`${message.type()}: ${message.text()}`); });
-		page.on("requestfailed", (request) => session!.network.push(`FAILED ${request.method()} ${request.url()} ${request.failure()?.errorText ?? ""}`));
-		page.on("response", (response) => session!.network.push(`${response.status()} ${response.request().method()} ${response.url()}`));
+		page.on("console", (message) => { if (!session!.authHost && ["error", "warning"].includes(message.type())) session!.console.push(`${message.type()}: ${message.text()}`); });
+		const redactedUrl = (raw: string) => { try { const u = new URL(raw); return u.origin + u.pathname.slice(0, 140); } catch { return "[unavailable]"; } };
+    page.on("requestfailed", (request) => session!.network.push(`FAILED ${request.method()} ${redactedUrl(request.url())}`));
+		page.on("response", (response) => session!.network.push(`${response.status()} ${response.request().method()} ${redactedUrl(response.url())}`));
 		sessions.set(id, session);
 		bindAbort(signal, () => { void session?.close(); });
 		return session;

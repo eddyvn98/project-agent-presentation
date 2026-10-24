@@ -240,7 +240,9 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 				}
 				case "scroll": await session.page.evaluate((direction) => window.scrollBy(0, direction === "down" ? innerHeight * 0.8 : -innerHeight * 0.8), action.direction ?? "down"); break;
 				case "screenshot": {
-					const bytes = await session.page.screenshot({ type: "jpeg", quality: 75, animations: "disabled" });
+					const sensitive = session.page.locator('input,textarea,select,[contenteditable="true"],[data-private],[data-sensitive]');
+          const bytes = await session.page.screenshot({ type: "jpeg", quality: 75, animations: "disabled",
+            mask: [sensitive], maskColor: "#64748b" });
 					if (input.taskId) await writeProjectAgentFile(input.taskId, renderFileId(step), bytes).catch(() => {});
 					return { text: "Browser screenshot captured.", image: await uploadRuntimeImage("browser-page.jpg", bytes, input.user, "image/jpeg") };
 				}
