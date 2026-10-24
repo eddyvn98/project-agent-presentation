@@ -29,6 +29,7 @@ vaultMonitor.unref?.();
 export interface BrowserSession {
 	browser: Browser;
 	owner?: string;
+	chatId?: string;
 	authHost?: string;
 	authMode?: "read" | "interact";
 	authVersion?: string;
@@ -64,7 +65,7 @@ async function getSharedBrowser(): Promise<Browser> {
 	return sharedBrowser;
 }
 
-async function routeGuard(context: BrowserContext): Promise<void> {
+async function routeGuard(context: BrowserContext, current: () => BrowserSession | undefined): Promise<void> {
 	await context.routeWebSocket(/.*/, async (socket) => {
 		try { await assertPublicWebSocketUrl(socket.url()); } catch { /* blocked below */ }
 		await socket.close();
@@ -72,6 +73,11 @@ async function routeGuard(context: BrowserContext): Promise<void> {
 	await context.route("**/*", async (route) => {
 		try {
 			const req = route.request();
+      const active = current();
+      if (active?.authMode === "read" && !["GET","HEAD","OPTIONS"].includes(req.method().toUpperCase())) {
+        await route.abort("blockedbyclient").catch(() => {});
+        return;
+      }
 			const { host: _host, "content-length": _length, ...headers } = await req.allHeaders();
 			const response = await guardedRequest(req.url(), {
 				method: req.method(), headers, body: req.postDataBuffer() ?? undefined,
@@ -108,7 +114,7 @@ async function createBrowserSession(id: string, signal?: AbortSignal, owner?: st
 		if (signal?.aborted) throw new Error("Browser task was stopped");
 		const browser = await getSharedBrowser();
 		context = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true, serviceWorkers: "block" });
-		await routeGuard(context);
+		await routeGuard(context, () => session);
 		const page = await context.newPage();
 		let closed = false;
 		session = {
@@ -178,7 +184,7 @@ export async function restorePersonalBrowserSession(session: BrowserSession, url
     serviceWorkers: "block", storageState: record.state,
   });
   try {
-    await routeGuard(next);
+    await routeGuard(next, () => session);
     const page = await next.newPage();
     const previous = session.context;
     session.context = next; session.page = page;
@@ -209,4 +215,11 @@ export async function assertPersonalBrowserPermission(session: BrowserSession, o
     "tabs","switch_tab","visual_observe","close"];
   if (record.grant.mode === "read" && !readOnly.includes(op))
     throw new Error("This website is authorized for read-only Agent access");
+}
+
+/** Deleting a task's sandbox must close its borrowed browser contexts, not its account Vault. */
+export async function closeBrowserSessionsForChat(chatId: string): Promise<void> {
+  await Promise.all([...sessions.values()]
+    .filter(session => session.chatId === chatId)
+    .map(session => session.close()));
 }

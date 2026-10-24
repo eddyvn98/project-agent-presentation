@@ -141,7 +141,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 	const id = input.taskId ?? input.chatId;
 	if (action.op === "close") { finishBrowserWatch(input.taskId ?? id); const session = await getBrowserSession(id, input.signal, input.ownerEmail); await session.close(); return { text: "Browser session closed." }; }
 	let session: BrowserSession;
-	try { session = await getBrowserSession(id, input.signal, input.ownerEmail); } catch (cause) { return { text: cause instanceof Error ? cause.message : "Could not start browser", failed: true }; }
+	try { session = await getBrowserSession(id, input.signal, input.ownerEmail); session.chatId = input.chatId; } catch (cause) { return { text: cause instanceof Error ? cause.message : "Could not start browser", failed: true }; }
 	const refDetail = action.ref ? snapshotRefLine(session.lastSnapshot, action.ref).replace(/\[ref=[^\]]+\]/, "").trim() : "";
 	const stepId = action.op === "screenshot" ? `render-${step}` : `browser-${step}`;
 	input.onStep?.({ tool: `browser_${action.op} #${stepId}`, detail: action.note || action.url || refDetail || action.ref || "" } satisfies RuntimeStep);

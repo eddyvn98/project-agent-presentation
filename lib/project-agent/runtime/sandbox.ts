@@ -155,6 +155,8 @@ export async function execInSandbox(chatId: string, command: string, timeoutSec 
 }
 
 export async function stopSandbox(chatId: string): Promise<void> {
+  // Revoke all task-scoped browser contexts before destroying the sandbox.
+  await import("./browser-agent/session").then(mod => mod.closeBrowserSessionsForChat(chatId));
 	const name = containerName(chatId);
 	clearTimeout(idleTimers.get(name));
 	idleTimers.delete(name);
