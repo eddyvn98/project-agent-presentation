@@ -26,7 +26,7 @@ function locatorForRef(session: BrowserSession, ref: string) {
 }
 
 function needsConfirmation(input: RuntimeInput, session: BrowserSession, label: string): boolean {
-	const prompt = (input.userPrompt ?? "").toLowerCase();
+	const prompt = (input.scheduledRun ? "" : input.userPrompt ?? "").toLowerCase();
 	let host = "";
 	try { host = new URL(session.page.url()).hostname.toLowerCase(); } catch { return true; }
 	return requiresUserConfirmation(label, prompt, host);
