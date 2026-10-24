@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { migrateLegacyScheduleFiles } from "@/lib/project-agent/scheduled-migration";
 import { dispatchDueSchedules } from "@/lib/project-agent/scheduled-worker";
+import { discoverProactiveOpportunities } from "@/lib/project-agent/proactive-store";
 import { tickDurableTasks } from "@/lib/project-agent/task-runner";
 import { tickWorkflowRuns } from "@/lib/project-agent/workflow-runner";
 
@@ -22,7 +23,8 @@ export async function POST(req: NextRequest) {
     const result = await dispatchDueSchedules();
     const queue = await tickDurableTasks();
     const workflows = await tickWorkflowRuns();
+    const proactive = await discoverProactiveOpportunities().catch(() => null);
     return NextResponse.json({ dispatched: result.filter(r => r.status === "dispatched").length,
-      attempted: result.length, queue, workflows, ...(migration ? { migration } : {}) });
+      attempted: result.length, queue, workflows, proactive, ...(migration ? { migration } : {}) });
   } catch { return NextResponse.json({ error: "Scheduler unavailable" }, { status: 503 }); }
 }
