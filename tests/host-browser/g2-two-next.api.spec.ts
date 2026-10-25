@@ -10,8 +10,17 @@ test("G2 two Next processes: single browser owner, takeover, remote Stop", async
     "Two isolated Next.js QA processes with common Mongo required");
   const aOrigin = new URL(baseURL!).origin;
   const bOrigin = process.env.G2_QA_OTHER_ORIGIN ?? "";
-  expect(aOrigin).toBe("http://127.0.0.1:3005");
-  expect(bOrigin).toBe("http://127.0.0.1:3006");
+  const first = new URL(aOrigin), secondHost = new URL(bOrigin);
+  const loopback = ["localhost", "127.0.0.1", "[::1]"];
+  expect(first.protocol).toBe("http:");
+  expect(secondHost.protocol).toBe("http:");
+  expect(loopback).toContain(first.hostname);
+  expect(secondHost.hostname).toBe(first.hostname);
+  expect(first.port).toBe("3005");
+  expect(secondHost.port).toBe("3006");
+  expect(process.env.P8_QA_ALLOWED_ORIGIN).toBe(aOrigin);
+  expect(aOrigin).toBe(first.origin);
+  expect(bOrigin).toBe(secondHost.origin);
   const second = await http.newContext({
     baseURL: bOrigin, storageState: process.env.P7_OWNER_STORAGE_STATE!,
   });
