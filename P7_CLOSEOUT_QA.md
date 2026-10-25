@@ -41,6 +41,34 @@ PROJECT_AGENT_P7_QA_FIXTURE=1
 Chromium must be installed for the **host process**. Keep the established
 SSRF/private-network guards unchanged.
 
+**Current blocker (25 Oct 2026):** Existing Playwright storage-state files yield
+an **empty NextAuth session**, and port 3004 is an active **non-isolated**
+development host. Do not run Stop or create QA fixtures on port 3004.
+Start a new isolated synthetic-only instance on 3005 or 3006 and obtain two
+valid `@project-agent.test` signed-in storage states using its supported dev
+login flow. Do not fabricate cookies, copy real browser profiles, or
+use production Entra accounts. The session preflight queries only
+`/api/auth/session` and prints no session payloads or secrets.
+
+```bash
+export P7_ISOLATED_QA=1
+export P7_HOST_BASE_URL=http://127.0.0.1:3005 # match the isolated host
+# Also set P7_OWNER_EMAIL, P7_OTHER_EMAIL, and BOTH Playwright storage-state paths.
+npm run p7:qa:session # live, read-only check of both signed-in identities
+```
+
+After confirming isolation and auth, explicitly permit mutations on this exact
+host only:
+
+```bash
+export P7_QA_MUTATION_ALLOWED_ORIGIN=$P7_HOST_BASE_URL
+export P7_ALLOW_QA_STOP=1
+```
+
+The `test:host:p7:closeout` command runs the session preflight in mutation
+mode **before** Playwright; any missing session, wrong identity, or mismatched
+approved origin aborts before fixture creation or Stop.
+
 ## Single local-agent QA pass
 
 ```bash
