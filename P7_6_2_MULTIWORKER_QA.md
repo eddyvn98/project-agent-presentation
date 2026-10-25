@@ -5,6 +5,28 @@ The preceding [P7.6.1 local mock E2E](P7_STATUS.md) **PASS** used a
 single-process runner with `PROJECT_AGENT_DURABLE_QUEUE=0`. That result
 does **not** prove cross-worker lease ownership or recovery.
 
+## Reported local results at source SHA 602f8cca
+
+- Source-module atomic-fake lease tests: **10/10 PASS**.
+- Two real Node OS processes and isolated MongoDB `127.0.0.1:27019`:
+  **3/3 PASS**. Exactly one action after claim competition;
+  expired worker quarantined with zero replay; Stop fenced both workers
+  with zero actions.
+- Ephemeral `p7_multiworker_qa_*` database was dropped, while the operator
+  verified the existing QA database remained intact.
+- `tsc --noEmit` and `git diff --check` PASS.
+- A failed invocation using `node --input-type=module` made child processes
+  inherit incompatible flags; direct file entrypoint subsequently passed.
+- **Acceptance classification:** Mongo/process smoke PASS. Full two-Next.js
+  worker runtime is OPEN; no real Dify/Entra contacted.
+
+**Follow-up hardening since SHA 602f8cca:** `task-terminal-guard.ts`
+adds atomic Stop versus `done/failed` Mongo filters; the worker result
+path uses guarded terminal writes and preserves snapshots/metrics only
+when its CAS wins. Regression is
+`tests/agent/p7-terminal-write-stop-race.test.ts`.
+This new code has not yet been retested on the host.
+
 ## What is under test
 
 1. **Two workers claim one queued task:** exactly one Mongo
@@ -70,12 +92,11 @@ never SKIP-as-PASS.
 | Service lifecycle | Heartbeat while busy, restart, stale worker final writes and repeated concurrent Stop |
 | Production release | Entra, external Dify and staging are **out of scope** here |
 
-**Important unresolved concurrency property:** Revoking the lease prevents
+**Important remaining concurrency property:** Revoking the lease prevents
 future lease-fenced tool calls; it cannot undo an external operation already
-dispatched before Stop. A late model result must also be prevented from
-overwriting terminal Stop with `done`. Full runtime acceptance needs a
-conditional terminal write in the host task repository plus a real two-host
-test with a controllable loopback tool. Do not claim production readiness
-from the process-level Mongo filter test alone.
+dispatched before Stop. Source-level conditional terminal writes are now
+implemented to prevent late `done`, but require local host regression
+and full two-host runtime validation with a controllable loopback tool.
+Do not claim production readiness from Mongo process smoke alone.
 
 No CI and no merges to `main`/`staging`.
