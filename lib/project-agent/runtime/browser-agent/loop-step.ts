@@ -11,7 +11,8 @@ export async function runP8BrowserLoopStep<T extends BrowserResult>(
   notify: ((step: RuntimeStep) => void) | undefined,
   execute: () => Promise<T>,
 ): Promise<T> {
-  if (!browserLoopEnabled()) return execute();
+  // Scene inspection is read-only: unchanged DOM is not a failed action.
+  if (action.op === "inspect_scene" || !browserLoopEnabled()) return execute();
   const record = (outcome: "verified" | "unverified" | "failed" | "blocked") => {
     const prior = browserLoopStatus(taskId)?.phase;
     recordBrowserLoopOutcome(taskId, action.op, outcome);
