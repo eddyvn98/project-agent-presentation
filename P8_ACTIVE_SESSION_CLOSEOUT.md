@@ -13,7 +13,9 @@ until reproduced under a connected in-memory session.
 - **The actual authenticated `/tasks/{taskId}/browser/control` POST route**
   owns the `qa_prepare` action. It opens a real Chromium session,
   loads the existing CSP-restricted P7 HTML via `page.setContent`,
-  captures a masked JPEG and returns a synthetic click point.
+  captures a masked JPEG and returns a synthetic click point. A QA-only
+  context router denies all outbound web requests; the closeout requires
+  `networkAttempts=0` through prepare, takeover and handback.
 - QA session is registered in a process-local bridge to survive separate
   Next route module instances in the **same** OS process. Browser Watch,
   takeover control and P8 numeric loop state use process-global maps, still
@@ -48,7 +50,7 @@ Server environment (example: port 3006):
 PROJECT_AGENT_RUNTIME=sandbox
 PROJECT_AGENT_BROWSER_AGENT=1
 PROJECT_AGENT_P7_QA_FIXTURE=1
-PROJECT_AGENT_P7_QA_PROJECT_ID=<synthetic-project-id>
+PROJECT_AGENT_P7_QA_PROJECT_ID=YOUR_SYNTHETIC_QA_PROJECT_ID
 PROJECT_AGENT_P8_LOOP=1
 PROJECT_AGENT_P8_LOOP_REPORT_ONLY=0
 PROJECT_AGENT_P8_QA_SESSION=1
@@ -67,7 +69,7 @@ control and task creation require exact local Origin and synthetic owner.
 ```bash
 export P7_ISOLATED_QA=1
 export P7_HOST_BASE_URL=http://127.0.0.1:3006
-export P7_PROJECT_ID=<synthetic-project-id>
+export P7_PROJECT_ID=YOUR_SYNTHETIC_QA_PROJECT_ID
 export P7_OWNER_STORAGE_STATE=/secure/path/owner.json
 export P7_OWNER_EMAIL=owner@project-agent.test
 export P7_NONMEMBER_STORAGE_STATE=/secure/path/nonmember.json
