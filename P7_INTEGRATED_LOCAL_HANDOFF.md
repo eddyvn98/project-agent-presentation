@@ -27,6 +27,39 @@ Install the matching Playwright Chromium browser for the **host process** or set
 
 For real Entra SSO, the operator must separately ensure that `http://127.0.0.1:3004/api/auth/callback/azure-ad` (or the actual provider ID) is registered as a supported redirect URI and that the NextAuth secret/client ID/client secret/tenant and public origin are configured for this QA host. Dev credentials are **not** evidence of Entra login.
 
+## Local QA blockers identified on 2026-10-25
+
+The clean-clone Node tests and in-memory Chromium preflight passed. **The authenticated host tests were
+not run** because the isolated Next.js QA server at `127.0.0.1:3004` was unreachable / returned
+an Internal Server Error, and the private QA `NEXTAUTH_URL` still pointed to `localhost:3002`.
+These are two separate blockers. Neither is a confirmed Browser Agent failure.
+
+Before generating any QA Project, exporting storage states or starting Playwright, run the
+**anonymous, read-only** readiness probe (requires no authentication secrets):
+
+```bash
+export P7_HOST_BASE_URL=http://127.0.0.1:3004
+npm run p7:qa:readiness
+```
+
+The probe reports a short status-only result: `HOST_UNREACHABLE` for connection/timeouts,
+`HOST_SERVER_ERROR` for HTTP 5xx, and `AUTH_PROVIDERS_UNAVAILABLE` for a broken NextAuth
+providers endpoint. It does not retrieve authenticated Project data or print page bodies. If
+it fails, **stop here** and inspect the isolated Next.js server's stderr, start command,
+bound interface/port and build logs. Do not guess that missing Chromium caused an HTTP 500.
+
+Once the host responds, configure its private `.env.local` or QA process environment to use
+`NEXTAUTH_URL=http://127.0.0.1:3004` (or `AUTH_URL` as appropriate), restart the
+**QA process only**, and run `npm run p7:qa:sso` with `P7_HOST_ENV_FILE` pointing at the
+actual QA config. Keep the main process on `3003` unchanged. Ensure the provider metadata
+callback uses the QA origin. No repository default should override operator credentials or
+quietly rewrite Microsoft Entra redirect URIs.
+
+The development-only P7 synthetic fixture refuses `NODE_ENV=production`, even on localhost.
+Use an isolated development/test instance with synthetic dev credentials, not a production
+server with the QA flag enabled. Read-only GET requests can omit the Origin header; POST,
+PATCH and DELETE still require a matching Origin to protect synthetic QA mutations.
+
 ## Single integrated QA sequence for the local agent
 
 ```bash
@@ -45,6 +78,7 @@ Set `P7_HOST_BASE_URL=http://127.0.0.1:3004`, `P7_HOST_ENV_FILE` (private host e
 `P7_OWNER_STORAGE_STATE` and `P7_OTHER_STORAGE_STATE`. Never print or commit storage state. Run:
 
 ```bash
+npm run p7:qa:readiness
 npm run p7:qa:sso
 export P7_ISOLATED_QA=1
 npm run p7:qa:create
