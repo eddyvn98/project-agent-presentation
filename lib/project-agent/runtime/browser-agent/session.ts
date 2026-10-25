@@ -188,13 +188,15 @@ export function closeAllBrowserSessions(): Promise<void> {
 }
 
 const operationLocks = new WeakMap<BrowserSession, Promise<void>>();
-export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promise<T>, countAgentAction = true): Promise<T> {
+/** Accounting and ownership are independent: fixture setup may be uncounted Agent work. */
+export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promise<T>,
+  countAgentAction = true, ownershipMode: "agent" | "human" = "agent"): Promise<T> {
 	const preceding = operationLocks.get(session) ?? Promise.resolve();
 	let unlock!: () => void;
 	const current = new Promise<void>((resolve) => { unlock = resolve; });
 	operationLocks.set(session, preceding.then(() => current));
 	await preceding;
-  try { await assertG2BrowserOwnership(session, countAgentAction ? "agent" : "human"); }
+  try { await assertG2BrowserOwnership(session, ownershipMode); }
   catch (error) { unlock(); throw error; }
 	if (session.page.isClosed() || !session.browser.isConnected()) { unlock(); throw new Error("Browser session is closed"); }
 	if (countAgentAction) session.operationCount += 1;
