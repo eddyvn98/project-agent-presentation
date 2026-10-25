@@ -90,6 +90,23 @@ Stop races, restart, cross-worker idempotency or real Dify/Entra. Its
 runtime success does not retroactively turn the earlier three failed
 synthetic tasks into successes.
 
+## P7.6.2 — Multi-worker Mongo recovery (implementation in progress)
+
+Added cross-worker Stop lease revocation in `durable-mongo-queue.ts`
+and `task-stop.ts`, with a mock-backed source-module regression and
+a separate disposable real-Mongo smoke harness spawning two OS workers.
+The harness checks one claim/one action, crash/expiry quarantine and
+remote Stop blocking the next action. It is restricted to a fresh
+`p7_multiworker_qa_*` database on `127.0.0.1:27019`.
+
+**Not yet executed against the local QA Mongo server by ChatGPT**:
+this environment has no MongoDB process/driver and cannot access the
+operator's localhost. The DB harness also does not exercise the full
+two-Next-host Agent runtime. See
+[P7.6.2 QA runbook](P7_6_2_MULTIWORKER_QA.md). Keep the production gate
+open until the local agent returns clean SHA-specific results, including
+proof that Stop cannot be overwritten by a late `done` status update.
+
 ## Acceptance gates remaining before production
 
 | Priority | Gate | Evidence so far | Remaining to close |
@@ -97,7 +114,7 @@ synthetic tasks into successes.
 | P0 | Microsoft Entra authentication and authorization | Dev synthetic session/metadata only | Authorized test-tenant sign-in/out, callback URI, expiry/revocation and owner/nonmember isolation |
 | P0 | Real Dify / app calculator transport | Loopback stub API flow only; 3 model tasks `failed` | **Wait for explicit API-key/external Dify approval**, then controlled real tool dispatch, exact receipt, timeouts, permissions and cost |
 | P0 | Task creation, retry, Stop and idempotency | **7/7 API PASS**, **P7.6.1 one-worker mock E2E PASS**, CAS/Stop closeout **2/2 PASS** | Durable cross-worker lease, Stop fencing, no duplicate external action after restart |
-| P0 | Chromium crash and multi-worker recovery | **1/1 PASS** for one isolated synthetic session | Multiple workers, concurrent takeover, lease fencing, restart and resource ownership |
+| P0 | Chromium crash and multi-worker recovery | **1/1 single-session PASS**; P7.6.2 QA harness/Stop revocation committed, unexecuted | Two-worker QA DB results, full runtime, concurrent takeover, terminal Stop fencing, restart and resource ownership |
 | P0 | Security and data isolation | **10 safety PASS** plus host ACL/Origin/artifact checks | Full threat review, SSRF/ACL regression breadth, audit/secrets/retention, QA route disabled in production |
 | P1 | Operational release controls | Isolated development QA only | Production-like staging smoke, build, rollback, monitoring, capacity and failure-response runbook |
 
