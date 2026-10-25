@@ -2,6 +2,7 @@ import { readInsightHistory } from "./insights-store";
 import { taskIssue } from "./task-issue";
 import { listSchedules } from "./scheduled-store";
 import { listAgentApprovals } from "./agent-approvals";
+import { readP8LoopCounters } from "./p8-loop-metrics";
 
 export interface AgentMetricDay {
   date: string; completed: number; failed: number; tokens: number; durationSeconds: number;
@@ -12,6 +13,7 @@ export interface AgentObservability {
   durationSeconds: number; avgDurationSeconds: number;
   pendingApprovals: number; activeSchedules: number;
   loopStopped: number; needsReview: number; toolFailures: number;
+  p8Actions: number; p8Verified: number; p8Unverified: number; p8Interventions: number; p8Blocked: number;
   days: AgentMetricDay[]; recent: Array<{ id: string; status: string; createdAt: string;
     durationSeconds: number; tokens: number; error?: string }>;
 }
@@ -39,12 +41,16 @@ export async function accountAgentObservability(owner: string): Promise<AgentObs
   let completed = 0, failed = 0, tokens = 0, outputTokens = 0, durationSeconds = 0;
   let estimatedCostUsd = 0, priced = 0;
   let loopStopped = 0, needsReview = 0, toolFailures = 0;
+  let p8Actions = 0, p8Verified = 0, p8Unverified = 0, p8Interventions = 0, p8Blocked = 0;
   for (const task of tasks) {
     const used = tokenCount(task.log ?? []), seconds = duration(task);
     const issue = taskIssue(task.error ?? "");
     if (issue?.kind === "loop" || task.log.some(line => /stall_stop|loop_blocked/.test(line))) loopStopped++;
     if (issue?.needsReview) needsReview++;
     toolFailures += Number((task.log.findLast(line => line.includes("metrics ::")) ?? "").match(/failed=(\d+)/)?.[1] ?? 0);
+    const p8 = readP8LoopCounters(task.log ?? []);
+    p8Actions += p8.actions; p8Verified += p8.verified; p8Unverified += p8.unverified;
+    p8Interventions += p8.interventions; p8Blocked += p8.blocked;
     tokens += used; durationSeconds += seconds;
     const metric = task.log.findLast(s => s.includes("metrics ::")) ?? "";
     outputTokens += Number(metric.match(/out_total=(\d+)/)?.[1] ?? 0);
@@ -67,6 +73,7 @@ export async function accountAgentObservability(owner: string): Promise<AgentObs
       Math.round(estimatedCostUsd * 1_000_000) / 1_000_000 : null,
     durationSeconds, avgDurationSeconds: finished ? Math.round(durationSeconds / finished) : 0,
     loopStopped, needsReview, toolFailures,
+    p8Actions, p8Verified, p8Unverified, p8Interventions, p8Blocked,
     pendingApprovals: approvals.filter(a => a.state === "pending" && Date.parse(a.expiresAt) > Date.now()).length,
     activeSchedules: schedules.filter(s => s.status === "active").length,
     days: [...dates.values()],
