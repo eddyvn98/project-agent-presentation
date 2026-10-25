@@ -13,6 +13,28 @@ const OP_TIMEOUT_MS = 30_000;
 const IDLE_CLOSE_MS = 5 * 60_000;
 const sessions = new Map<string, BrowserSession>();
 const pendingSessions = new Map<string, Promise<BrowserSession>>();
+/** Only synthetic P8 QA gets a process-shared session bridge across Next route bundles. */
+const qaGlobal = globalThis as typeof globalThis & {
+  __projectAgentP8QaSessions?: Map<string, BrowserSession>;
+};
+const qaSessions = qaGlobal.__projectAgentP8QaSessions ??= new Map<string, BrowserSession>();
+const qaActive = (id: string) => {
+  if (process.env.PROJECT_AGENT_P8_QA_SESSION !== "1" || process.env.NODE_ENV === "production") return null;
+  const session = qaSessions.get(id);
+  if (session && (session.page.isClosed() || !session.browser.isConnected())) {
+    qaSessions.delete(id); return null;
+  }
+  return session ?? null;
+};
+export function registerP8QaBrowserSession(id: string, session: BrowserSession): void {
+  if (process.env.PROJECT_AGENT_P8_QA_SESSION !== "1" ||
+      !["development", "test"].includes(process.env.NODE_ENV ?? "") ||
+      !/^pat_[a-f0-9]{12}$/.test(id)) throw new Error("P8 QA browser registry disabled");
+  if ([...qaSessions.keys()].some(other => other !== id))
+    throw new Error("Only one isolated P8 synthetic browser fixture may be active");
+  qaSessions.set(id, session);
+}
+
 const slots = new BrowserSlotPool(MAX_CONTEXTS);
 let sharedBrowser: Promise<Browser> | null = null;
 let browserIdleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -102,7 +124,7 @@ async function routeGuard(context: BrowserContext, current: () => BrowserSession
 }
 
 export async function getBrowserSession(id: string, signal?: AbortSignal, owner?: string): Promise<BrowserSession> {
-	const existing = sessions.get(id);
+	const existing = sessions.get(id) ?? qaActive(id);
 	if (existing) { if (existing.page.isClosed() || !existing.browser.isConnected()) { await existing.close(); return getBrowserSession(id, signal, owner); } if (owner && existing.owner && existing.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); if (owner && !existing.owner) existing.owner = owner.trim().toLowerCase(); existing.lastUsed = Date.now(); return existing; }
 	const pending = pendingSessions.get(id);
 	if (pending) { const result = await pending; if (owner && result.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); return result; }
@@ -148,10 +170,16 @@ async function createBrowserSession(id: string, signal?: AbortSignal, owner?: st
 }
 
 /** Read-only peek: a watcher must not launch an extra browser session. */
-export function activeBrowserSession(id: string): BrowserSession | null { return sessions.get(id) ?? null; }
+export function activeBrowserSession(id: string): BrowserSession | null { return sessions.get(id) ?? qaActive(id); }
 
-export function closeBrowserSession(id: string): Promise<void> { return sessions.get(id)?.close() ?? Promise.resolve(); }
-export function closeAllBrowserSessions(): Promise<void> { return Promise.all([...sessions.keys()].map(closeBrowserSession)).then(() => {}); }
+export function closeBrowserSession(id: string): Promise<void> {
+  const current = sessions.get(id) ?? qaSessions.get(id);
+  qaSessions.delete(id);
+  return current?.close() ?? Promise.resolve();
+}
+export function closeAllBrowserSessions(): Promise<void> {
+  return Promise.all([...new Set([...sessions.keys(), ...qaSessions.keys()])].map(closeBrowserSession)).then(() => {});
+}
 
 const operationLocks = new WeakMap<BrowserSession, Promise<void>>();
 export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promise<T>, countAgentAction = true): Promise<T> {
