@@ -119,6 +119,30 @@ review: OPEN; G4 staging and production readiness: OPEN.** See
    Next version, browser version, PASS/FAIL/SKIP, retry count and elapsed time.
    The report must distinguish *observed progress* from *goal completion*.
 
+## G2 Mongo browser ownership development (acceptance OPEN)
+
+Existing P7 Mongo task leases prevent double task dispatch but do
+not share live P8 Chromium sessions between Next OS processes. G2 adds
+an **off-by-default, synthetic-only** browser ownership CAS ledger:
+`projectAgentBrowserOwnership`, lease token, worker ID, epoch/revision,
+owner-checked agent/human transitions, heartbeat, remote Stop revocation,
+expiry quarantine and explicit reviewed **fresh-session** recovery.
+The RAM-only automatic handback cannot bypass Mongo in G2 mode.
+
+Focused Node test `npm run test:g2:unit`: **4/4 PASS** from
+byte-identical source/test GitHub blobs. The suite validates atomic
+claim, stale revision, Stop fencing and quarantine/review. Tests are
+not evidence of real Chromium recovery. Added:
+`npm run test:g2:multiworker:db` (two actual Node processes + real
+isolated Mongo) and `npm run test:host:g2` (two actual Next workers +
+Chromium control and remote Stop). Both **NOT RUN** here: no QA Mongo,
+host dependencies/auth or two Next processes available. Integrated
+TypeScript and P7/P8/G1 focused host regressions are **NOT RUN** here.
+A controlled Next-worker crash/restart and explicit review remain a
+separate host acceptance gate. See
+[G2 detailed QA handoff](G2_MULTIWORKER_QA.md) and
+[P8 status](P8_STATUS.md). Do not close G2 until host evidence exists.
+
 ## Release gates remaining after P8 + bounded G1 synthetic acceptance
 
 - State is **process-local RAM** (30-minute TTL, 16 events/task, 64 tasks).
