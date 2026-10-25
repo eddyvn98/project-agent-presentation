@@ -66,13 +66,37 @@ production readiness.
   synthetic tasks are QA artifacts, not successful model results. Preserve
   their provenance and clean up only under the isolated QA manifest policy.
 
+## P7.6.1 — local mock runtime E2E (operator-reported PASS)
+
+**PASS within synthetic/local scope**, not production acceptance. The local
+AI-WEB-CHAT QA clone started an isolated temporary host on port 3006, issued
+an HTTP 202 task, and completed the task end-to-end using a single worker
+with `PROJECT_AGENT_RUNTIME=sandbox` and **`PROJECT_AGENT_DURABLE_QUEUE=0`**.
+A Dify-shaped SSE mock listening exclusively on `127.0.0.1:3999` received
+exactly **one** streaming request, responded with `agent_message` and
+`message_end`, and returned a valid final model action. Task receipt:
+`pat_7b4f9d029c42`, `status=done`, nonempty conversation ID, coherent
+creation/completion timestamps, zero artifacts, and result text:
+
+`P7.6.1 local mock runtime succeeded: task completed end-to-end.`
+
+Post-completion auto-title attempted a **dummy** loopback endpoint on
+`127.0.0.1:9` and logged `fetch failed`; the completed task remained
+`done`. No non-loopback Dify request was sent. Port 3006/mock were
+stopped; QA 3005 was left untouched.
+
+**Not proven by P7.6.1:** Mongo lease ownership, heartbeat, expiry,
+Stop races, restart, cross-worker idempotency or real Dify/Entra. Its
+runtime success does not retroactively turn the earlier three failed
+synthetic tasks into successes.
+
 ## Acceptance gates remaining before production
 
 | Priority | Gate | Evidence so far | Remaining to close |
 | --- | --- | --- | --- |
 | P0 | Microsoft Entra authentication and authorization | Dev synthetic session/metadata only | Authorized test-tenant sign-in/out, callback URI, expiry/revocation and owner/nonmember isolation |
 | P0 | Real Dify / app calculator transport | Loopback stub API flow only; 3 model tasks `failed` | **Wait for explicit API-key/external Dify approval**, then controlled real tool dispatch, exact receipt, timeouts, permissions and cost |
-| P0 | Task creation, retry, Stop and idempotency | **7/7 API PASS** with loopback stub; CAS/Stop synthetic closeout **2/2 PASS** | Successful end-to-end Agent completion, durable lease, no duplicate external action after restart |
+| P0 | Task creation, retry, Stop and idempotency | **7/7 API PASS**, **P7.6.1 one-worker mock E2E PASS**, CAS/Stop closeout **2/2 PASS** | Durable cross-worker lease, Stop fencing, no duplicate external action after restart |
 | P0 | Chromium crash and multi-worker recovery | **1/1 PASS** for one isolated synthetic session | Multiple workers, concurrent takeover, lease fencing, restart and resource ownership |
 | P0 | Security and data isolation | **10 safety PASS** plus host ACL/Origin/artifact checks | Full threat review, SSRF/ACL regression breadth, audit/secrets/retention, QA route disabled in production |
 | P1 | Operational release controls | Isolated development QA only | Production-like staging smoke, build, rollback, monitoring, capacity and failure-response runbook |
@@ -86,8 +110,9 @@ whether an external provider was contacted.
 
 **P7.6 — Production gate closure (first).** The loopback API and
 single-session crash tests now have focused PASS evidence. Next prioritize
-successful end-to-end Agent completion with a controlled mock/local runtime,
-then multi-worker lease/restart testing and a security threat review.
+multi-worker lease/restart testing as P7.6.2, then a security
+threat review; the one-worker mock/local runtime E2E is now accepted only
+within its explicitly disabled durable-queue configuration.
 The external Dify calculator remains **blocked pending explicit user approval**
 for API-key use and non-loopback traffic. Real Entra login requires an
 authorized test tenant and must not be replaced by synthetic session evidence.
