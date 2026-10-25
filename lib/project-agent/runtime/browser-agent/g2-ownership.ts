@@ -31,6 +31,7 @@ export async function bindG2BrowserOwnership(
   const claim = await claimBrowserLease(await collection(), id,
     owner!, PROJECT_AGENT_BOOT_ID);
   if (!claim) throw new Error("Browser owned by another worker or needs review");
+  session.g2RefEpoch = claim.epoch;
   const heartbeat = setInterval(() => {
     void collection().then(coll => renewBrowserLease(coll, claim))
       .then(ok => { if (!ok) void session.close(); })
