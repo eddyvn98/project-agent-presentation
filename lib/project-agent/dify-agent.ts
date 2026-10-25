@@ -14,6 +14,7 @@ import { loadProjectAgentTaskContext } from "./task-context"; import type { Proj
 import { resolveDifyConversationId } from "./conversation";
 import { autoCompactIfNeeded } from "./auto-compact"; import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
 import { routeModelSelector } from "./runtime/usage-pricing"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
+import { commitTaskTerminalIfActive } from "./task-terminal-guard";
 import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
 const MAX_VISUAL_REVIEW_PASSES = 4;
 export function projectAgentDifyUser(ownerEmail: string, projectId: string): string {
@@ -263,35 +264,35 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		await updateProjectAgentTask(task.id, { logLine: "app_stage :: saving_results" });
 		const finished = await readProjectAgentTask(task.id).catch(() => null);
 		await saveTaskWorkLog(task.projectId, projectOwnerEmail, describeTaskWork(finished ?? task, latestFiles.map((file) => file.name), savedSources)).catch(() => {});
-		return updateProjectAgentTask(task.id, {
-			status: "done",
-			completedAt: new Date().toISOString(),
-			...conversationPatch(conversationId),
+		const accepted = await commitTaskTerminalIfActive(task, "done", {
+			completedAt: new Date().toISOString(), ...conversationPatch(conversationId),
 			...(message.promptTokens ? { contextTokens: message.promptTokens } : {}),
-			resultText: latestAnswer,
-			...(runtimeSources.length ? { sources: runtimeSources } : {}),
+			resultText: latestAnswer, ...(runtimeSources.length ? { sources: runtimeSources } : {}),
 			files: latestFiles,
-			...(latestFiles.length > 0 ? { filesExpireAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() } : {}),
+			...(latestFiles.length ? { filesExpireAt: new Date(Date.now() + 86400000).toISOString() } : {}),
 			logLine: "Dify Project Agent completed",
-		}).then(async (completed) => { const saved = await retainProjectHindsight(completed); if (saved) void updateProjectAgentTask(task.id, { logLine: "hindsight :: retained completed task" }).catch(() => {}); return reflect(completed); });
+		});
+		const completed = await readProjectAgentTask(task.id);
+		if (!completed) throw new Error("Project Agent task disappeared during completion");
+		if (!accepted) return completed; // Stop won the terminal CAS.
+		const saved = await retainProjectHindsight(completed);
+		if (saved) void updateProjectAgentTask(task.id, { logLine: "hindsight :: retained completed task" }).catch(() => {});
+		return reflect(completed);
 	} catch (cause) {
 		await partialQueue;
 		const cancelled = Boolean(signal?.aborted);
 		const message = cancelled ? "Stopped by you." : cause instanceof Error ? cause.message : String(cause);
-		return updateProjectAgentTask(task.id, {
-			status: "failed",
-			...(cancelled ? { cancelled: true } : {}),
-			completedAt: new Date().toISOString(),
-			...conversationPatch(conversationId),
+		const accepted = await commitTaskTerminalIfActive(task, "failed", {
+			completedAt: new Date().toISOString(), ...conversationPatch(conversationId),
 			...(runtimeSources.length ? { sources: runtimeSources } : {}),
-			...(latestFiles.length > 0 ? {
-				files: latestFiles,
-				filesExpireAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-				...(latestAnswer ? { resultText: latestAnswer } : {}),
-			} : {}),
-			error: message,
-			logLine: `failed: ${message}`,
-		}).then(reflect);
+			...(latestFiles.length ? { files: latestFiles,
+				filesExpireAt: new Date(Date.now() + 86400000).toISOString(),
+				...(latestAnswer ? { resultText: latestAnswer } : {}) } : {}),
+			error: message, logLine: `failed: ${message}`,
+		});
+		const failed = await readProjectAgentTask(task.id);
+		if (!failed) throw new Error("Project Agent task disappeared during failure handling");
+		return accepted ? reflect(failed) : failed;
 	} finally {
 		// Board turns this task left running (for example after a crash mid-apply) must refuse a late commit once the task is over.
 		await cancelTaskWorkspaceTurns(task.id).catch(() => {});
