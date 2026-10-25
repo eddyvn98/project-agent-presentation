@@ -25,7 +25,8 @@ recovery or staging/production readiness.
 WebMCP scene inspection and safe 3D viewer](UI_TARS_SUPERSPLAT_UPGRADE.md).
 No second computer-control runtime or extra model dependency is installed.
 The WebMCP feature is disabled by default and needs a compatible browser;
-3D embedding needs a separately secured host viewer route.
+3D embedding requires `enable3DViewer` opt-in and a separately secured
+host viewer route; merely receiving an agent-ui block does not load HTML.
 
 ## Integration
 
