@@ -213,6 +213,41 @@ Run the focused check before the host suite:
 npx vitest run --config vitest.agent.config.ts tests/agent/p7-qa-recovery-race.test.ts
 ```
 
+## P7.5 post-acceptance hardening: never replay uncertain running tasks
+
+The latest local AI-WEB-CHAT report for isolated synthetic QA is **31/31 host Playwright
+PASS (0 FAIL, 0 SKIP)**, focused P7 Vitest **9/9** and preflight Node **6/6**.
+These are local-agent results for its QA host checkout, not freshly rerun results
+for every subsequent Presentation commit.
+
+The previous non-durable `recoverProjectAgentTask` path restarted a running
+task with an old server boot ID once. Because a browser, upload or other external
+tool may have already acted before the crash, that automatic replay was unsafe.
+The P7.5 recovery policy now:
+
+- Defaults to waiting for **Mongo durable lease** when `PROJECT_AGENT_DURABLE_QUEUE`
+  is unspecified, matching `task-runner.ts`; explicit `0` uses legacy handling.
+- Re-dispatches only never-started `queued` tasks that are not cancelled.
+- Marks an orphaned, previously running legacy task `failed` with a
+  **manual-review-required** message, without executing its tools again.
+- Preserves terminal tasks and never dispatches an explicitly cancelled task.
+- Leaves live non-durable tasks alone even if their last update is old.
+
+Focused regressions:
+`tests/agent/p7-task-recovery-policy.test.ts` and
+`tests/agent/p7-task-recovery-integration.test.ts`. On the local agent, run:
+
+```bash
+npx vitest run --config vitest.agent.config.ts tests/agent/p7-task-recovery-policy.test.ts tests/agent/p7-task-recovery-integration.test.ts
+npm run test:agent
+```
+
+**Operational tradeoff:** A task interrupted mid-execution requires inspection
+and an explicit retry rather than silent continuation. This policy does not
+replace host-side Mongo compare-and-swap for concurrent Stop versus status
+writes, nor does it validate real Entra SSO. Do not claim production approval
+on synthetic QA alone.
+
 ## Known limitations
 
 The development-only fixture tests Chromium/watch/handback mechanics; it does not demonstrate an AI model autonomously selecting a browser tool on a real public site. Ordinary Dify workflow and production Entra sign-in require separate integration verification. All new tests must be run in the actual Next.js QA host, not just the neutral demo. Source-level edits made through GitHub alone do not prove host PASS. Respect the 300-line file policy and never include credentials in logs or reports.
