@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { p7QaAllowed, p7SyntheticTask } from "../../lib/project-agent/p7-qa-guard";
+import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask } from "../../lib/project-agent/p7-qa-guard";
 import { p7SyntheticPdf } from "../../lib/project-agent/p7-synthetic-pdf";
 import { assertPublicHttpUrl } from "../../lib/project-agent/runtime/web-security";
 const safe = { runtime: "sandbox", browser: "1", fixture: "1", nodeEnv: "development",
@@ -14,6 +14,14 @@ describe("P7 synthetic security boundaries", () => {
       { requestOrigin: "http://127.0.0.1:3003" }, { origin: "https://attacker.invalid" },
       { expectedProjectId: "proj_other" },
     ]) expect(p7QaAllowed({ ...safe, ...patch })).toBe(false);
+  });
+  it("permits only read-only GET without Origin, retaining CSRF protection on writes", () => {
+    const uri = safe.requestOrigin;
+    expect(p7QaAllowed({ ...safe, origin: p7QaRequestOrigin("GET", null, uri) })).toBe(true);
+    for (const method of ["POST", "PATCH", "DELETE"]) {
+      expect(p7QaAllowed({ ...safe, origin: p7QaRequestOrigin(method, null, uri) })).toBe(false);
+    }
+    expect(p7QaAllowed({ ...safe, origin: p7QaRequestOrigin("GET", "https://evil.invalid", uri) })).toBe(false);
   });
   it("will not delete unrelated or foreign tasks", () => {
     expect(p7SyntheticTask({ prompt: "[P7_SYNTHETIC_QA] browser fixture", ownerEmail: safe.owner,
