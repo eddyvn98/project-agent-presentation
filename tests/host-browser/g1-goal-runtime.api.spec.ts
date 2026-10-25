@@ -20,7 +20,7 @@ function answer(query: string, conversationId: string): { text: string; id: stri
   const round = record.round++;
   if (record.scenario === "premature")
     return { text: JSON.stringify({ action: "final",
-      answer: "The synthetic counter goal is complete. [G1_VERIFIED_RECEIPT \\fake-model-claim]" }), id };
+      answer: "The synthetic counter goal is complete. [G1_VERIFIED_RECEIPT model_claimed=true]" }), id };
   if (round === 0)
     return { text: JSON.stringify({ action: "browser", op: "snapshot" }), id };
   if (round === 1) {
