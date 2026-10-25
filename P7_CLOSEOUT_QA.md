@@ -41,14 +41,17 @@ PROJECT_AGENT_P7_QA_FIXTURE=1
 Chromium must be installed for the **host process**. Keep the established
 SSRF/private-network guards unchanged.
 
-**Current blocker (25 Oct 2026):** Existing Playwright storage-state files yield
-an **empty NextAuth session**, and port 3004 is an active **non-isolated**
-development host. Do not run Stop or create QA fixtures on port 3004.
-Start a new isolated synthetic-only instance on 3005 or 3006 and obtain two
-valid `@project-agent.test` signed-in storage states using its supported dev
-login flow. Do not fabricate cookies, copy real browser profiles, or
-use production Entra accounts. The session preflight queries only
-`/api/auth/session` and prints no session payloads or secrets.
+**Status update (25 Oct 2026):** The earlier missing/empty synthetic
+NextAuth sessions and isolated QA-host blocker were resolved locally in an
+AI-WEB-CHAT integration worktree. The operator reported isolated QA on port
+3005 with separate Mongo/PostgreSQL/data and synthetic owner/nonmember
+identities. **CAS/Stop closeout 2/2 PASS**, while host API still has
+**21 PASS, 6 intentional SKIP**; this is not production acceptance.
+See [P7_STATUS.md](P7_STATUS.md) for exact evidence and remaining gates.
+Port 3004 remains a non-isolated dev host: do not run Stop or destructive QA
+fixtures there. When rebuilding isolated QA, use the documented login-state
+preflight; never fabricate cookies, copy real Chrome profiles or use
+production identities.
 
 ```bash
 export P7_ISOLATED_QA=1
