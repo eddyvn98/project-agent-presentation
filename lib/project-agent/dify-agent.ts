@@ -282,7 +282,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		const cancelled = Boolean(signal?.aborted);
 		const message = cancelled ? "Stopped by you." : cause instanceof Error ? cause.message : String(cause);
 		const accepted = await commitTaskTerminalIfActive(task, "failed", {
-			completedAt: new Date().toISOString(), ...conversationPatch(conversationId),
+			...(cancelled ? { cancelled: true } : {}), completedAt: new Date().toISOString(), ...conversationPatch(conversationId),
 			...(runtimeSources.length ? { sources: runtimeSources } : {}),
 			...(latestFiles.length ? { files: latestFiles,
 				filesExpireAt: new Date(Date.now() + 86400000).toISOString(),
