@@ -17,7 +17,7 @@ const taskId = "pat_123456789abc";
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(browserControlState).mockReturnValue({ paused: false, revision: 0 });
-  vi.mocked(closeBrowserSession).mockResolvedValue();
+  vi.mocked(closeBrowserSession).mockResolvedValue(undefined);
 });
 describe("P7 rejected Chromium fixture cleanup", () => {
   it("removes Watch frame, releases control and closes the task session", async () => {
