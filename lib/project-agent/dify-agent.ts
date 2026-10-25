@@ -12,7 +12,7 @@ import { stripProjectSourceReadRequests } from "./large-source-reader";
 import { loadDefaultMemoryContext, loadProjectChatContext } from "./project-chat-context";
 import { loadProjectAgentTaskContext } from "./task-context"; import type { ProjectAgentTask, ProjectAgentTaskSource } from "./types";
 import { resolveDifyConversationId } from "./conversation";
-import { autoCompactIfNeeded } from "./auto-compact"; import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
+import { autoCompactIfNeeded } from "./auto-compact"; import { readProjectAgentTask, updateProjectAgentTask, recordGuardedTerminalTask } from "./task-store";
 import { routeModelSelector } from "./runtime/usage-pricing"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
 import { commitTaskTerminalIfActive } from "./task-terminal-guard";import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
 const MAX_VISUAL_REVIEW_PASSES = 4;
@@ -274,9 +274,9 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		const completed = await readProjectAgentTask(task.id);
 		if (!completed) throw new Error("Project Agent task disappeared during completion");
 		if (!accepted) return completed; // Stop won the terminal CAS.
+		await recordGuardedTerminalTask(completed);
 		const saved = await retainProjectHindsight(completed);
-		if (saved) void updateProjectAgentTask(task.id, { logLine: "hindsight :: retained completed task" }).catch(() => {});
-		return reflect(completed);
+		if (saved) void updateProjectAgentTask(task.id, { logLine: "hindsight :: retained completed task" }).catch(() => {}); return reflect(completed);
 	} catch (cause) {
 		await partialQueue;
 		const cancelled = Boolean(signal?.aborted);
@@ -291,7 +291,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		});
 		const failed = await readProjectAgentTask(task.id);
 		if (!failed) throw new Error("Project Agent task disappeared during failure handling");
-		return accepted ? reflect(failed) : failed;
+		if (accepted) await recordGuardedTerminalTask(failed); return accepted ? reflect(failed) : failed;
 	} finally {
 		// Board turns this task left running (for example after a crash mid-apply) must refuse a late commit once the task is over.
 		await cancelTaskWorkspaceTurns(task.id).catch(() => {});
