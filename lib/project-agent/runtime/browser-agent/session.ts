@@ -58,6 +58,7 @@ export interface BrowserSession {
 	chatId?: string;
 	authHost?: string;
 	authMode?: "read" | "interact";
+  g2RefEpoch?: number;
 	authVersion?: string;
   lastAuthSavedAt?: number;
 	context: BrowserContext;
