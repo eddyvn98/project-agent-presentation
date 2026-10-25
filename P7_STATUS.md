@@ -41,16 +41,41 @@ real Chrome user profile, or external Dify actions were exercised.
 At the time of the report, QA port 3005 was intentionally left running for
 review; do not stop or delete its resources without operator approval.
 
+## Follow-up: safe per-gate local checks (operator-reported)
+
+These checks were run after the isolated host acceptance above on the dirty
+AI-WEB-CHAT integration worktree. They are **additional evidence**, not a
+replacement for the earlier 21-PASS/6-SKIP host API suite or proof of
+production readiness.
+
+- **Task creation/retry/idempotency API: 7/7 PASS** using a Dify stub restricted
+  to loopback, with no external network requests. **Three synthetic tasks
+  ended `failed`** because the real model/runtime was not configured.
+  These API passes establish request routing, retry and idempotency behavior
+  only; they **do not prove successful Agent execution**.
+- **Chromium crash/recovery: 1/1 PASS**, confined to a single synthetic
+  browser session. No multi-worker, concurrent-lease or distributed crash
+  recovery validation was performed.
+- **QA/SSRF guards: 10 safety checks PASS**. Prior host checks also passed
+  scoped access, Origin and artifact controls. This is **focused security
+  evidence**, not a completed security audit or penetration test.
+- **External Dify/API-key access: NOT AUTHORIZED / NOT RUN.** A separate
+  explicit confirmation was requested but **not received**. Do not send any
+  external Dify request, expose credentials or imply the real calculator ran.
+- No production/Entra identity was used. The three intentionally failed
+  synthetic tasks are QA artifacts, not successful model results. Preserve
+  their provenance and clean up only under the isolated QA manifest policy.
+
 ## Acceptance gates remaining before production
 
-| Priority | Gate | Required proof |
-| --- | --- | --- |
-| P0 | Microsoft Entra authentication and authorization | Authorized test-tenant sign-in/out, callback URI, session expiry/refresh, owner/nonmember isolation and expired/revoked session denial |
-| P0 | Real Dify / app calculator transport | End-to-end tool dispatch, exact results and receipts, error/timeouts, access restrictions and controlled cost with explicitly enabled integration |
-| P0 | Task creation, retry, Stop and idempotency | Authorized nonproduction task creation/retry, concurrent requests, no double execution after restart, durable lease and CAS observed in real DB |
-| P0 | Chromium crash and multi-worker recovery | Controlled process/browser failure, frame/session cleanup, takeover ownership, restart handling, explicit approval to retry uncertain external actions |
-| P0 | Security and data isolation | SSRF/private-network denial, file/history/frame ACLs, synthetic/QA endpoints disabled in production, secret handling, audit traces and retention |
-| P1 | Operational release controls | Production-like staging smoke, build/typecheck, rollback, monitoring/alerts, resource ceilings and failure recovery runbook |
+| Priority | Gate | Evidence so far | Remaining to close |
+| --- | --- | --- | --- |
+| P0 | Microsoft Entra authentication and authorization | Dev synthetic session/metadata only | Authorized test-tenant sign-in/out, callback URI, expiry/revocation and owner/nonmember isolation |
+| P0 | Real Dify / app calculator transport | Loopback stub API flow only; 3 model tasks `failed` | **Wait for explicit API-key/external Dify approval**, then controlled real tool dispatch, exact receipt, timeouts, permissions and cost |
+| P0 | Task creation, retry, Stop and idempotency | **7/7 API PASS** with loopback stub; CAS/Stop synthetic closeout **2/2 PASS** | Successful end-to-end Agent completion, durable lease, no duplicate external action after restart |
+| P0 | Chromium crash and multi-worker recovery | **1/1 PASS** for one isolated synthetic session | Multiple workers, concurrent takeover, lease fencing, restart and resource ownership |
+| P0 | Security and data isolation | **10 safety PASS** plus host ACL/Origin/artifact checks | Full threat review, SSRF/ACL regression breadth, audit/secrets/retention, QA route disabled in production |
+| P1 | Operational release controls | Isolated development QA only | Production-like staging smoke, build, rollback, monitoring, capacity and failure-response runbook |
 
 Do not merge to `main`/`staging` or enable production tasks until these gates
 are measured in a controlled environment. The six skipped API tests should
@@ -59,12 +84,14 @@ whether an external provider was contacted.
 
 ## Proposed next development sequence
 
-**P7.6 — Production gate closure (first).** Build a repeatable opt-in
-acceptance matrix with precise test flags, synthetic/staging credentials,
-read-only preflight, and receipts showing which actions actually ran. Start
-with controlled task creation/retry + Dify calculator, followed by isolated
-crash injection. Real Entra login requires an authorized test tenant and must
-never be silently replaced with a fabricated session.
+**P7.6 — Production gate closure (first).** The loopback API and
+single-session crash tests now have focused PASS evidence. Next prioritize
+successful end-to-end Agent completion with a controlled mock/local runtime,
+then multi-worker lease/restart testing and a security threat review.
+The external Dify calculator remains **blocked pending explicit user approval**
+for API-key use and non-loopback traffic. Real Entra login requires an
+authorized test tenant and must not be replaced by synthetic session evidence.
+For every gate retain SHA, environment, PASS/FAIL/SKIP and a redacted receipt.
 
 **P8 — Assisted autonomous browser workflows (after P7.6 gates).**
 Use a small benchmark of authorized real-world web tasks to select DOM-first
