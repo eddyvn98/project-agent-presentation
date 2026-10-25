@@ -6,7 +6,7 @@
 **G1 SINGLE-WORKER + LOOPBACK MOCK MODEL + SYNTHETIC DOM: ACCEPTED
 (operator-reported PASS).**
 **REAL DIFY/MODEL SEMANTIC GOAL ACCEPTANCE: OPEN.**
-**G2 MULTI-WORKER BROWSER RECOVERY: OPEN.**
+**G2 MULTI-WORKER BROWSER RECOVERY: OPEN — SOURCE/QA HARNESS IMPLEMENTED, HOST E2E NOT RUN.**
 **G3 SECURITY/AUTHORIZED INTEGRATION: OPEN.**
 **G4 PRODUCTION RELEASE: NOT APPROVED.**
 
@@ -88,7 +88,8 @@ The Dify-shaped SSE mock listened only on `127.0.0.1:3998`.
   on that field. The local host test removed that assertion and instead
   asserted a positive numeric `p8Verified` inside the trusted final
   receipt (**observed 2**). **No runtime guard changed.** The original
-  source test therefore needs parity correction before reuse unchanged.
+  source test has since been corrected on `gpt/full-project-agent`:
+  public `G1_VERIFIED_RECEIPT` must contain numeric `p8Verified > 0`.
   Public task access does NOT prove task-log visibility or persistence.
 - Local operator reports cleanup of QA Project/tasks, synthetic run
   Mongo/PostgreSQL databases, auth storage states and `.env.local`;
@@ -116,7 +117,8 @@ outputs, SHA and redacted fixture receipts with the local QA handoff.
 | G1 goal completion: real single worker + local mock SSE + synthetic Chromium DOM | CLOSED, operator-reported 2/2 |
 | G1 premature model-final rejection / trusted receipt gate | CLOSED, operator-reported |
 | Real provider / ordinary Dify goal completion and tool continuation | OPEN, requires separate authorization |
-| Real multi-Next-worker browser session ownership, failover and Stop fencing | OPEN |
+| G2 browser ownership CAS source and deterministic Node tests | IMPLEMENTED, unit 4/4 PASS |
+| G2 real Mongo/two processes and Next+Chromium crash recovery | OPEN, host E2E NOT RUN |
 | Real Entra, real Dify, security audit, staging and production rollout | OPEN, separately authorized |
 
 ## Next gates, in order
@@ -128,9 +130,10 @@ mock-model / synthetic DOM** G1 acceptance on the operator's report.
 See [G1 local runtime QA](G1_LOCAL_RUNTIME_QA.md) for exact scenario
 and reproducible setup. The positive and premature-final negative tests
 both PASS; four localhost model POSTs were counted. The original source
-test's public `task.log` assertion was removed **only in the integrated
-host test** and replaced with a trusted receipt `p8Verified > 0` check
-(observed 2). No G1 runtime guard was weakened.
+test's public `task.log` assertion is now removed in **both** the
+integrated host and Presentation test source. Both check the public
+receipt's numeric `p8Verified > 0` (host observed 2); no runtime guard
+was weakened.
 
 **Still outside this G1 acceptance:** production-like tool failure,
 malformed responses, timeout and Stop race matrices; handback/stale-plan
@@ -139,15 +142,41 @@ A local mock cannot establish success with a real model or ordinary Dify;
 that belongs to authorized integration/security acceptance (G3).
 No additional external Dify/Entra/model calls are authorized here.
 
-### G2 — Two genuine Next.js workers and session recovery
+### G2 — Mongo-fenced browser ownership: IMPLEMENTED / ACCEPTANCE OPEN
 
-Use two OS processes with shared QA Mongo and a controlled routing topology.
-Validate single session ownership or an explicit affinity/coordinator
-strategy: concurrent takeovers, remote Stop, lease expiry, worker crash and
-restart, stale worker fencing, task/control revision, Watch visibility,
-cleanup and no duplicate irreversible action. A process-local global Map
-must fail closed; it cannot be described as cross-process persistence.
-Report pass/fail separately for browser continuity and durable task leases.
+Root cause: P7 task queue leases protect work dispatch, but P8 Chromium,
+Watch and human-control state live in each worker's RAM. A process-local
+`globalThis` bridge cannot transfer a Chromium tab to another OS process.
+
+Source development adds an opt-in, **nonproduction/synthetic only**
+`projectAgentBrowserOwnership` Mongo CAS ledger. The runtime binds the
+browser to an exact worker/token/epoch and verifies ownership before
+agent or manual operations; human takeover/handback increment a shared
+revision. Remote Stop revokes ownership. Expired/crashed ownership is
+quarantined, not reclaimed automatically; reviewed recovery requires a
+fresh browser and a newer epoch, **not** old-tab serialization/replay.
+The former RAM-only takeover expiry is disabled in G2 mode (fail closed).
+
+New executable QA evidence:
+- **Node contract tests 4/4 PASS, 0 FAIL, 0 SKIP**, executed in this
+  environment from byte-identical GitHub blobs
+  (`tests/node/g2-browser-lease.test.mjs`,
+  `g2-lease-core.mjs`).
+- **Two real Node processes + Mongo:** `test:g2:multiworker:db`
+  authored, **NOT RUN** (Mongo QA and host-installed driver unavailable
+  here). Four cases: atomic ownership, human revision, Stop, crash/review.
+- **Two genuine Next.js processes + Chromium:** `test:host:g2`
+  authored, **NOT RUN** (host NextAuth/DB/browser unavailable here).
+  It covers owner contention, in-owner handback and remote Stop,
+  but NOT a Next-process SIGKILL/restart.
+- P7/P8/G1 focused suites and integrated host TypeScript: **NOT RUN**
+  in this source-authoring environment; require local QA results.
+
+See [G2 multi-worker handoff](G2_MULTIWORKER_QA.md). **G2 remains
+OPEN** pending actual two-worker DB/Next runs, crash/lease expiry
+quarantine, deliberate owner-reviewed fresh restart, old action fencing
+and no duplicate side-effect receipts. This is neither transparent browser
+migration nor a production exactly-once guarantee.
 
 ### G3 — Security and authorized integration
 
