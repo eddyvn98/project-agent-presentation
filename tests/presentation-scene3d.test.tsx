@@ -10,9 +10,15 @@ const source = JSON.stringify({ type: "scene3d", title: "Synthetic room",
   caption: "3D reconstruction", viewerUrl: valid });
 
 describe("safe click-to-load 3D presentation", () => {
+  it("is disabled by default until host opts into safe 3D asset serving", () => {
+    const { container } = render(<ProjectAgentRichBlock source={source} />);
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open 3D viewer" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("Visual unavailable");
+  });
   it("does not load executable HTML until the user explicitly opens it", async () => {
     const user = userEvent.setup();
-    const { container } = render(<ProjectAgentRichBlock source={source} />);
+    const { container } = render(<ProjectAgentRichBlock source={source} enable3DViewer />);
     expect(screen.getByText("Synthetic room")).toBeTruthy();
     expect(container.querySelector("iframe")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Open 3D viewer" }));
