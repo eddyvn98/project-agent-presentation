@@ -30,6 +30,35 @@ test("active owner browser status is available without exposing image content", 
   expect(data).toHaveProperty("control");
 });
 
+test("opt-in Browser Watch returns a real protected JPEG frame", async ({ request, baseURL }) => {
+  test.skip(process.env.P7_ALLOW_BROWSER_WATCH !== "1" || !qaTask(),
+    "Requires P7_ALLOW_BROWSER_WATCH=1 and an active synthetic QA browser session");
+  test.setTimeout(90_000);
+  const watch = taskBase() + "/" + encodeURIComponent(qaTask()) + "/browser";
+  const origin = new URL(baseURL!).origin;
+  const enabled = await request.post(watch, { headers: { Origin: origin },
+    data: { watch: true }, failOnStatusCode: false });
+  expect(enabled.ok()).toBe(true);
+  try {
+    let available = false;
+    for (let i = 0; i < 12; i++) {
+      const status = await request.get(watch, { failOnStatusCode: false });
+      const body = await status.json() as { preview?: { hasImage?: boolean } };
+      if (body.preview?.hasImage) { available = true; break; }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    expect(available, "Agent did not create a new browser frame in the active QA session").toBe(true);
+    const image = await request.get(watch + "?image=1", { failOnStatusCode: false });
+    expect(image.status()).toBe(200);
+    expect(image.headers()["content-type"]).toContain("image/jpeg");
+    const bytes = await image.body();
+    expect([...bytes.subarray(0, 2)]).toEqual([0xff, 0xd8]);
+  } finally {
+    await request.post(watch, { headers: { Origin: origin },
+      data: { watch: false }, failOnStatusCode: false });
+  }
+});
+
 test("optional safe takeover and handback on a dedicated test session", async ({ request, baseURL }) => {
   test.skip(!allowControl() || !qaTask(), "Requires P7_ALLOW_BROWSER_CONTROL=1 and a running QA browser task");
   const origin = new URL(baseURL!).origin;
