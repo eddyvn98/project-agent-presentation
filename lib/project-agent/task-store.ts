@@ -263,6 +263,12 @@ export async function updateProjectAgentTask(
 	}
 	return next;
 }
+/** Persist secondary receipts after guarded Mongo terminal CAS. */
+export async function recordGuardedTerminalTask(task: ProjectAgentTask): Promise<void> {
+  await writeLegacySnapshot(task).catch(() => {});
+  void recordFinishedTask(task);
+  if (task.log.some(line => line.includes("metrics ::"))) void scoreLessonTrials(task).catch(() => {});
+}
 
 export async function failStaleProjectAgentTask(task: ProjectAgentTask): Promise<ProjectAgentTask> {
 	if (!isProjectAgentTaskStale(task)) return task;
