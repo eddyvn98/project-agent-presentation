@@ -14,13 +14,12 @@ certification. No real Entra/Dify API or external website is contacted.
 | Secrets / frames | Screenshot masks cover sensitive inputs; Browser Watch history is RAM-only, opt-in and purged on Watch-off; Watch/traffic URL display now hides paths, queries and fragments | Browser session cookies/vault grants, screenshots of sensitive non-input page text, retention and destruction review |
 | Console / network logs | Untrusted browser console message text is replaced by severity-only message; network diagnostics store origin, not path or URL query | End-to-end redaction of other runtime logs, headers, stack traces, Dify prompts and downloadable evidence |
 | Browser audit | `browser-security-policy.ts` hashes high-impact labels and writes 30-day TTL records; production audit failures now throw (fail closed) | DB failure integration, audit ACL, retention deployment policy and security monitoring |
-| Terminal write / Stop | `task-terminal-guard.ts` conditionally writes to host collection `project_agent_tasks` and refuses stale `done` after Stop; queue Stop revokes Mongo lease | Integrated host typing, two-worker runtime with bounded loopback mock and proof that all tool sites honor the fence |
+| Task start / terminal write / Stop | `task-terminal-guard.ts` conditionally writes queued → running and running → done/failed to host `project_agent_tasks`; Stop also uses CAS and revokes the lease | Integrated host typing, two-worker runtime with bounded loopback mock, all tool sites honoring fences |
 
 ## Focused code and regression changes
 
-- `tests/agent/p7-terminal-write-stop-race.test.ts`: Stop-first,
-  completion-first, lease loss, owner mismatch, aborted error and queued
-  failure are checked against a CAS-capable Mongo fake.
+- `tests/agent/p7-terminal-write-stop-race.test.ts`: Stop-first, completion-first, queued-start after Stop, lease loss,
+  owner mismatch, aborted error and queued failure are checked against a CAS-capable Mongo fake.
 - `tests/agent/p7-security-review.test.ts`: credential URL, mixed DNS,
   metadata/loopback addresses, QA owner/Origin/production flags, Watch
   URL/console redaction and audit failures.
