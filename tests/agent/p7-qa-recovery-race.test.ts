@@ -116,6 +116,25 @@ describe("P7 synthetic browser recovery race", () => {
     })).rejects.toThrow("frame failed");
     expect(await withP7SyntheticRecoverySlot(id, async () => 42)).toBe(42);
   });
+  it("cleans when conditional Mongo update throws after preparation", async () => {
+    let cleans = 0;
+    await expect(recoverP7SyntheticBrowser({
+      task: source(), projectId, owner, controlPaused: () => false,
+      prepare: async () => ({ hasFrame: true }), readTask: async () => source(),
+      markRunning: async () => { throw new Error("Mongo unavailable"); },
+      cleanup: async () => { cleans++; },
+    })).rejects.toThrow("Mongo unavailable");
+    expect(cleans).toBe(1);
+  });
+  it("discards a prepared session with no JPEG rather than retaining Watch", async () => {
+    let cleans = 0;
+    await expect(recoverP7SyntheticBrowser({
+      task: source(), projectId, owner, controlPaused: () => false,
+      prepare: async () => ({ hasFrame: false }), readTask: async () => source(),
+      markRunning: async () => true, cleanup: async () => { cleans++; },
+    })).rejects.toThrow("no frame");
+    expect(cleans).toBe(1);
+  });
   it("cleans when preparation throws after creating a browser session", async () => {
     let cleans = 0;
     await expect(recoverP7SyntheticBrowser({
