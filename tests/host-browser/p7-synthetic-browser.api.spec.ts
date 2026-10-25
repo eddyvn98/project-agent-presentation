@@ -1,13 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { taskBase, projectId } from "./qa-helpers";
+import { taskBase, projectId, restoreSyntheticBrowserFixture } from "./qa-helpers";
 const enabled = () => process.env.P7_ALLOW_BROWSER_CONTROL === "1" &&
   Boolean(process.env.P7_RUNNING_BROWSER_TASK_ID) && Boolean(process.env.P7_FIXTURE_BUTTON_X);
 const fixture = () => `/api/projects/${encodeURIComponent(projectId())}/agent/p7-qa`;
 const taskId = () => process.env.P7_RUNNING_BROWSER_TASK_ID!;
 const watch = () => `${taskBase()}/${encodeURIComponent(taskId())}/browser`;
 
-test("in-memory Chromium produces a real private JPEG Watch frame", async ({ request }) => {
+test("in-memory Chromium produces a real private JPEG Watch frame", async ({ request, baseURL }) => {
   test.skip(!enabled(), "Bootstrap synthetic browser fixture and opt in to Watch");
+  await restoreSyntheticBrowserFixture(request, baseURL);
   const response = await request.get(watch(), { failOnStatusCode: false });
   expect(response.status()).toBe(200);
   expect((await response.json() as { preview: { hasImage: boolean } }).preview.hasImage).toBe(true);
@@ -18,6 +19,7 @@ test("in-memory Chromium produces a real private JPEG Watch frame", async ({ req
 });
 test("owner performs synthetic manual click and returns control", async ({ request, baseURL }) => {
   test.skip(!enabled(), "Requires local synthetic browser and browser-control opt-in");
+  await restoreSyntheticBrowserFixture(request, baseURL);
   const headers = { Origin: new URL(baseURL!).origin };
   const endpoint = watch() + "/control";
   let acquired = false;
@@ -52,9 +54,30 @@ test("nonmember cannot access synthetic browser fixture", async ({ playwright, b
     expect([401, 403, 404].includes(response.status())).toBe(true);
   } finally { await ctx.dispose(); }
 });
+test("Watch off purges private frames; synthetic rehydration restores a fresh JPEG", async ({ request, baseURL }) => {
+  test.skip(!enabled() || process.env.P7_SYNTHETIC_BROWSER_TASK !== "1",
+    "Requires a synthetic browser fixture with explicit recovery");
+  await restoreSyntheticBrowserFixture(request, baseURL);
+  const origin = new URL(baseURL!).origin;
+  const disabled = await request.post(watch(), {
+    headers: { Origin: origin }, data: { watch: false }, failOnStatusCode: false,
+  });
+  expect(disabled.status()).toBe(200);
+  const cleared = await (await request.get(watch())).json() as { preview: unknown };
+  expect(cleared.preview).toBeNull();
+  const absent = await request.get(watch() + "?image=1", { failOnStatusCode: false });
+  expect(absent.status()).toBe(404);
+  await restoreSyntheticBrowserFixture(request, baseURL);
+  const restored = await (await request.get(watch())).json() as
+    { preview: { hasImage: boolean; sequence: number } };
+  expect(restored.preview.hasImage).toBe(true);
+  expect(restored.preview.sequence).toBeGreaterThan(0);
+});
+
 test("crashed isolated Chromium can be replaced and yields a fresh frame", async ({ request, baseURL }) => {
   test.skip(!enabled() || process.env.P7_ALLOW_BROWSER_CRASH !== "1",
     "Requires isolated QA process and explicit browser-crash opt-in");
+  await restoreSyntheticBrowserFixture(request, baseURL);
   const headers = { Origin: new URL(baseURL!).origin };
   const prior = await (await request.get(watch())).json() as { preview: { sequence: number } };
   const crashed = await request.patch(fixture(), { headers, data: { kind: "crash", taskId: taskId() },
