@@ -56,3 +56,25 @@ test("checks live owner and nonmember NextAuth session before reporting readines
     await assert.rejects(p7SessionPreflight(env, requester, true), /MUTATION_ALLOWED_ORIGIN/);
   } finally { rmSync(folder, { recursive: true, force: true }); }
 });
+test("empty NextAuth response aborts before testing nonmember or any mutation", async () => {
+  const folder = mkdtempSync(join(tmpdir(), "p7-empty-session-"));
+  const state = join(folder, "owner.json");
+  writeFileSync(state, JSON.stringify({ cookies: [], origins: [] }));
+  let opened = 0, disposed = 0;
+  const env = {
+    P7_ISOLATED_QA: "1", P7_HOST_BASE_URL: "http://127.0.0.1:3005",
+    P7_OWNER_STORAGE_STATE: state, P7_OTHER_STORAGE_STATE: state,
+    P7_OWNER_EMAIL: "owner@project-agent.test", P7_OTHER_EMAIL: "other@project-agent.test",
+  };
+  try {
+    await assert.rejects(p7SessionPreflight(env, {
+      newContext: async () => {
+        opened++;
+        return { get: async () => ({ status: () => 200, json: async () => ({}) }),
+          dispose: async () => { disposed++; } };
+      },
+    }), /NextAuth session is empty/);
+    assert.equal(opened, 1);
+    assert.equal(disposed, 1);
+  } finally { rmSync(folder, { recursive: true, force: true }); }
+});
