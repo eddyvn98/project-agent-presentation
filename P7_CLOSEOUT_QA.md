@@ -13,6 +13,10 @@ fixture mode in a production process.
   a `@project-agent.test` task owner. Employee tasks are not affected.
 - Synthetic Mongo recovery CAS now **requires `updatedAt`**. A missing
   version is a conflict, never an unconditional write.
+- Both CAS and the read-only mapping probe use the host-declared
+  `COLLECTION = "project_agent_tasks"` (snake_case), not the obsolete
+  `projectAgentTasks`. The host-schema contract compares the **actual**
+  `services/mongodb/projectAgentTasks.repo.ts` declaration to the adapter.
 - Owner-only `GET /api/projects/:projectId/agent/p7-qa?taskId=...&verifyCas=1`
   compares the stored synthetic task with the expected collection, `_id`,
   owner, Project, prompt, status and timestamp. It returns
@@ -52,6 +56,20 @@ npm run test:agent
 npx tsc --noEmit
 ```
 
+**Required host-schema gate** (run after pulling into the AI-WEB-CHAT host
+checkout, where `services/mongodb/projectAgentTasks.repo.ts` exists):
+
+```bash
+npm run test:p7:host-schema
+# Or from standalone Presentation checkout, point to the real host source:
+P7_HOST_TASK_REPO_PATH=/absolute/path/to/AI-WEB-CHAT/services/mongodb/projectAgentTasks.repo.ts npm run test:p7:host-schema
+```
+
+The contract **fails** when the host repository file is missing; no synthetic
+fallback/skip is treated as a PASS. It must confirm `project_agent_tasks`
+before the authenticated `verifyCas=1` E2E check. Never change Mongo data
+to satisfy this source-level check.
+
 Set the same authenticated QA variables documented in
 `P7_INTEGRATED_LOCAL_HANDOFF.md`. In particular, provide
 `P7_HOST_BASE_URL`, `P7_OWNER_STORAGE_STATE`, `P7_OTHER_STORAGE_STATE`,
@@ -75,7 +93,8 @@ Never delete an untracked Project or reuse a production database.
 
 ## Acceptance gates
 
-1. Host schema probe returns HTTP 200 and `casMappingVerified:true`.
+1. Source-level host-schema contract PASS, then host schema probe returns
+   HTTP 200 and `casMappingVerified:true`.
    If it returns 409, check the **host-owned** task repository's collection
    name, `_id` type and `updatedAt` representation. There is no fallback
    to an unconditional `markRunning` update.
