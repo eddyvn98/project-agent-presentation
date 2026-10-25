@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { test, expect } from "@playwright/test";
-import { projectId, taskBase } from "./qa-helpers";
+import { taskBase } from "./qa-helpers";
 
 const id = () => process.env.P7_EXISTING_FILE_TASK_ID ?? "";
 const fileId = () => process.env.P7_EXISTING_FILE_ID ?? "";
