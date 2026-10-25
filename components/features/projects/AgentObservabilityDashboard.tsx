@@ -33,6 +33,11 @@ export function AgentObservabilityDashboard() {
           ["Approvals pending", String(data.pendingApprovals)],
           ["Loop stops", String(data.loopStopped ?? 0)], ["Requires review", String(data.needsReview ?? 0)],
           ["Tool failures", String(data.toolFailures ?? 0)],
+          ["P8 browser actions", String(data.p8Actions ?? 0)],
+          ["Observed browser progress", String(data.p8Verified ?? 0)],
+          ["Unverified browser steps", String(data.p8Unverified ?? 0)],
+          ["Human browser interventions", String(data.p8Interventions ?? 0)],
+          ["Blocked browser attempts", String(data.p8Blocked ?? 0)],
         ].map(([label, value]) => <div key={label} className="rounded-xl border p-3">
           <p className="text-xs text-slate-500">{label}</p>
           <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
@@ -48,7 +53,7 @@ export function AgentObservabilityDashboard() {
             {day.failed > 0 && <div className="w-full bg-orange-500" style={{ height: Math.max(3, day.failed / max * 125) }}/>}
           </div>)}
         </div>
-        <p className="mt-2 text-xs text-slate-500">Dark: completed · Orange: failed. Technical loop stops and review counts reflect recorded task data. Token counts are not a spending limit.</p>
+        <p className="mt-2 text-xs text-slate-500">Dark: completed · Orange: failed. Technical loop stops and review counts reflect recorded task data. P8 progress is observable DOM evidence, not proof that the overall goal was achieved. Token counts are not a spending limit.</p>
       </div>
       <div className="overflow-auto rounded-xl border p-3"><h2 className="mb-3 font-semibold">Recent task runs</h2>
         <table className="w-full text-left text-xs">
