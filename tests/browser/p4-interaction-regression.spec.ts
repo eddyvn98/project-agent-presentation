@@ -120,11 +120,16 @@ test.describe("P4 Presentation Lab interactive regression", () => {
     await trigger.focus();
     await page.keyboard.press("Enter");
     await expect(dialog).toBeVisible();
+    // Exercise close as well as reopen when the currently focused anchor
+    // is offscreen. This reproduces the measured Escape failure directly.
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await expect(trigger).not.toBeInViewport();
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
     await expect(trigger).toBeFocused();
+    await expect(trigger).toBeInViewport();
 
-    // Simulate a dynamic page/scroll change after focus restoration.
+    // Also simulate a new scroll after focus restoration.
     // Keyboard Enter still activates the focused button even when offscreen.
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
     await expect(trigger).not.toBeInViewport();
