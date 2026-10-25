@@ -6,6 +6,8 @@ import { humanBrowserOperation, parseHumanBrowserAction } from "@/lib/project-ag
 import * as projectCap from "@/lib/capabilities/project";
 import { p7QaRequestOrigin } from "@/lib/project-agent/p7-qa-guard";
 import { P8_QA_OPERATIONS, p8QaSessionAllowed } from "@/lib/project-agent/p8-qa-session-guard";
+import { g2CrashQaOperation, g2QaClickReceipt } from
+  "@/lib/project-agent/runtime/browser-agent/g2-crash-qa";
 import { prepareP8QaBrowser, p8QaBrowserProbe, runP8QaBrowserStep,
   cleanupP8QaBrowser } from "@/lib/project-agent/runtime/browser-agent/p8-qa-fixture";
 
@@ -64,11 +66,16 @@ export async function POST(req: NextRequest,
         await cleanupP8QaBrowser(task.id);
         return NextResponse.json({ ok: true, connected: false }, { headers: HEADERS });
       }
+      if (typeof raw.op === "string" && raw.op.startsWith("qa_g2_"))
+        return NextResponse.json(await g2CrashQaOperation(raw.op as
+          Parameters<typeof g2CrashQaOperation>[0], task.id, owner, raw),
+          { headers: HEADERS });
       if (raw.kind !== "click" && raw.kind !== "no_progress")
         return NextResponse.json({ error: "Invalid synthetic step" }, { status: 400, headers: HEADERS });
-      return NextResponse.json(
-        await runP8QaBrowserStep(task.id, owner, task.projectId, raw.kind),
-        { headers: HEADERS });
+      const step = await runP8QaBrowserStep(task.id, owner, task.projectId, raw.kind);
+      if (raw.kind === "click" && step.ok && typeof step.count === "number")
+        await g2QaClickReceipt(task.id, owner, step.count);
+      return NextResponse.json(step, { headers: HEADERS });
     } catch (error) {
       return NextResponse.json({
         error: error instanceof Error ? error.message.slice(0, 140) : "Synthetic QA action failed",
