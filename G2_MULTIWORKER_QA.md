@@ -41,7 +41,7 @@ No production recovery endpoint was enabled by this change.
 | Command | Scope | Exit meaning |
 | --- | --- | --- |
 | `npm run test:g2:unit` | Four Node in-memory atomic-Mongo contract tests: claim race, revision/takeover, remote Stop, crash/quarantine/review | Source contract only |
-| `npm run test:g2:multiworker:db` | Four scenarios using **two real Node child processes**, same **real** isolated Mongo; action event ledger | Mongo/process proof, not Next/Chromium |
+| `npm run test:g2:multiworker:db` | Five scenarios using **two real Node child processes**, same **real** isolated Mongo; action event ledger | Mongo/process proof, not Next/Chromium |
 | `npm run test:host:g2` | Two **separate Next.js QA server processes**, same Project/DB; Chromium ownership, owner-only manual takeover and remote Stop | Partial two-Next browser/control proof, not crash recovery |
 | `npm run test:p7:multiworker:unit` | P7 task lease and Stop regression | Task ledger, not browser |
 | `npm run test:p8:unit`, `npm run test:g1:unit` | P8/G1 backward compatibility | Not a G2 E2E substitute |
@@ -101,7 +101,9 @@ npm run test:g2:multiworker:db
 Expected real Mongo outcomes: one winner/one action; failed remote
 claim while owner has human control; Stop blocks old/new action; crash
 expiry quarantines without replay, then reviewed fresh epoch permits
-one **new** synthetic action. Confirm actual child PIDs differ and
+one **new** synthetic action. A separate crash **after** a recorded
+synthetic effect must remain quarantined with its original action count
+of one, with no automatic second action. Confirm actual child PIDs differ and
 isolated QA run database is removed.
 
 ## Two genuine Next.js workers: host-specific gate
