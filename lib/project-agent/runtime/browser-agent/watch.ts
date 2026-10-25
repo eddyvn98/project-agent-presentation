@@ -29,9 +29,12 @@ function prune() {
   for (const [id, entry] of frames)
     if (now - entry.updatedAt > EXPIRES_MS) frames.delete(id);
 }
-function publicLocation(raw: string): string {
-  try { const url = new URL(raw); return url.origin + url.pathname.slice(0, 180); }
-  catch { return ""; }
+/** URL paths may contain tokens or personal IDs; Watch exposes origin only. */
+export function publicBrowserWatchLocation(raw: string): string {
+  try {
+    const url = new URL(raw);
+    return ["http:", "https:"].includes(url.protocol) ? url.origin : "";
+  } catch { return ""; }
 }
 /** All images are opt-in, masked, RAM-only, and purged when watching stops. */
 export function setBrowserWatch(taskId: string, watching: boolean) {
@@ -80,7 +83,7 @@ export async function captureBrowserWatch(taskId: string, page: Page, action: st
     });
     if (screenshot.byteLength > MAX_IMAGE_BYTES) return;
     if (frames.get(taskId) !== before || !before.watching || before.finished) return;
-    const location = publicLocation(page.url());
+    const location = publicBrowserWatchLocation(page.url());
     const step: SavedFrame = {
       sequence: ++before.sequence, updatedAt: Date.now(), action: action.slice(0, 120),
       location, image: Buffer.from(screenshot), ...(marker ? { marker } : {}),
