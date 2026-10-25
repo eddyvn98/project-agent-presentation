@@ -60,6 +60,48 @@ Use an isolated development/test instance with synthetic dev credentials, not a 
 server with the QA flag enabled. Read-only GET requests can omit the Origin header; POST,
 PATCH and DELETE still require a matching Origin to protect synthetic QA mutations.
 
+## 2026-10-25 follow-up — auth providers OK, /assistant timed out
+
+On QA PID `69667`, `/api/auth/providers` returned HTTP 200 while the anonymous
+`/assistant` GET exceeded the old five-second deadline. **Port 3004 is reachable; only
+chat route readiness remains unverified.** The probe now labels this as
+`CHAT_ROUTE_TIMEOUT`, never as a blanket `HOST_UNREACHABLE`.
+The new default is 15 seconds to accommodate first Next.js development compilation;
+set `P7_READINESS_TIMEOUT_MS=30000` once for diagnostic purposes. Do not mark a slow
+compile PASS or indefinitely increase timeout without server logs.
+
+Read-only host triage (run on the local machine, **not** in the GitHub repo):
+
+```bash
+ps -p 69667 -o pid,ppid,etime,command
+lsof -nP -a -p 69667 -d cwd,1,2
+lsof -nP -iTCP:3004 -sTCP:LISTEN
+curl --noproxy '*' -sS -o /dev/null -w 'providers HTTP %{http_code} in %{time_total}s\n' --max-time 10 http://127.0.0.1:3004/api/auth/providers
+curl --noproxy '*' -sS -o /dev/null -w 'assistant HTTP %{http_code} in %{time_total}s\n' --max-time 30 http://127.0.0.1:3004/assistant
+P7_READINESS_TIMEOUT_MS=30000 npm run p7:qa:readiness
+```
+
+Locate stdout/stderr from the shell or supervised process that started PID 69667,
+using `lsof` to identify redirected log files if available. Read the relevant lines
+for compilation, `GET /assistant`, NextAuth, hydration or database errors. **Do not
+dump process environment, cookies, full authenticated pages or secrets.** A missing
+log cannot prove any specific cause. Check whether `/assistant` cold-compiles slowly,
+blocks on a database or session call, or throws a Next.js runtime error.
+
+Do not kill/restart a long-running dirty QA checkout without determining who owns it.
+The safest fallback is to start a **separate, clean QA checkout with its own Next.js
+build output, synthetic-only database and development credentials** on an unused
+loopback port (for example `3006`), leaving ports `3003` and `3004` alone.
+Use a single consistent origin for that isolated run, e.g.
+`NEXTAUTH_URL=http://127.0.0.1:3006` and
+`P7_HOST_BASE_URL=http://127.0.0.1:3006`, plus separate QA login states.
+Do not copy the existing `localhost:3002` callback or reuse production secrets.
+Configure the matching Entra redirect only if real Microsoft SSO will be tested;
+synthetic dev credentials **do not** verify Entra sign-in.
+Keep `PROJECT_AGENT_P7_QA_FIXTURE=1` restricted to non-production QA.
+No QA bootstrap or browser mutations until this host's readiness and synthetic
+auth prerequisites pass.
+
 ## Single integrated QA sequence for the local agent
 
 ```bash
