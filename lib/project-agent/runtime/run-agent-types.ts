@@ -1,5 +1,6 @@
 import type { ProjectAgentTaskSource } from "../types";
 import type { Span } from "./trace";
+import type { G1GoalReceipt } from "./g1-goal-check";
 import type { DirectWorkspaceState } from "./workspace-direct-apply";
 import type { WorkspaceSavedUpdate } from "./workspace-task-progress";
 
@@ -22,6 +23,7 @@ export interface RuntimeInput {
 	signal?: AbortSignal;
 	onStep?: (step: RuntimeStep) => void;
 	onConversation?(conversationId: string): void;
+	onG1Receipt?(receipt: G1GoalReceipt): void;
 	modelSelector?: string;
 	recoverChatContext?: () => Promise<string>;
 	depth?: number;
