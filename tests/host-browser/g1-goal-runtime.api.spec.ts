@@ -105,7 +105,7 @@ for (const scenario of ["success", "premature"] as const) {
         expect(result.resultText ?? "").not.toContain("G1_VERIFIED_RECEIPT");
       }
       if (scenario === "success") {
-        const marker = result.resultText?.match(/\\[G1_VERIFIED_RECEIPT (\\{[^\\n]+?\\})\\]/);
+        const marker = result.resultText?.match(/\[G1_VERIFIED_RECEIPT (\{[^\n]+?\})\]/);
         expect(marker, "App-authored public goal receipt required").toBeTruthy();
         const receipt = JSON.parse(marker![1]) as { p8Verified?: unknown };
         expect(typeof receipt.p8Verified).toBe("number");
