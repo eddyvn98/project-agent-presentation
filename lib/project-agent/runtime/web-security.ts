@@ -39,6 +39,7 @@ export async function resolvePublicAddresses(hostname: string, lookup: AddressLo
 export async function assertPublicHttpUrl(rawUrl: string, lookup: AddressLookup = systemLookup): Promise<URL> {
 	const url = new URL(rawUrl);
 	if (!/^https?:$/.test(url.protocol)) throw new Error("only http and https URLs are allowed");
+	if (url.username || url.password) throw new Error("URLs containing credentials are not allowed");
 	await resolvePublicAddresses(url.hostname, lookup);
 	return url;
 }
