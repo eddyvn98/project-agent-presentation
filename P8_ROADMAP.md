@@ -149,6 +149,17 @@ The origin policy's new Node tests ran **4/4 PASS** in source-authoring
 environment. The new browser-mode Vitest test and post-port full host
 regression are **NOT RUN here**, requiring local agent validation.
 
+**Remaining G2 host gate is now executable, not yet accepted:**
+`npm run test:host:g2:crash` is a new guarded interactive orchestration
+suite. It starts two real Next process groups from distinct QA checkouts
+and build directories; SIGKILLs A after one verified Chromium click;
+tests old lease isolation, forced synthetic expiry/quarantine,
+post-crash operator-reviewed restart on B, epoch-scoped stale-ref denial
+and no automatic replay using a QA-only action ledger.
+Requires real isolated host Mongo/Postgres/NextAuth and a terminal;
+**host PASS/FAIL/SKIP NOT RUN in the authoring environment**.
+See [G2 crash/recovery handoff](G2_CRASH_RECOVERY_QA.md).
+
 **G2 remains OPEN:** No *two-Next-host* worker crash -> lease
 quarantine -> owner-reviewed fresh browser restart -> old-action
 fencing/no-replay E2E has passed. Existing 5/5 Mongo/Node QA
