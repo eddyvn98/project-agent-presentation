@@ -11,3 +11,8 @@ export function sensitiveScreenshotMask(page: Page) {
     '[data-testid*="api-key" i]','[data-testid*="access-token" i]',
   ].join(","));
 }
+
+/** Browser console text is untrusted and can contain keys, tokens or PII. */
+export function safeBrowserConsoleEntry(level: string): string {
+  return ["error", "warning"].includes(level) ? level + ": [page message redacted]" : "";
+}
