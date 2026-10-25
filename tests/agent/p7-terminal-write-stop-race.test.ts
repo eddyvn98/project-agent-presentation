@@ -80,6 +80,12 @@ describe("P7.6.2 terminal write vs Stop Mongo CAS", () => {
     expect(await commitTaskTerminalIfActive(identity, "failed",
       { error: "another failure" })).toBe(false);
   });
+  it("aborted worker failure retains cancelled=true if its CAS wins before Stop", async () => {
+    expect(await commitTaskTerminalIfActive(identity, "failed",
+      { cancelled: true, error: "Stopped by you." })).toBe(true);
+    expect(await stopTaskIfActive(identity)).toBe(false);
+    expect(task).toMatchObject({ status: "failed", cancelled: true, error: "Stopped by you." });
+  });
   it("scope mismatch is never allowed to finalize another owner's task", async () => {
     expect(await commitTaskTerminalIfActive({ ...identity, ownerEmail: "another@project-agent.test" },
       "done", { resultText: "bad" })).toBe(false);
