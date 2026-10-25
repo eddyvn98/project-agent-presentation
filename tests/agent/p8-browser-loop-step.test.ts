@@ -78,6 +78,16 @@ describe("P8 maker/checker enforcement", () => {
       async () => { throw new Error("Synthetic failure"); })).rejects.toThrow("Synthetic failure");
     expect(browserLoopStatus(task)?.failed).toBe(1);
   });
+  it("notifies a human only once on escalation and never copies page contents", async () => {
+    vi.stubEnv("PROJECT_AGENT_P8_LOOP", "1");
+    const state = stub(), notify = vi.fn(), action = act("click", { ref: "e1" });
+    for (let n = 0; n < 3; n++)
+      await runP8BrowserLoopStep(task, state.session, action, notify,
+        async () => ({ text: "no DOM change" }));
+    const calls = notify.mock.calls.filter(([entry]) => entry.tool === "loop_escalation");
+    expect(calls).toHaveLength(1);
+    expect(JSON.stringify(calls)).not.toContain("example.test");
+  });
   it("stops after repeated no-progress actions without invoking maker again", async () => {
     vi.stubEnv("PROJECT_AGENT_P8_LOOP", "1");
     const state = stub(), maker = vi.fn(async () => ({ text: "clicked" }));
