@@ -104,9 +104,14 @@ for (const scenario of ["success", "premature"] as const) {
         expect(result.error).toMatch(/G1 goal checker: counter target not independently verified/);
         expect(result.resultText ?? "").not.toContain("G1_VERIFIED_RECEIPT");
       }
-      const audit = await request.get(`${taskBase()}/${taskId}`);
-      const { task } = await audit.json() as { task: { log: string[] } };
-      expect(task.log.some(line => line.includes("p8_loop_metrics"))).toBe(true);
+      if (scenario === "success") {
+        const marker = result.resultText?.match(/\\[G1_VERIFIED_RECEIPT (\\{[^\\n]+?\\})\\]/);
+        expect(marker, "App-authored public goal receipt required").toBeTruthy();
+        const receipt = JSON.parse(marker![1]) as { p8Verified?: unknown };
+        expect(typeof receipt.p8Verified).toBe("number");
+        expect(receipt.p8Verified).toBeGreaterThan(0);
+      }
+      // Public task API deliberately omits task.log; never assert private logs here.
     } finally {
       const removed = await request.delete(endpoint, { headers,
         data: { taskId }, failOnStatusCode: false });
