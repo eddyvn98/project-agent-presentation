@@ -6,10 +6,14 @@ vi.mock("../../lib/project-agent/task-store", () => ({
 vi.mock("../../lib/project-agent/p7-qa-browser-cleanup", () => ({
   cleanupP7DiscardedBrowser: vi.fn(),
 }));
+vi.mock("../../lib/project-agent/durable-mongo-queue", () => ({
+  revokeDurableTaskLease: vi.fn(),
+}));
 import { stopProjectAgentTaskNow } from "../../lib/project-agent/task-stop";
 import { stopProjectAgentTask } from "../../lib/project-agent/task-runner";
 import { readProjectAgentTask, updateProjectAgentTask } from "../../lib/project-agent/task-store";
 import { cleanupP7DiscardedBrowser } from "../../lib/project-agent/p7-qa-browser-cleanup";
+import { revokeDurableTaskLease } from "../../lib/project-agent/durable-mongo-queue";
 import type { ProjectAgentTask } from "../../lib/project-agent/types";
 
 const synthetic = {
@@ -19,17 +23,22 @@ const synthetic = {
   status: "running",
 } as ProjectAgentTask;
 const oldFixture = process.env.PROJECT_AGENT_P7_QA_FIXTURE;
+const oldQueue = process.env.PROJECT_AGENT_DURABLE_QUEUE;
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.PROJECT_AGENT_P7_QA_FIXTURE = "1";
+  process.env.PROJECT_AGENT_DURABLE_QUEUE = "0";
   vi.mocked(stopProjectAgentTask).mockReturnValue(false);
   vi.mocked(readProjectAgentTask).mockResolvedValue(synthetic);
   vi.mocked(updateProjectAgentTask).mockResolvedValue({ ...synthetic, status: "failed" });
   vi.mocked(cleanupP7DiscardedBrowser).mockResolvedValue(true);
+  vi.mocked(revokeDurableTaskLease).mockResolvedValue(true);
 });
 afterEach(() => {
   if (oldFixture === undefined) delete process.env.PROJECT_AGENT_P7_QA_FIXTURE;
   else process.env.PROJECT_AGENT_P7_QA_FIXTURE = oldFixture;
+  if (oldQueue === undefined) delete process.env.PROJECT_AGENT_DURABLE_QUEUE;
+  else process.env.PROJECT_AGENT_DURABLE_QUEUE = oldQueue;
 });
 describe("P7 synthetic Stop disposes an orphan browser", () => {
   it("cleans the synthetic session after marking Stop", async () => {
@@ -38,6 +47,19 @@ describe("P7 synthetic Stop disposes an orphan browser", () => {
       expect.objectContaining({ status: "failed", cancelled: true }));
     expect(cleanupP7DiscardedBrowser).toHaveBeenCalledTimes(1);
     expect(cleanupP7DiscardedBrowser).toHaveBeenCalledWith(synthetic.id);
+  });
+  it("revokes a durable lease when Stop comes from a different worker", async () => {
+    process.env.PROJECT_AGENT_DURABLE_QUEUE = "1";
+    expect(await stopProjectAgentTaskNow(synthetic)).toBe("requested");
+    expect(updateProjectAgentTask).toHaveBeenCalledWith(synthetic.id,
+      expect.objectContaining({ status: "failed", cancelled: true }));
+    expect(revokeDurableTaskLease).toHaveBeenCalledWith(synthetic.id);
+  });
+  it("revokes a durable lease even when Stop aborts the local worker", async () => {
+    process.env.PROJECT_AGENT_DURABLE_QUEUE = "1";
+    vi.mocked(stopProjectAgentTask).mockReturnValue(true);
+    expect(await stopProjectAgentTaskNow(synthetic)).toBe("requested");
+    expect(revokeDurableTaskLease).toHaveBeenCalledWith(synthetic.id);
   });
   it("does not touch employee browser sessions", async () => {
     const employee = { ...synthetic, prompt: "Read a public webpage" };
