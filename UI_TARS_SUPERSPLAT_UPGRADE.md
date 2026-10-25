@@ -77,10 +77,23 @@ rich block between paragraphs:
 The parser accepts only a bounded **same-origin authenticated
 Project-file HTML path**; external URLs, embedded credentials,
 queries, fragments, traversal and other file types are rejected.
-The HTML is not loaded until the user clicks `Open 3D viewer`.
+Even a valid block remains **inert by default**: the host must
+explicitly pass `enable3DViewer={true}` to `ProjectAgentAnswer`
+(or `ProjectAgentRichBlock`) after verifying its authenticated
+viewer-serving route and strict CSP. No host opt-in means a quiet
+visual fallback, not an iframe. The HTML is not loaded until the user clicks `Open 3D viewer`.
 The iframe uses `sandbox="allow-scripts"` (NO
 `allow-same-origin`, forms, top-navigation or popups) and
 `referrerPolicy="no-referrer"`; closing unmounts the iframe.
+
+Example app-side usage after QA:
+
+```tsx
+<ProjectAgentAnswer
+  markdown={answer}
+  enable3DViewer={safeViewerHostRouteConfigured}
+/>
+```
 
 **Host dependency / security contract:** This repository implements
 the presentation component, **not** a new file-serving backend, scene
