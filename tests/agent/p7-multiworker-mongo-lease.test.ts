@@ -52,7 +52,9 @@ const queue = {
   }),
   find: vi.fn((filter: Record<string, any>) => {
     let selected = [...rows.values()].filter(row => matches(row, filter));
-    const chain = {
+    type Cursor = { sort: (order: object) => Cursor; limit: (size: number) => Cursor;
+      toArray: () => Promise<Row[]> };
+    const chain: Cursor = {
       sort: (_sort: object) => chain,
       limit: (n: number) => { selected = selected.slice(0, n); return chain; },
       toArray: async () => selected.map(row => ({ ...row })),
