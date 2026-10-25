@@ -16,9 +16,10 @@ production acceptance is implied.
 
 **G1 runtime synthetic single-worker acceptance (operator-reported PASS):** [Real worker + loopback SSE model
 fixture, independent Chromium goal checker, terminal receipt and negative
-case](G1_LOCAL_RUNTIME_QA.md). Source tests and opt-in host E2E were added
-but are not yet evidence of a passing local host run. No real provider,
-staging or production gate is closed by this work.
+case](G1_LOCAL_RUNTIME_QA.md). The isolated Next 14.2.16 host reported 2/2
+end-to-end PASS with a loopback SSE mock, including a rejected premature
+model-final. This does not prove real Dify/Entra, multi-worker browser
+recovery or staging/production readiness.
 
 **UI-TARS / SuperSplat opt-in upgrade:** [Browser geometry, read-only native
 WebMCP scene inspection and safe 3D viewer](UI_TARS_SUPERSPLAT_UPGRADE.md).
