@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { allowControl, taskBase } from "./qa-helpers";
+import { allowControl, taskBase, restoreSyntheticBrowserFixture } from "./qa-helpers";
 
 const qaTask = () => process.env.P7_RUNNING_BROWSER_TASK_ID ?? "";
 
@@ -20,8 +20,9 @@ test("browser control rejects foreign Origin", async ({ request }) => {
   expect(response.status()).toBe(403);
 });
 
-test("active owner browser status is available without exposing image content", async ({ request }) => {
+test("active owner browser status is available without exposing image content", async ({ request, baseURL }) => {
   test.skip(!qaTask(), "Provide P7_RUNNING_BROWSER_TASK_ID from an active isolated QA task");
+  await restoreSyntheticBrowserFixture(request, baseURL);
   const response = await request.get(taskBase() + "/" + encodeURIComponent(qaTask()) + "/browser",
     { failOnStatusCode: false });
   expect(response.status()).toBe(200);
@@ -34,6 +35,7 @@ test("opt-in Browser Watch returns a real protected JPEG frame", async ({ reques
   test.skip(process.env.P7_ALLOW_BROWSER_WATCH !== "1" || !qaTask(),
     "Requires P7_ALLOW_BROWSER_WATCH=1 and an active synthetic QA browser session");
   test.setTimeout(90_000);
+  await restoreSyntheticBrowserFixture(request, baseURL);
   const watch = taskBase() + "/" + encodeURIComponent(qaTask()) + "/browser";
   const origin = new URL(baseURL!).origin;
   const enabled = await request.post(watch, { headers: { Origin: origin },
@@ -61,6 +63,7 @@ test("opt-in Browser Watch returns a real protected JPEG frame", async ({ reques
 
 test("optional safe takeover and handback on a dedicated test session", async ({ request, baseURL }) => {
   test.skip(!allowControl() || !qaTask(), "Requires P7_ALLOW_BROWSER_CONTROL=1 and a running QA browser task");
+  await restoreSyntheticBrowserFixture(request, baseURL);
   const origin = new URL(baseURL!).origin;
   const watch = taskBase() + "/" + encodeURIComponent(qaTask()) + "/browser";
   const endpoint = watch + "/control";
