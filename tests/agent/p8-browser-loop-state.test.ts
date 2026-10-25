@@ -13,6 +13,15 @@ describe("P8 bounded privacy-safe browser loop", () => {
     vi.stubEnv("PROJECT_AGENT_P8_LOOP", "1");
     expect(browserLoopEnabled()).toBe(true);
   });
+  it("L1 report-only mode observes, warns and never blocks existing actions", () => {
+    vi.stubEnv("PROJECT_AGENT_P8_LOOP", "1");
+    vi.stubEnv("PROJECT_AGENT_P8_LOOP_REPORT_ONLY", "1");
+    for (let n = 0; n < 55; n++) {
+      expect(authorizeBrowserLoopAction(id, "click")).toBeNull();
+      recordBrowserLoopOutcome(id, "click", "unverified");
+    }
+    expect(browserLoopStatus(id)).toMatchObject({ phase: "needs_help", actions: 55 });
+  });
   it("separates independent progress proof from an unverified tool return", () => {
     expect(authorizeBrowserLoopAction(id, "click")).toBeNull();
     recordBrowserLoopOutcome(id, "click", "unverified");
