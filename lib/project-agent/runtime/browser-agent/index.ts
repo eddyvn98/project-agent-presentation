@@ -158,7 +158,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 		let marker: BrowserClickMarker | undefined;
 		await assertPersonalBrowserPermission(session, action.op);
     await checkAgentBrowserPolicy(input, session, action.op, action.url);
-    if ((process.env.PROJECT_AGENT_P8_STALL_GUARD === "1" || process.env.PROJECT_AGENT_P8_LOOP === "1") &&
+    if ((process.env.PROJECT_AGENT_P8_STALL_GUARD === "1" || (process.env.PROJECT_AGENT_P8_LOOP === "1" && process.env.PROJECT_AGENT_P8_LOOP_REPORT_ONLY !== "1")) &&
         browserRetryStalled(id, action.op, action.ref ?? "", session.page.url(), session.lastSnapshot))
       return { text: P8_STALL_GUIDANCE, failed: true };
 		if (session.authMode === "read" && ["click", "type", "press", "select", "upload", "drag", "visual_click", "visual_type"].includes(action.op))
@@ -287,7 +287,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			/ref|locator|element|stale|not attached|timeout/i.test(failureText) &&
 			!/captcha|password|sensitive|confirm|policy|permission|blocked/i.test(failureText);
 		const refreshed = domFailure ? await snapshot(session).catch(() => "") : "";
-		const stalled = (process.env.PROJECT_AGENT_P8_STALL_GUARD === "1" || process.env.PROJECT_AGENT_P8_LOOP === "1") && domFailure && Boolean(refreshed) &&
+		const stalled = (process.env.PROJECT_AGENT_P8_STALL_GUARD === "1" || (process.env.PROJECT_AGENT_P8_LOOP === "1" && process.env.PROJECT_AGENT_P8_LOOP_REPORT_ONLY !== "1")) && domFailure && Boolean(refreshed) &&
 			recordBrowserDomFailure(id, action.op, action.ref ?? "", session.page.url(), session.lastSnapshot);
 		const observed = domFailure && !stalled ? await observeVisualFrame(input, session).catch(() => null) : null;
 		return { text: "Browser " + action.op + " failed: " + failureText +
