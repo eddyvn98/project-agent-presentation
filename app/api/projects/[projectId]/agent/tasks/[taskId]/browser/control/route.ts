@@ -54,8 +54,10 @@ export async function POST(req: NextRequest,
     if (!allowed) return NextResponse.json({ error: "Isolated P8 synthetic QA disabled" },
       { status: 403, headers: HEADERS });
     try {
-      if (raw.op === "qa_prepare")
-        return NextResponse.json(await prepareP8QaBrowser(task.id, owner), { headers: HEADERS });
+      if (raw.op === "qa_prepare") {
+        try { return NextResponse.json(await prepareP8QaBrowser(task.id, owner), { headers: HEADERS }); }
+        catch (error) { await cleanupP8QaBrowser(task.id); throw error; }
+      }
       if (raw.op === "qa_probe")
         return NextResponse.json(p8QaBrowserProbe(task.id), { headers: HEADERS });
       if (raw.op === "qa_cleanup") {
