@@ -8,7 +8,8 @@ export interface LoopEvent {
 export interface LoopStatus {
   phase: LoopPhase; startedAt: number; updatedAt: number; actions: number;
   verified: number; unverified: number; failed: number; blocked: number;
-  interventions: number; consecutiveUnverified: number; events: LoopEvent[];
+  interventions: number; consecutiveUnverified: number; humanWaitMs: number;
+  humanStartedAt?: number; events: LoopEvent[];
 }
 const TTL_MS = 30 * 60_000;
 const MAX_TASKS = 64, MAX_EVENTS = 16;
@@ -36,7 +37,7 @@ function ensure(taskId: string): LoopStatus {
   }
   state = { phase: "active", startedAt: now, updatedAt: now, actions: 0,
     verified: 0, unverified: 0, failed: 0, blocked: 0,
-    interventions: 0, consecutiveUnverified: 0, events: [] };
+    interventions: 0, consecutiveUnverified: 0, humanWaitMs: 0, events: [] };
   states.set(taskId, state);
   return state;
 }
@@ -64,7 +65,7 @@ export function authorizeBrowserLoopAction(taskId: string, operation: string): s
   if (state.phase === "human_control") return "Browser is controlled by the user; wait for handback.";
   if (READ_ONLY.has(operation)) return null;
   if (state.phase === "needs_help" || state.actions >= ACTION_LIMIT ||
-      Date.now() - state.startedAt > TIME_LIMIT_MS) {
+      Date.now() - state.startedAt - state.humanWaitMs > TIME_LIMIT_MS) {
     if (state.phase !== "needs_help") { state.phase = "needs_help"; event(state, "escalation"); }
     return "Browser loop paused at its safety budget. Request human assistance or finish with verified results.";
   }
@@ -84,13 +85,16 @@ export function recordBrowserLoopOutcome(taskId: string, operation: string, outc
 }
 export function noteBrowserLoopTakeover(taskId: string): void {
   const state = ensure(taskId);
-  if (state.phase !== "human_control") { state.interventions++; state.phase = "human_control"; event(state, "takeover"); }
+  if (state.phase !== "human_control") { state.interventions++; state.phase = "human_control";
+    state.humanStartedAt = Date.now(); event(state, "takeover"); }
 }
 export function noteBrowserLoopHandback(taskId: string): void {
   const state = states.get(taskId);
   if (!state || state.phase !== "human_control") return;
   // Human intervention resets the no-progress streak, not the hard budget.
   state.consecutiveUnverified = 0;
+  state.humanWaitMs += Math.max(0, Date.now() - (state.humanStartedAt ?? Date.now()));
+  delete state.humanStartedAt;
   state.phase = state.actions >= ACTION_LIMIT || Date.now() - state.startedAt > TIME_LIMIT_MS
     ? "needs_help" : "active";
   event(state, "handback");
