@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../lib/project-agent/task-runner", () => ({ stopProjectAgentTask: vi.fn() }));
 vi.mock("../../lib/project-agent/task-store", () => ({
-  readProjectAgentTask: vi.fn(), updateProjectAgentTask: vi.fn(),
+  readProjectAgentTask: vi.fn(), recordGuardedTerminalTask: vi.fn(),
 }));
 vi.mock("../../lib/project-agent/p7-qa-browser-cleanup", () => ({
   cleanupP7DiscardedBrowser: vi.fn(),
@@ -9,9 +9,13 @@ vi.mock("../../lib/project-agent/p7-qa-browser-cleanup", () => ({
 vi.mock("../../lib/project-agent/durable-mongo-queue", () => ({
   revokeDurableTaskLease: vi.fn(),
 }));
+vi.mock("../../lib/project-agent/task-terminal-guard", () => ({
+  stopTaskIfActive: vi.fn(),
+}));
 import { stopProjectAgentTaskNow } from "../../lib/project-agent/task-stop";
 import { stopProjectAgentTask } from "../../lib/project-agent/task-runner";
-import { readProjectAgentTask, updateProjectAgentTask } from "../../lib/project-agent/task-store";
+import { readProjectAgentTask, recordGuardedTerminalTask } from "../../lib/project-agent/task-store";
+import { stopTaskIfActive } from "../../lib/project-agent/task-terminal-guard";
 import { cleanupP7DiscardedBrowser } from "../../lib/project-agent/p7-qa-browser-cleanup";
 import { revokeDurableTaskLease } from "../../lib/project-agent/durable-mongo-queue";
 import type { ProjectAgentTask } from "../../lib/project-agent/types";
@@ -30,7 +34,7 @@ beforeEach(() => {
   process.env.PROJECT_AGENT_DURABLE_QUEUE = "0";
   vi.mocked(stopProjectAgentTask).mockReturnValue(false);
   vi.mocked(readProjectAgentTask).mockResolvedValue(synthetic);
-  vi.mocked(updateProjectAgentTask).mockResolvedValue({ ...synthetic, status: "failed" });
+  vi.mocked(stopTaskIfActive).mockResolvedValue(true);
   vi.mocked(cleanupP7DiscardedBrowser).mockResolvedValue(true);
   vi.mocked(revokeDurableTaskLease).mockResolvedValue(true);
 });
@@ -43,16 +47,16 @@ afterEach(() => {
 describe("P7 synthetic Stop disposes an orphan browser", () => {
   it("cleans the synthetic session after marking Stop", async () => {
     expect(await stopProjectAgentTaskNow(synthetic)).toBe("requested");
-    expect(updateProjectAgentTask).toHaveBeenCalledWith(synthetic.id,
-      expect.objectContaining({ status: "failed", cancelled: true }));
+    expect(stopTaskIfActive).toHaveBeenCalledWith(synthetic);
+    expect(recordGuardedTerminalTask).toHaveBeenCalledTimes(1);
     expect(cleanupP7DiscardedBrowser).toHaveBeenCalledTimes(1);
     expect(cleanupP7DiscardedBrowser).toHaveBeenCalledWith(synthetic.id);
   });
   it("revokes a durable lease when Stop comes from a different worker", async () => {
     process.env.PROJECT_AGENT_DURABLE_QUEUE = "1";
     expect(await stopProjectAgentTaskNow(synthetic)).toBe("requested");
-    expect(updateProjectAgentTask).toHaveBeenCalledWith(synthetic.id,
-      expect.objectContaining({ status: "failed", cancelled: true }));
+    expect(stopTaskIfActive).toHaveBeenCalledWith(synthetic);
+    expect(recordGuardedTerminalTask).toHaveBeenCalledTimes(1);
     expect(revokeDurableTaskLease).toHaveBeenCalledWith(synthetic.id);
   });
   it("revokes a durable lease even when Stop aborts the local worker", async () => {
@@ -60,6 +64,13 @@ describe("P7 synthetic Stop disposes an orphan browser", () => {
     vi.mocked(stopProjectAgentTask).mockReturnValue(true);
     expect(await stopProjectAgentTaskNow(synthetic)).toBe("requested");
     expect(revokeDurableTaskLease).toHaveBeenCalledWith(synthetic.id);
+  });
+  it("does not overwrite done when terminal completion won the race", async () => {
+    vi.mocked(stopTaskIfActive).mockResolvedValue(false);
+    expect(await stopProjectAgentTaskNow(synthetic)).toBe("completed");
+    expect(revokeDurableTaskLease).not.toHaveBeenCalled();
+    expect(cleanupP7DiscardedBrowser).not.toHaveBeenCalled();
+    expect(recordGuardedTerminalTask).not.toHaveBeenCalled();
   });
   it("does not touch employee browser sessions", async () => {
     const employee = { ...synthetic, prompt: "Read a public webpage" };
