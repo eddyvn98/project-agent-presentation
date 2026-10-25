@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { test, expect } from "@playwright/test";
+import { test, expect, request as http } from "@playwright/test";
 import { projectId, taskBase, waitTask } from "./qa-helpers";
 
 /** Local SSE model only. Host still runs its real task worker, action parser,
@@ -7,7 +7,7 @@ import { projectId, taskBase, waitTask } from "./qa-helpers";
 const conversations = new Map<string, { scenario: "success" | "premature"; round: number }>();
 const modelPort = 3998;
 let server: Server;
-let requests = 0;
+let requests = 0, modelCalls = 0;
 function answer(query: string, conversationId: string): { text: string; id: string } {
   let record = conversations.get(conversationId);
   let id = conversationId;
@@ -50,6 +50,7 @@ test.beforeAll(async () => {
       data += part.toString();
       if (data.length > 200_000) { res.writeHead(413).end(); return; }
     }
+    modelCalls++;
     const body = JSON.parse(data) as { query?: string; conversation_id?: string };
     const output = answer(body.query ?? "", body.conversation_id ?? "");
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store" });
@@ -64,7 +65,8 @@ test.beforeAll(async () => {
   });
 });
 test.afterAll(async () => {
-  await new Promise<void>(resolve => server?.close(() => resolve()));
+  if (server) await new Promise<void>(resolve => server.close(() => resolve()));
+  if (requests === 2) expect(modelCalls).toBe(4);
   conversations.clear();
 });
 
@@ -79,6 +81,14 @@ for (const scenario of ["success", "premature"] as const) {
     expect(created.status(), await created.text()).toBe(201);
     const { taskId, prepared } = await created.json() as { taskId: string; prepared: boolean };
     expect(prepared).toBe(true);
+    const outsider = await http.newContext({ baseURL: origin,
+      storageState: process.env.P7_NONMEMBER_STORAGE_STATE });
+    try {
+      expect((await outsider.get(`${taskBase()}/${taskId}`,
+        { failOnStatusCode: false })).status()).toBe(404);
+      expect((await outsider.post(endpoint, { headers, data: { scenario },
+        failOnStatusCode: false })).status()).toBe(403);
+    } finally { await outsider.dispose(); }
     try {
       const result = await waitTask(request, taskId, 100_000);
       if (scenario === "success") {
