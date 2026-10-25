@@ -5,6 +5,7 @@ import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { createProjectAgentTask, deleteProjectAgentConversation, readProjectAgentTask,
   updateProjectAgentTask, writeProjectAgentFile } from "@/lib/project-agent/task-store";
 import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask, P7_QA_PREFIX } from "@/lib/project-agent/p7-qa-guard";
+import { p8QaDedicatedOrigin } from "@/lib/project-agent/p8-qa-session-guard";
 import { recoverP7SyntheticBrowser, withP7SyntheticRecoverySlot } from "@/lib/project-agent/p7-qa-recovery";
 import { PROJECT_AGENT_BOOT_ID } from "@/lib/project-agent/boot";
 import { markP7BrowserRunningIfCurrent, verifyP7TaskStoreMapping } from "@/lib/project-agent/p7-qa-conditional-update";
@@ -43,7 +44,9 @@ export async function POST(req: NextRequest, { params }: { params: { projectId: 
   const body = await req.json().catch(() => null) as { kind?: unknown } | null;
   if (!["browser", "pdf", "p8_browser"].includes(String(body?.kind))) return reply({ error: "Expected browser, pdf or p8_browser" }, 400);
   if (body?.kind === "p8_browser" &&
-      (process.env.PROJECT_AGENT_P8_QA_SESSION !== "1" || process.env.PROJECT_AGENT_P8_LOOP !== "1"))
+      (process.env.PROJECT_AGENT_P8_QA_SESSION !== "1" || process.env.PROJECT_AGENT_P8_LOOP !== "1" ||
+        !p8QaDedicatedOrigin(req.nextUrl.origin, process.env.P8_QA_ALLOWED_ORIGIN,
+          process.env.P8_QA_ISOLATED_HOST)))
     return reply({ error: "P8 synthetic session fixture disabled" }, 403);
   const owner = allowed.owner!, kind = body.kind;
   const task = await createProjectAgentTask({ projectId: params.projectId, ownerEmail: owner,
