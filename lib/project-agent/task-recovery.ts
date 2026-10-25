@@ -21,7 +21,8 @@ export async function recoverProjectAgentTask(task: ProjectAgentTask): Promise<P
   if (decision === "wait_for_lease") return task;
   // Legacy running work without a recorded boot ID is not safe to replay.
   if (decision === "none") return task.status === "running" &&
-    process.env.PROJECT_AGENT_DURABLE_QUEUE === "0" ? failStaleProjectAgentTask(task) : task;
+    process.env.PROJECT_AGENT_DURABLE_QUEUE === "0" && !isProjectAgentTaskRunningHere(task.id) ?
+      failStaleProjectAgentTask(task) : task;
   if (decision === "stop") {
     return updateProjectAgentTask(task.id, {
       status: "failed", cancelled: true, completedAt: new Date().toISOString(),
