@@ -1,5 +1,6 @@
 import { runProjectAgentTask } from "./dify-agent";
-import { updateProjectAgentTask } from "./task-store";
+import { readProjectAgentTask } from "./task-store";
+import { commitTaskTerminalIfActive } from "./task-terminal-guard";
 import { autoTitleProjectAgentConversation } from "./chat-title";
 import { afterTaskForGoal } from "./goal-hook";
 import { enqueueDurableTask, withDurableTaskLease, scanDurableQueue } from "./durable-mongo-queue";
@@ -26,11 +27,10 @@ export function startProjectAgentTask(taskId: string): void {
 		.catch(async (cause) => {
 			const error = cause instanceof Error ? cause.message : String(cause);
 			console.error(`[project-agent] task ${taskId} escaped its failure handler`, error);
-			await updateProjectAgentTask(taskId, {
-				status: "failed",
-				completedAt: new Date().toISOString(),
-				error,
-				logLine: `failed: ${error}`,
+			const current = await readProjectAgentTask(taskId).catch(() => null);
+			if (current) await commitTaskTerminalIfActive(current, "failed", {
+				completedAt: new Date().toISOString(), error: error.slice(0, 200),
+				logLine: `failed: ${error.slice(0, 200)}`,
 			}).catch(() => {});
 		})
 		.finally(() => { runningTasks.delete(taskId); controllers.delete(taskId); if (actuallyRan) { void afterTaskForGoal(taskId, startProjectAgentTask); void import("./workflow-runner").then(m => m.afterTaskForWorkflow(taskId)).catch(() => {}); } });
