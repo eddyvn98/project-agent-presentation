@@ -35,7 +35,9 @@
     "test:p7:host-schema": "node --test tests/host-schema/p7-task-collection.contract.mjs",
     "test:host:p7:closeout": "node scripts/p7-session-preflight.mjs --mutation && playwright test --config playwright.host.config.ts tests/host-browser/p7-cas-stop.api.spec.ts --project=host-api",
     "test:g1:unit": "vitest run --config vitest.agent.config.ts tests/agent/g1-goal-check.test.ts",
-    "test:host:g1": "node scripts/g1-host-preflight.mjs && playwright test --config playwright.host.config.ts tests/host-browser/g1-goal-runtime.api.spec.ts --project=host-api"
+    "test:host:g1": "node scripts/g1-host-preflight.mjs && playwright test --config playwright.host.config.ts tests/host-browser/g1-goal-runtime.api.spec.ts --project=host-api",
+    "test:g2:unit": "node --test tests/node/g2-browser-lease.test.mjs",
+    "test:g2:multiworker:db": "node scripts/g2-multiworker-browser-qa.mjs"
   },
   "peerDependencies": {
     "next": ">=14",
