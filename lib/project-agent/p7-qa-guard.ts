@@ -29,3 +29,11 @@ export function p7SyntheticTask(task: { prompt: string; projectId: string; owner
   return task.prompt.startsWith(P7_QA_PREFIX) && task.projectId === projectId &&
     task.ownerEmail.trim().toLowerCase() === owner.trim().toLowerCase();
 }
+
+/** Synthetic browser tasks may be revived after QA host restart, never after explicit Stop. */
+export function canRecoverP7BrowserTask(task: {
+  prompt: string; status: string; cancelled?: boolean;
+}): boolean {
+  return task.prompt === P7_QA_PREFIX + " browser fixture - local synthetic data only" &&
+    (task.status === "running" || task.status === "failed") && task.cancelled !== true;
+}
