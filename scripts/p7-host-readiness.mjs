@@ -1,3 +1,5 @@
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
 /** Anonymous, read-only check: no cookies, user data or secrets are sent. */
 export async function inspectP7Host(base, request = fetch, chatPath = "/assistant") {
   const target = new URL(base);
@@ -33,7 +35,7 @@ export async function inspectP7Host(base, request = fetch, chatPath = "/assistan
   }
   return { ready: true, checks };
 }
-if (process.argv[1] && import.meta.url === new URL("file://" + process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const base = process.env.P7_HOST_BASE_URL;
   if (!base) throw new Error("P7_HOST_BASE_URL required");
   const result = await inspectP7Host(base, fetch, process.env.P7_PROJECT_CHAT_PATH || "/assistant");
