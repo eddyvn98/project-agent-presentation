@@ -34,6 +34,8 @@ export interface ProjectAgentTask {
   /** Run spawned by a saved schedule; cannot modify schedules or grant new rights. */
   scheduleRunId?: string;
   idempotencyKey?: string;
+  /** Exact body digest for conflict-safe client task retries. */
+  requestFingerprint?: string;
   /** Exact prior task for a retry; never grants cross-owner access. */
   retryOfTaskId?: string;
   workflowRunId?: string;
@@ -90,6 +92,8 @@ export interface CreateProjectAgentTaskInput {
   projectOwnerEmail?: string;
   scheduleRunId?: string;
   idempotencyKey?: string;
+  /** Exact body digest for conflict-safe client task retries. */
+  requestFingerprint?: string;
   workflowRunId?: string;
   engines?: string[];
   /** Picker id or selector; validated when the task is created, ignored when unknown. */
