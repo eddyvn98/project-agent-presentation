@@ -33,7 +33,9 @@
     "test:p8:browser": "vitest run --config vitest.agent.config.ts tests/agent/p8-browser-real.test.ts",
     "test:p7:closeout": "vitest run --config vitest.agent.config.ts tests/agent/p7-qa-recovery-race.test.ts tests/agent/p7-qa-conditional-update.test.ts tests/agent/p7-qa-browser-cleanup.test.ts tests/agent/p7-qa-stop-cleanup.test.ts",
     "test:p7:host-schema": "node --test tests/host-schema/p7-task-collection.contract.mjs",
-    "test:host:p7:closeout": "node scripts/p7-session-preflight.mjs --mutation && playwright test --config playwright.host.config.ts tests/host-browser/p7-cas-stop.api.spec.ts --project=host-api"
+    "test:host:p7:closeout": "node scripts/p7-session-preflight.mjs --mutation && playwright test --config playwright.host.config.ts tests/host-browser/p7-cas-stop.api.spec.ts --project=host-api",
+    "test:g1:unit": "vitest run --config vitest.agent.config.ts tests/agent/g1-goal-check.test.ts",
+    "test:host:g1": "node scripts/g1-host-preflight.mjs && playwright test --config playwright.host.config.ts tests/host-browser/g1-goal-runtime.api.spec.ts --project=host-api"
   },
   "peerDependencies": {
     "next": ">=14",
