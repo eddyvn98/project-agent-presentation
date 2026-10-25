@@ -1,7 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { request } from "@playwright/test";
 
 /** Authenticate synthetic QA identities by asking NextAuth, not by inspecting cookies. */
 export function syntheticSessionEmail(value, expectedEmail) {
@@ -22,7 +21,7 @@ export function isolatedQaOrigin(baseURL, mutation = false, approvedOrigin) {
     throw new Error("Set P7_QA_MUTATION_ALLOWED_ORIGIN to the exact isolated QA origin");
   return url.origin;
 }
-export async function verifySyntheticNextAuthState(origin, filename, expected, requester = request) {
+export async function verifySyntheticNextAuthState(origin, filename, expected, requester) {
   if (!filename || !existsSync(resolve(filename)))
     throw new Error("Synthetic QA Playwright storage state file is missing");
   const client = await requester.newContext({
@@ -38,7 +37,7 @@ export async function verifySyntheticNextAuthState(origin, filename, expected, r
     return syntheticSessionEmail(session, expected);
   } finally { await client.dispose(); }
 }
-export async function p7SessionPreflight(env = process.env, requester = request, mutation = false) {
+export async function p7SessionPreflight(env = process.env, requester, mutation = false) {
   if (env.P7_ISOLATED_QA !== "1")
     throw new Error("P7_ISOLATED_QA=1 is required; shared/dev host must not run closeout");
   if (!env.P7_HOST_BASE_URL) throw new Error("P7_HOST_BASE_URL is required");
@@ -53,6 +52,7 @@ export async function p7SessionPreflight(env = process.env, requester = request,
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   try {
+    const { request } = await import("@playwright/test");
     const result = await p7SessionPreflight(process.env, request,
       process.argv.includes("--mutation"));
     console.log(JSON.stringify(result, null, 2)); // Never print cookies, tokens or addresses.
