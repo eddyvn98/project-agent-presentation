@@ -1,0 +1,111 @@
+import { randomUUID } from "node:crypto";
+import { NextRequest, NextResponse } from "next/server";
+import * as projectCap from "@/lib/capabilities/project";
+import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
+import { createProjectAgentTask, deleteProjectAgentConversation, readProjectAgentTask,
+  updateProjectAgentTask, writeProjectAgentFile } from "@/lib/project-agent/task-store";
+import { p7QaAllowed, p7SyntheticTask, P7_QA_PREFIX } from "@/lib/project-agent/p7-qa-guard";
+import { p7SyntheticPdf } from "@/lib/project-agent/p7-synthetic-pdf";
+import { prepareP7BrowserFixture } from "@/lib/project-agent/runtime/browser-agent/p7-fixture";
+import { closeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
+import { setBrowserWatch } from "@/lib/project-agent/runtime/browser-agent/watch";
+import { clearBrowserControl } from "@/lib/project-agent/runtime/browser-agent/control";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+const headers = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" };
+const reply = (value: object, status = 200) => NextResponse.json(value, { status, headers });
+async function authorized(req: NextRequest, projectId: string) {
+  const auth = await resolveProjectRequestAccess(req, projectId, "CHAT");
+  if (auth.response) return { response: auth.response };
+  const owner = auth.callerEmail?.trim().toLowerCase() ?? "";
+  const project = await projectCap.getProject(projectId, auth.ownerEmail!);
+  const permitted = project.ok && Boolean(project.data) && p7QaAllowed({
+    runtime: process.env.PROJECT_AGENT_RUNTIME, browser: process.env.PROJECT_AGENT_BROWSER_AGENT,
+    fixture: process.env.PROJECT_AGENT_P7_QA_FIXTURE, nodeEnv: process.env.NODE_ENV,
+    projectId, projectName: project.data?.name ?? "", owner, origin: req.headers.get("origin"),
+    requestOrigin: req.nextUrl.origin, expectedProjectId: process.env.PROJECT_AGENT_P7_QA_PROJECT_ID,
+  });
+  return permitted ? { owner } : { response: reply({ error: "P7 synthetic QA is disabled" }, 403) };
+}
+/** Dev-only synthetic task: intentionally does NOT start Dify or a worker. */
+export async function POST(req: NextRequest, { params }: { params: { projectId: string } }) {
+  const allowed = await authorized(req, params.projectId);
+  if (allowed.response) return allowed.response;
+  const body = await req.json().catch(() => null) as { kind?: unknown } | null;
+  if (body?.kind !== "browser" && body?.kind !== "pdf") return reply({ error: "Expected browser or pdf" }, 400);
+  const owner = allowed.owner!, kind = body.kind;
+  const task = await createProjectAgentTask({ projectId: params.projectId, ownerEmail: owner,
+    prompt: `${P7_QA_PREFIX} ${kind} fixture - local synthetic data only`,
+    userPrompt: `Synthetic P7 ${kind} fixture`, projectOwnerEmail: owner });
+  try {
+    if (kind === "browser") {
+      await updateProjectAgentTask(task.id, { status: "running", logLine: "p7_synthetic :: browser fixture" });
+      const prepared = await prepareP7BrowserFixture(task.id, owner);
+      return reply({ taskId: task.id, kind, ...prepared }, 201);
+    }
+    const bytes = p7SyntheticPdf(), fileId = randomUUID();
+    await writeProjectAgentFile(task.id, fileId, bytes);
+    await updateProjectAgentTask(task.id, { status: "done", resultText: "P7 synthetic PDF artifact",
+      completedAt: new Date().toISOString(), filesExpireAt: new Date(Date.now() + 3600000).toISOString(),
+      files: [{ id: fileId, name: "p7-synthetic.pdf", mimeType: "application/pdf", size: bytes.length }],
+      logLine: "p7_synthetic :: pdf artifact" });
+    return reply({ taskId: task.id, fileId, kind }, 201);
+  } catch (error) {
+    await closeBrowserSession(task.id).catch(() => {});
+    setBrowserWatch(task.id, false);
+    await deleteProjectAgentConversation(params.projectId, owner, { taskId: task.id }).catch(() => {});
+    return reply({ error: error instanceof Error ? error.message.slice(0, 160) : "QA fixture failed" }, 503);
+  }
+}
+/** Only deletes synthetic task records belonging to this exact owner and Project. */
+export async function DELETE(req: NextRequest, { params }: { params: { projectId: string } }) {
+  const allowed = await authorized(req, params.projectId);
+  if (allowed.response) return allowed.response;
+  const body = await req.json().catch(() => null) as { taskId?: unknown } | null;
+  if (typeof body?.taskId !== "string" || !/^pat_[a-f0-9]{12}$/.test(body.taskId))
+    return reply({ error: "Invalid synthetic task id" }, 400);
+  const task = await readProjectAgentTask(body.taskId);
+  if (!task || !p7SyntheticTask(task, params.projectId, allowed.owner!))
+    return reply({ error: "Synthetic task not found" }, 404);
+  await closeBrowserSession(task.id).catch(() => {});
+  setBrowserWatch(task.id, false); clearBrowserControl(task.id);
+  const removed = await deleteProjectAgentConversation(params.projectId, allowed.owner!, { taskId: task.id });
+  return reply({ ok: removed === 1, removed });
+}
+/** Crash only the sole browser session in the isolated QA process, never a shared employee browser. */
+export async function PATCH(req: NextRequest, { params }: { params: { projectId: string } }) {
+  const allowed = await authorized(req, params.projectId);
+  if (allowed.response) return allowed.response;
+  const body = await req.json().catch(() => null) as { kind?: unknown; taskId?: unknown } | null;
+  if (typeof body?.taskId !== "string") return reply({ error: "Task id required" }, 400);
+  const task = await readProjectAgentTask(body.taskId);
+  if (!task || !p7SyntheticTask(task, params.projectId, allowed.owner!))
+    return reply({ error: "Synthetic task not found" }, 404);
+  if (body.kind === "recover") {
+    const result = await prepareP7BrowserFixture(task.id, allowed.owner!);
+    return reply({ taskId: task.id, ...result });
+  }
+  if (body.kind !== "crash" || process.env.PROJECT_AGENT_P7_QA_CRASH !== "1")
+    return reply({ error: "QA crash injection is disabled" }, 403);
+  const { activeBrowserSession, browserResourceSnapshot } = await import("@/lib/project-agent/runtime/browser-agent/session");
+  const session = activeBrowserSession(task.id);
+  const counters = browserResourceSnapshot();
+  if (!session || counters.activeSessions !== 1 || counters.pendingSessions !== 0)
+    return reply({ error: "Only one isolated QA browser session may be crashed" }, 409);
+  await session.browser.close();
+  return reply({ ok: true, disconnected: !session.browser.isConnected() });
+}
+export async function GET(req: NextRequest, { params }: { params: { projectId: string } }) {
+  const allowed = await authorized(req, params.projectId);
+  if (allowed.response) return allowed.response;
+  const id = req.nextUrl.searchParams.get("taskId") ?? "";
+  const task = /^pat_[a-f0-9]{12}$/.test(id) ? await readProjectAgentTask(id) : null;
+  if (!task || !p7SyntheticTask(task, params.projectId, allowed.owner!))
+    return reply({ error: "Synthetic task not found" }, 404);
+  const { activeBrowserSession } = await import("@/lib/project-agent/runtime/browser-agent/session");
+  const session = activeBrowserSession(id);
+  if (!session?.browser.isConnected()) return reply({ taskId: id, connected: false });
+  const count = await session.page.locator("#qa-output").textContent().catch(() => null);
+  return reply({ taskId: id, connected: true, count, hasFrame: Boolean(session.page) });
+}
