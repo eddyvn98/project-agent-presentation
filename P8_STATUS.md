@@ -21,6 +21,10 @@ not a production or end-to-end semantic-goal success claim.
 - Host P8 implementation commit **`4aec99a4`**; status/index commit
   **`ca65a8e104664536216183d8bfd102f730ea9376`** (reported remote HEAD).
   No PR, merge, staging release or production deployment was reported.
+  Subsequent AI-WEB-CHAT evidence-precision correction was reported pushed
+  at host commit `3351ae4c`: the fixture `pid` is Node/Next
+  `process.pid`, not Chromium's process ID; `networkAttempts=0`
+  covers the fixture's route counter only, not machine-wide egress.
 - Local QA operator reports: P7+P8 focused **115 PASS, 1 SKIP**;
   P8 session/guard **8/8 PASS**; TypeScript **PASS**;
   Mongo host-schema **1/1 PASS**; 35 modified/new files below 300 lines
