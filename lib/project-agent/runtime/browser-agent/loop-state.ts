@@ -14,7 +14,8 @@ const TTL_MS = 30 * 60_000;
 const MAX_TASKS = 64, MAX_EVENTS = 16;
 const ACTION_LIMIT = 48, TIME_LIMIT_MS = 12 * 60_000;
 const ESCALATE_AT = 3;
-const READ_ONLY = new Set(["snapshot", "console", "network", "tabs", "wait", "close"]);
+const READ_ONLY = new Set(["snapshot", "console", "network", "tabs", "wait", "close",
+  "screenshot", "extract", "visual_observe"]);
 const OPERATIONS = new Set([
   "open", "back", "click", "type", "press", "select", "drag", "upload", "scroll",
   "download", "screenshot", "extract", "new_tab", "switch_tab", "close_tab",
@@ -67,7 +68,7 @@ export function recordBrowserLoopOutcome(taskId: string, operation: string, outc
   const state = ensure(taskId);
   if (state.phase === "closed") return;
   state[outcome]++;
-  state.consecutiveUnverified = outcome === "verified" ? 0 :
+  if (!READ_ONLY.has(operation)) state.consecutiveUnverified = outcome === "verified" ? 0 :
     outcome === "unverified" || outcome === "failed" ? state.consecutiveUnverified + 1 : state.consecutiveUnverified;
   event(state, "action", operation, outcome);
   if (state.consecutiveUnverified >= ESCALATE_AT && state.phase === "active") {
