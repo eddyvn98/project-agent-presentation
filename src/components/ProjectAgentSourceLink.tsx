@@ -17,7 +17,7 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
       <Globe2 aria-hidden className="h-3 w-3 shrink-0" /><span className="truncate">{label}</span>
     </button></Popover.Trigger>
     <Popover.Portal><Popover.Content sideOffset={6} collisionPadding={12} onOpenAutoFocus={(event) => { event.preventDefault(); linkRef.current?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); triggerRef.current?.focus(); }} aria-label={`Source details: ${title}`}
-      className="z-[100] w-72 max-w-[calc(100vw-1.5rem)] overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-900"
+      className="relative z-[100] w-72 max-w-[calc(100vw-1.5rem)] overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-900"
       style={{ maxHeight: "var(--radix-popover-content-available-height)", overflowWrap: "anywhere" }}>
       <p className="pr-7 text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
       <p className="mt-1 truncate text-xs text-slate-500">{host}</p>
