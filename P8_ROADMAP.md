@@ -56,6 +56,17 @@ old DOM retry guard independently; assisted P8 enables it automatically.
 The same root task continues through Watch and takeover. No new AI API key,
 scheduler, dependency or network access is needed.
 
+## Active session QA extension
+
+A dedicated [Next 14 P8 synthetic Chromium fixture](P8_ACTIVE_SESSION_CLOSEOUT.md)
+creates a QA task without a worker and then launches the **real browser
+session in the authenticated browser control route** to test Watch,
+independent DOM checking, takeover/handback and owner/nonmember isolation.
+It is strictly limited to a disposable loopback host at port 3005 or 3006,
+with exact Origin, synthetic owner/Project and explicit flags.
+The fixture/session bridge stays within one OS process; cross-process
+browser session persistence remains a separate release gate.
+
 ## Local acceptance gates
 
 1. Focused P8 Vitest tests PASS for checker, owner isolation, budget,
