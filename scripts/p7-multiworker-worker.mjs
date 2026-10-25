@@ -8,7 +8,7 @@ if (process.env.P7_ISOLATED_QA !== "1" || process.env.P7_MULTIWORKER_MONGO_QA !=
     !/^p7_multiworker_qa_[a-f0-9]{12}$/.test(dbName) ||
     !/^pat_[a-f0-9]{12}$/.test(id)) throw new Error("Refusing non-isolated P7 Mongo worker");
 const { MongoClient } = await import("mongodb");
-const client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
+const client = new MongoClient(uri, { directConnection: true, serverSelectionTimeoutMS: 5000 });
 await client.connect();
 const db = client.db(dbName), queue = db.collection("projectAgentDurableTasks");
 const tasks = db.collection("project_agent_tasks");
