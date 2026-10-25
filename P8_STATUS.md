@@ -71,6 +71,13 @@ outputs, SHA and redacted fixture receipts with the local QA handoff.
 
 ### G1 — Runtime task-goal E2E (next development acceptance)
 
+**Implementation update:** deterministic G1 loopback SSE model, guarded
+synthetic worker fixture, app-owned DOM checker and terminal receipt contract
+are committed on this Presentation development branch. See
+[G1 local runtime QA](G1_LOCAL_RUNTIME_QA.md). The host E2E suite must still
+run in an isolated Next 14 host before this gate can be accepted.
+No G1 host PASS, model execution or production approval is claimed here.
+
 Run from a separate, disposable AI-WEB-CHAT QA clone. First use a local
 Dify-shaped model mock with the **actual task/worker/tool continuation**
 path and synthetic in-memory Chromium HTML. Confirm at least:
