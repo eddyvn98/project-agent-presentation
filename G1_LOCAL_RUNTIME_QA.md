@@ -30,6 +30,10 @@ Neither a source review nor G1 unit tests prove worker/model E2E.
 - This is **not** an unrestricted goal verification feature for real user
   requests: outside the exact synthetic marker/flags it is a no-op.
   A visible DOM counter equals 1 is narrower than semantic completion.
+- The worker uses the application's usual task setup, workspace and task
+  store; an isolated host with its normal local dependencies and sandbox
+  image is required. A missing Docker image, database or Chromium install
+  is a **BLOCKED** environment prerequisite, not a passing G1 test.
 - Disable external connectors and Hindsight; use a disposable QA project,
   dedicated Mongo/PostgreSQL and network-isolated development environment.
   Keep this suite on the sole QA process, not main/staging.
