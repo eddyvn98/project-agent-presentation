@@ -12,6 +12,7 @@ import { cleanupP7DiscardedBrowser } from "@/lib/project-agent/p7-qa-browser-cle
 import { p7SyntheticPdf } from "@/lib/project-agent/p7-synthetic-pdf";
 import { prepareP7BrowserFixture } from "@/lib/project-agent/runtime/browser-agent/p7-fixture";
 import { closeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
+import { cleanupP8QaBrowser } from "@/lib/project-agent/runtime/browser-agent/p8-qa-fixture";
 import { setBrowserWatch } from "@/lib/project-agent/runtime/browser-agent/watch";
 import { clearBrowserControl } from "@/lib/project-agent/runtime/browser-agent/control";
 
@@ -84,8 +85,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { projectId
   const task = await readProjectAgentTask(body.taskId);
   if (!task || !p7SyntheticTask(task, params.projectId, allowed.owner!))
     return reply({ error: "Synthetic task not found" }, 404);
-  await closeBrowserSession(task.id).catch(() => {});
-  setBrowserWatch(task.id, false); clearBrowserControl(task.id);
+  if (task.prompt === `${P7_QA_PREFIX} p8 browser fixture - local synthetic data only`)
+    await cleanupP8QaBrowser(task.id);
+  else { await closeBrowserSession(task.id).catch(() => {});
+    setBrowserWatch(task.id, false); clearBrowserControl(task.id); }
   const removed = await deleteProjectAgentConversation(params.projectId, allowed.owner!, { taskId: task.id });
   return reply({ ok: removed === 1, removed });
 }
@@ -118,7 +121,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { projectId:
       return reply({ error: "Synthetic browser recovery failed" }, 503);
     }
   }
-  if (body.kind !== "crash" || process.env.PROJECT_AGENT_P7_QA_CRASH !== "1")
+  if (body.kind !== "crash" || task.prompt !== `${P7_QA_PREFIX} browser fixture - local synthetic data only` ||
+      process.env.PROJECT_AGENT_P7_QA_CRASH !== "1")
     return reply({ error: "QA crash injection is disabled" }, 403);
   const { activeBrowserSession, browserResourceSnapshot } = await import("@/lib/project-agent/runtime/browser-agent/session");
   const session = activeBrowserSession(task.id);
