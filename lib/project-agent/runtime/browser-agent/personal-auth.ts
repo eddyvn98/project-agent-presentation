@@ -51,7 +51,7 @@ export async function enterPersonalLoginSecret(taskId: string, owner: string, te
           [details.type, details.name, details.autocomplete].join(" ")))
       throw new Error("Focus a password or verification-code field first");
     await session.page.keyboard.insertText(text);
-  }, false);
+  }, false, "human");
   return { ok: true }; // NEVER return the secret, include it in logs, or forward it to the model
 }
 export async function submitPersonalLoginField(taskId: string, owner: string) {
@@ -68,7 +68,7 @@ export async function submitPersonalLoginField(taskId: string, owner: string) {
           [field.type, field.name, field.autocomplete].join(" ")))
       throw new Error("Focus the password or verification-code field first");
     await session.page.keyboard.press("Enter");
-  }, false);
+  }, false, "human");
   return { ok: true };
 }
 export async function savePersonalLogin(taskId: string, owner: string,
@@ -78,7 +78,7 @@ export async function savePersonalLogin(taskId: string, owner: string,
   const consent = consents.get(taskId)!;
   if (vaultHost(session.page.url()) !== consent.host)
     throw new Error("Return to the original website before saving its login");
-  const state = await withBrowserOp(session, () => session.context.storageState({ indexedDB: true }), false);
+  const state = await withBrowserOp(session, () => session.context.storageState({ indexedDB: true }), false, "human");
   const grant = await savePersonalBrowserGrant(owner, session.page.url(), state, mode, automation, relatedHosts);
   forgetPersonalLogin(taskId);
   return { grant };
