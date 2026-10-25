@@ -1,6 +1,6 @@
 import type { ProjectAgentTask } from "./types";
 import { stopProjectAgentTask } from "./task-runner";
-import { readProjectAgentTask } from "./task-store";
+import { readProjectAgentTask, recordGuardedTerminalTask } from "./task-store";
 import { stopTaskIfActive } from "./task-terminal-guard";
 import { cleanupP7DiscardedBrowser } from "./p7-qa-browser-cleanup";
 import { p7SyntheticTask, P7_QA_PREFIX } from "./p7-qa-guard";
@@ -14,6 +14,8 @@ export async function stopProjectAgentTaskNow(task: ProjectAgentTask): Promise<"
   if (!latest || latest.status === "done" || latest.status === "failed") return "completed";
   const stopped = await stopTaskIfActive(latest);
   if (!stopped) return "completed"; // Completion or another Stop already won.
+  const finalTask = await readProjectAgentTask(task.id);
+  if (finalTask) await recordGuardedTerminalTask(finalTask);
   if (process.env.PROJECT_AGENT_DURABLE_QUEUE !== "0")
     await revokeDurableTaskLease(task.id);
   // An orphan synthetic fixture has no runner/AbortSignal of its own.
