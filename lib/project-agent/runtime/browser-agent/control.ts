@@ -1,3 +1,4 @@
+import { browserLoopEnabled, noteBrowserLoopHandback, noteBrowserLoopTakeover } from "./loop-state";
 /** Host-process user takeover gate. Only the initiating task owner can change it via the authenticated route. */
 type Control = { paused: boolean; revision: number; touched: number; manualCount: number; listeners: Set<() => void> };
 const active = new Map<string, Control>();
@@ -16,6 +17,7 @@ export function browserControlState(id: string) {
 export function touchBrowserControl(id: string) { const state = get(id); if (state.paused) state.touched = Date.now(); }
 export function requestBrowserTakeover(id: string): void {
   const state = get(id);
+  if (!state.paused && browserLoopEnabled()) noteBrowserLoopTakeover(id);
   state.paused = true; state.manualCount = 0; state.touched = Date.now();
 }
 export function claimHumanBrowserAction(id: string): boolean {
@@ -26,7 +28,8 @@ export function claimHumanBrowserAction(id: string): boolean {
 export function releaseBrowserControl(id: string): void {
   const state = active.get(id);
   if (!state) return;
-  if (state.paused) { state.paused = false; state.revision++; }
+  if (state.paused) { state.paused = false; state.revision++;
+    if (browserLoopEnabled()) noteBrowserLoopHandback(id); }
   state.touched = Date.now();
   for (const notify of state.listeners) notify();
 }
