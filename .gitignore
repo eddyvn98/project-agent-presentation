@@ -13,3 +13,6 @@ playwright/.auth/
 .p7-auth/
 .p7-evidence/
 *.p7-storage-state.json
+!.env.p7.example
+.p7-auth/
+.p7-evidence/
