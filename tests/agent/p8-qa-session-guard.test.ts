@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { p8QaSessionAllowed, P8_QA_PROMPT, P8_QA_OPERATIONS }
+import { p8QaSessionAllowed, p8QaDedicatedOrigin, P8_QA_PROMPT, P8_QA_OPERATIONS }
   from "../../lib/project-agent/p8-qa-session-guard";
 const ctx = { runtime: "sandbox", browser: "1", fixture: "1",
   nodeEnv: "development", projectId: "proj_p8_qa",
@@ -14,6 +14,13 @@ describe("P8 QA Chromium session fixture security contract", () => {
     expect(p8QaSessionAllowed(ctx, task, flags)).toBe(true);
     expect(P8_QA_OPERATIONS.has("qa_prepare")).toBe(true);
     expect(P8_QA_OPERATIONS.has("click")).toBe(false);
+  });
+  it("permits only a dedicated loopback QA origin, never normal dev", () => {
+    expect(p8QaDedicatedOrigin(ctx.origin, ctx.origin, "1")).toBe(true);
+    for (const origin of ["http://127.0.0.1:3004", "http://127.0.0.1:3000",
+      "http://example.org:3006", "https://127.0.0.1:3006"])
+      expect(p8QaDedicatedOrigin(origin, origin, "1")).toBe(false);
+    expect(p8QaDedicatedOrigin(ctx.origin, undefined, "1")).toBe(false);
   });
   it("denies production, other projects and untrusted owner accounts", () => {
     for (const c of [{ nodeEnv: "production" }, { owner: "staff@company.test" },
