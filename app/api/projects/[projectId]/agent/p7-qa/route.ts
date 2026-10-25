@@ -8,6 +8,7 @@ import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask, P7_QA_PREFIX } from "@
 import { recoverP7SyntheticBrowser, withP7SyntheticRecoverySlot } from "@/lib/project-agent/p7-qa-recovery";
 import { PROJECT_AGENT_BOOT_ID } from "@/lib/project-agent/boot";
 import { markP7BrowserRunningIfCurrent } from "@/lib/project-agent/p7-qa-conditional-update";
+import { cleanupP7DiscardedBrowser } from "@/lib/project-agent/p7-qa-browser-cleanup";
 import { p7SyntheticPdf } from "@/lib/project-agent/p7-synthetic-pdf";
 import { prepareP7BrowserFixture } from "@/lib/project-agent/runtime/browser-agent/p7-fixture";
 import { closeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
@@ -97,13 +98,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { projectId:
         prepare: () => prepareP7BrowserFixture(task.id, allowed.owner!),
         readTask: () => readProjectAgentTask(task.id),
         markRunning: latest => markP7BrowserRunningIfCurrent(latest, PROJECT_AGENT_BOOT_ID),
-        cleanup: async () => {
-          // Never erase frames or close a session under live human takeover.
-          if (browserControlState(task.id).paused) return;
-          setBrowserWatch(task.id, false);
-          clearBrowserControl(task.id);
-          await closeBrowserSession(task.id);
-        },
+        cleanup: () => cleanupP7DiscardedBrowser(task.id).then(() => {}),
       }));
       if (!recovered) return reply({ error: "Synthetic browser recovery already in progress" }, 409);
       if (!recovered.ok) return reply({ error: recovered.reason === "human_takeover" ?
