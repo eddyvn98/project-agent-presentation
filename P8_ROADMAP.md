@@ -6,7 +6,13 @@
 Evidence: 67/67 P7 regressions, 1/1 Mongo contract, 2/2 host CAS/Stop,
 owner 200 / nonmember 404, typecheck PASS, as reported by the local operator.
 
-**P8: code implemented in Presentation branch; host QA NOT YET ACCEPTED.**
+**P8: synthetic Next 14 host L1/L2 + takeover/handback QA ACCEPTED
+(operator-reported, 2026-10-25); real-model, multi-worker and release gates OPEN.**
+Host branch `feat/project-agent-local-business`: P8 code `4aec99a4`,
+status/index `ca65a8e104664536216183d8bfd102f730ea9376`.
+Reported host focused 115 PASS / 1 SKIP; P8 guard/session 8/8 PASS;
+L1 and L2 each 1/1 PASS. See [P8 status](P8_STATUS.md) for scope and
+independent-verification limitations.
 The baseline DOM-first browser, visual fallback, Browser Watch,
 takeover/handback, approvals, per-task leases, runtime StallGuard,
 ActionReplayGuard and token/cost accounting already existed before P8.
@@ -81,7 +87,7 @@ browser session persistence remains a separate release gate.
    Next version, browser version, PASS/FAIL/SKIP, retry count and elapsed time.
    The report must distinguish *observed progress* from *goal completion*.
 
-## Release gates not completed by source-only P8 work
+## Release gates remaining after synthetic host acceptance
 
 - State is **process-local RAM** (30-minute TTL, 16 events/task, 64 tasks).
   Summary metrics persist through the existing task log, but live budgets,
@@ -97,5 +103,5 @@ browser session persistence remains a separate release gate.
 - Production-grade Entra, real Dify, staging, threat review, multi-worker
   browser sessions, cost alerts and rollback remain separate release gates.
 
-See [P8 local QA](P8_LOCAL_QA.md) for executable commands. Do not run CI,
+See [P8 status and next gates](P8_STATUS.md) and [P8 local QA](P8_LOCAL_QA.md) for executable commands. Do not run CI,
 access real external Dify/Entra, touch `main/staging`, or merge during P8 QA.
