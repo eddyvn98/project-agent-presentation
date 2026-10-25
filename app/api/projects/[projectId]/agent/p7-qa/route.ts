@@ -21,7 +21,9 @@ async function authorized(req: NextRequest, projectId: string) {
   if (auth.response) return { response: auth.response };
   const owner = auth.callerEmail?.trim().toLowerCase() ?? "";
   const project = await projectCap.getProject(projectId, auth.ownerEmail!);
-  const permitted = project.ok && Boolean(project.data) && p7QaAllowed({
+  // Synthetic fixtures belong only to the initiating Project owner, never collaborators.
+  const permitted = auth.ownerEmail?.trim().toLowerCase() === owner &&
+    project.ok && Boolean(project.data) && p7QaAllowed({
     runtime: process.env.PROJECT_AGENT_RUNTIME, browser: process.env.PROJECT_AGENT_BROWSER_AGENT,
     fixture: process.env.PROJECT_AGENT_P7_QA_FIXTURE, nodeEnv: process.env.NODE_ENV,
     projectId, projectName: project.data?.name ?? "", owner,
@@ -87,6 +89,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { projectId:
   if (body.kind === "recover") {
     if (!canRecoverP7BrowserTask(task))
       return reply({ error: "Only an unfinished synthetic browser task can be restored" }, 409);
+    const { browserControlState } = await import("@/lib/project-agent/runtime/browser-agent/control");
+    if (browserControlState(task.id).paused)
+      return reply({ error: "Release human browser control before recovering the fixture" }, 409);
     try {
       const result = await prepareP7BrowserFixture(task.id, allowed.owner!);
       if (!result.hasFrame) throw new Error("Synthetic browser recovery produced no frame");
