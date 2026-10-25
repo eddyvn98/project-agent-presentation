@@ -1,6 +1,6 @@
 # P7.6.2 — isolated two-worker lease/recovery acceptance
 
-**Status: IMPLEMENTED / NOT YET EXECUTED AGAINST REAL QA MONGO.**
+**Status: Mongo/two-OS-process smoke 3/3 PASS at SHA 602f8cca; full two-Next.js-worker Agent runtime OPEN.**
 The preceding [P7.6.1 local mock E2E](P7_STATUS.md) **PASS** used a
 single-process runner with `PROJECT_AGENT_DURABLE_QUEUE=0`. That result
 does **not** prove cross-worker lease ownership or recovery.
