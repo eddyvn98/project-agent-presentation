@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ProjectAgentRichBlock } from "../src/components/ProjectAgentRichBlocks";
+import { ProjectAgentAnswer } from "../src/components/ProjectAgentAnswer";
 import { parseRichUiBlock } from "../src/lib/project-agent/rich-ui";
 import { safeProject3DViewerUrl } from "../src/lib/project-agent/scene3d-policy";
 
@@ -29,6 +30,15 @@ describe("safe click-to-load 3D presentation", () => {
     expect(iframe?.getAttribute("sandbox")).not.toContain("allow-same-origin");
     await user.click(screen.getByRole("button", { name: "Close 3D viewer" }));
     expect(container.querySelector("iframe")).toBeNull();
+  });
+  it("threads host opt-in through the actual Markdown agent-ui rendering path", async () => {
+    const markdown = "Before\\n\\n\`\`\`agent-ui\\n" + source + "\\n\`\`\`\\n\\nAfter";
+    const { container, rerender } = render(<ProjectAgentAnswer markdown={markdown} />);
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open 3D viewer" })).toBeNull();
+    rerender(<ProjectAgentAnswer markdown={markdown} enable3DViewer />);
+    expect(screen.getByRole("button", { name: "Open 3D viewer" })).toBeTruthy();
+    expect(screen.getByText("After")).toBeTruthy();
   });
   it("rejects external, encoded, scripting and traversal viewer URLs", () => {
     expect(safeProject3DViewerUrl(valid)).toBe(valid);
