@@ -72,7 +72,10 @@ test.describe("P4 Presentation Lab interactive regression", () => {
     await expect(trigger).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(dialog).toBeVisible();
-    await dialog.getByRole("button", { name: "Close source details" }).click();
+    const close = dialog.getByRole("button", { name: "Close source details" });
+    await expect(close).toBeInViewport();
+    await close.click();
+    await expect(dialog).toHaveCount(0);
     await expect(trigger).toBeFocused();
   });
 
