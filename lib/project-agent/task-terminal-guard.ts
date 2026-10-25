@@ -52,3 +52,25 @@ export async function stopTaskIfActive(
   });
   return result.modifiedCount === 1;
 }
+
+/** A late worker must never resurrect a queued task that Stop already closed. */
+export async function markTaskRunningIfQueued(
+  task: Pick<ProjectAgentTask, "id" | "projectId" | "ownerEmail">, bootId: string,
+): Promise<boolean> {
+  if (!/^pat_[a-f0-9]{12}$/.test(task.id)) throw new Error("Invalid queued task id");
+  try { await assertActiveTaskLease(); }
+  catch (error) {
+    if (error instanceof Error && /MongoDB task lease expired or changed/.test(error.message))
+      return false;
+    throw error;
+  }
+  const db = await getMongoAiDb(), now = new Date().toISOString();
+  const result = await db.collection(PROJECT_AGENT_TASKS_COLLECTION).updateOne({
+    _id: task.id, projectId: task.projectId, ownerEmail: task.ownerEmail,
+    status: "queued", cancelled: { $ne: true },
+  }, {
+    $set: { status: "running", bootId, startedAt: now, updatedAt: now },
+    $push: { log: `${now} app_stage :: loading_context` },
+  });
+  return result.modifiedCount === 1;
+}
