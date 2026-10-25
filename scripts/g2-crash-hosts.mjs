@@ -13,6 +13,9 @@ const REQUIRED = ["P7_ISOLATED_QA", "P8_QA_ISOLATED_HOST",
 export function crashEnvironment(env = process.env) {
   if (process.platform === "win32")
     throw new Error("G2 process-group SIGKILL harness requires POSIX");
+  if (env.NODE_ENV === "production" ||
+      env.G2_QA_DB_ISOLATION_ATTESTED !== "1")
+    throw new Error("G2 crash QA requires nonproduction and explicit QA DB isolation attestation");
   for (const name of REQUIRED)
     if (env[name] !== "1") throw new Error(name + "=1 required for G2 crash QA");
   if (env.PROJECT_AGENT_RUNTIME !== "sandbox" ||
