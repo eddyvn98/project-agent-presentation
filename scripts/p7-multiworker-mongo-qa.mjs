@@ -30,10 +30,15 @@ function spawn(id) {
   return {
     child, send: msg => child.send(msg),
     next: async () => {
-      const msg = await Promise.race([
-        pending.length ? Promise.resolve(pending.shift()) : new Promise(resolve => waiters.push(resolve)),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("QA worker event timeout")), 10000)),
-      ]);
+      const msg = pending.length ? pending.shift() : await new Promise((done, reject) => {
+        const callback = value => { clearTimeout(timer); done(value); };
+        const timer = setTimeout(() => {
+          const pos = waiters.indexOf(callback);
+          if (pos >= 0) waiters.splice(pos, 1);
+          reject(new Error("QA worker event timeout"));
+        }, 10000);
+        waiters.push(callback);
+      });
       assert.notEqual(msg.event, "error", msg.message ?? "worker error");
       return msg.event;
     },
@@ -123,7 +128,11 @@ try {
   console.log(JSON.stringify({ scope: "real_Mongo_two_OS_processes", cases: report,
     externallyCalled: false, productionReady: false }, null, 2));
 } finally {
-  for (const child of children) child.kill("SIGKILL");
+  const exited = [...children].map(child => new Promise(resolve => {
+    child.once("exit", resolve);
+    child.kill("SIGKILL");
+  }));
+  await Promise.all(exited);
   if (created) {
     const marker = await database.collection("p7_test_run").findOne({ _id: "marker" });
     if (marker?.runId === runId && marker.purpose === "isolated_multiworker_qa")
