@@ -14,6 +14,12 @@
   differently; subscriptions and version limits still apply.
   Do not equate the GitHub repository's MIT badge with browser
   binary or multi-tenant SaaS redistribution rights.
+- The upstream `js/README.md` contains older-sounding blanket
+  "free and open source / no subscriptions" marketing text, whereas
+  the root README and proprietary binary license describe current
+  entitlement/version restrictions. Treat the **binary license**
+  and provider's current contract as controlling, not a stale
+  language-binding README or badge.
 - Upstream's claims of 87 C++ stealth patches, 50+ detection sites
   and specific bot/CAPTCHA test scores are vendor-reported, not
   independently accepted Project Agent benchmarks. Avoid assuming
