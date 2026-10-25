@@ -1,4 +1,5 @@
 import { browserLoopEnabled, noteBrowserLoopHandback, noteBrowserLoopTakeover } from "./loop-state";
+import { clearBrowserStall } from "./stall-guard";
 /** Host-process user takeover gate. Only the initiating task owner can change it via the authenticated route. */
 type Control = { paused: boolean; revision: number; touched: number; manualCount: number; listeners: Set<() => void> };
 const active = new Map<string, Control>();
@@ -29,6 +30,7 @@ export function releaseBrowserControl(id: string): void {
   const state = active.get(id);
   if (!state) return;
   if (state.paused) { state.paused = false; state.revision++;
+    clearBrowserStall(id); // Human changed the page; old locator failure evidence is stale.
     if (browserLoopEnabled()) noteBrowserLoopHandback(id); }
   state.touched = Date.now();
   for (const notify of state.listeners) notify();
