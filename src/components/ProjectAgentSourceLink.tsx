@@ -20,13 +20,29 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
     if (rect.top < 12 || rect.bottom > window.innerHeight - 12)
       trigger.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
   };
+  const restoreTrigger = () => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    trigger.focus({ preventScroll: true });
+    revealTrigger();
+    // Radix unmount/focus-scope cleanup can finish after onCloseAutoFocus.
+    // Recheck after one and two paints, not after a fixed sleep. Stop if the
+    // user changed focus, reopened the popover, or navigated away.
+    requestAnimationFrame(() => {
+      if (!trigger.isConnected || document.activeElement !== trigger) return;
+      revealTrigger();
+      requestAnimationFrame(() => {
+        if (trigger.isConnected && document.activeElement === trigger) revealTrigger();
+      });
+    });
+  };
   if (!safePresentationUrl(href) || !/^https?:\/\//i.test(href)) return <span>{label}</span>;
   return <Popover.Root onOpenChange={(open) => { if (open) revealTrigger(); }}>
     <Popover.Trigger asChild><button ref={triggerRef} type="button" aria-label={`Show source: ${title} (${host})`}
       className="not-prose mx-0.5 inline-flex min-h-6 max-w-[14rem] items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 align-baseline text-xs leading-5 text-slate-600 focus-visible:ring-2 focus-visible:ring-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
       <Globe2 aria-hidden className="h-3 w-3 shrink-0" /><span className="truncate">{label}</span>
     </button></Popover.Trigger>
-    <Popover.Portal><Popover.Content sideOffset={6} collisionPadding={12} onOpenAutoFocus={(event) => { event.preventDefault(); revealTrigger(); linkRef.current?.focus({ preventScroll: true }); }} onCloseAutoFocus={(event) => { event.preventDefault(); triggerRef.current?.focus({ preventScroll: true }); revealTrigger(); }} aria-label={`Source details: ${title}`}
+    <Popover.Portal><Popover.Content sideOffset={6} collisionPadding={12} onOpenAutoFocus={(event) => { event.preventDefault(); revealTrigger(); linkRef.current?.focus({ preventScroll: true }); }} onCloseAutoFocus={(event) => { event.preventDefault(); restoreTrigger(); }} aria-label={`Source details: ${title}`}
       className="relative z-[100] w-72 max-w-[calc(100vw-1.5rem)] overflow-auto rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-xl dark:border-slate-700 dark:bg-slate-900"
       style={{ maxHeight: "var(--radix-popover-content-available-height)", overflowWrap: "anywhere" }}>
       <p className="pr-7 text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
