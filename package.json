@@ -13,7 +13,9 @@
     "test:e2e": "playwright test",
     "check:lines": "node tests/check-lines.mjs",
     "test:agent": "vitest run --config vitest.agent.config.ts",
-    "check:agent-routes": "node scripts/check-agent-routes.mjs"
+    "check:agent-routes": "node scripts/check-agent-routes.mjs",
+    "check:host:p7": "node scripts/p7-host-preflight.mjs",
+    "test:host:p7": "playwright test --config playwright.host.config.ts"
   },
   "peerDependencies": {
     "next": ">=14",
