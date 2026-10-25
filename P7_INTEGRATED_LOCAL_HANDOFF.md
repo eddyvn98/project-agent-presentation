@@ -265,13 +265,12 @@ exact synthetic browser prompt, previous status and timestamp, and
 `cancelled != true`. Thus Stop winning first prevents the recovery write;
 Stop winning second leaves the stopped state authoritative.
 
-**Host integration check:** `markP7BrowserRunningIfCurrent` uses Mongo
-collection `projectAgentTasks` with string `_id`. The neutral repository
-does not contain the host-owned `projectAgentTasks.repo.ts` implementation.
-Local QA must verify the host task repository uses this exact collection/key.
-If not, the conditional update fails closed; align with the host's actual
-Mongo collection rather than relaxing the guard or falling back to an
-unconditional update. No production data should be modified for that check.
+**Host integration check:** Both recovery CAS and read-only mapping now
+use `project_agent_tasks` with string `_id`, matching the host-owned
+`projectAgentTasks.repo.ts` declaration. Run `npm run test:p7:host-schema`
+in AI-WEB-CHAT (or point `P7_HOST_TASK_REPO_PATH` at its actual file).
+The contract fails if the authoritative source is unavailable or mismatched.
+Do not relax CAS or modify production data to satisfy this check.
 
 Focused tests:
 
