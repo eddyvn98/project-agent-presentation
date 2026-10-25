@@ -7,6 +7,11 @@ export interface P7QaContext {
   nodeEnv: string | undefined; projectId: string; projectName: string;
   owner: string; origin: string | null; requestOrigin: string; expectedProjectId?: string;
 }
+/** Read-only GETs normally have no Origin header; mutations must keep exact Origin. */
+export function p7QaRequestOrigin(method: string, headerOrigin: string | null,
+ requestOrigin: string): string | null {
+  return method === "GET" && headerOrigin === null ? requestOrigin : headerOrigin;
+}
 export function p7QaAllowed(context: P7QaContext): boolean {
   if (context.nodeEnv === "production" || context.fixture !== "1" ||
       context.runtime !== "sandbox" || context.browser !== "1") return false;
