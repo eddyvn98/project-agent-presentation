@@ -30,11 +30,11 @@ if (process.env.P7_ALLOW_BROWSER_CONTROL === "1" && !process.env.P7_RUNNING_BROW
   throw new Error("Browser control requires P7_RUNNING_BROWSER_TASK_ID");
 if (process.env.P7_ALLOW_TASK_CREATION === "1" && process.env.P7_PROJECT_CHAT_PATH === "/")
   throw new Error("Use an isolated QA chat route, not the host root");
-console.log("P7 host QA preflight passed (no credentials printed).");
+console.log("P7 host QA storage-state FILE checks passed; NextAuth login is NOT verified.");
 console.log(JSON.stringify({
   remoteHost: !["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname),
-  ownerAuthLoaded: true,
-  otherAuthLoaded: Boolean(process.env.P7_OTHER_STORAGE_STATE),
+  ownerStateFileParsed: true,
+  otherStateFileParsed: Boolean(process.env.P7_OTHER_STORAGE_STATE),
   createTaskEnabled: process.env.P7_ALLOW_TASK_CREATION === "1",
   browserControlEnabled: process.env.P7_ALLOW_BROWSER_CONTROL === "1",
   chatRouteConfigured: Boolean(process.env.P7_PROJECT_CHAT_PATH),
