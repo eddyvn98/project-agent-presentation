@@ -27,7 +27,8 @@ export function p7QaAllowed(context: P7QaContext): boolean {
 export function p7SyntheticTask(task: { prompt: string; projectId: string; ownerEmail: string },
  projectId: string, owner: string): boolean {
   return [`${P7_QA_PREFIX} browser fixture - local synthetic data only`,
-    `${P7_QA_PREFIX} pdf fixture - local synthetic data only`].includes(task.prompt) &&
+    `${P7_QA_PREFIX} pdf fixture - local synthetic data only`,
+    `${P7_QA_PREFIX} p8 browser fixture - local synthetic data only`].includes(task.prompt) &&
     task.projectId === projectId &&
     task.ownerEmail.trim().toLowerCase() === owner.trim().toLowerCase();
 }
