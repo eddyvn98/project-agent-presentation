@@ -6,7 +6,8 @@ const MAX_IMAGE_BYTES = 750_000;
 const MAX_HISTORY_BYTES = 4 * 1024 * 1024;
 const MAX_HISTORY_STEPS = 12;
 const MAX_WATCH_TASKS = 16;
-const frames = new Map<string, BrowserFrame>();
+const watchGlobal = globalThis as typeof globalThis & { __projectAgentWatchFrames?: Map<string, BrowserFrame> };
+const frames = watchGlobal.__projectAgentWatchFrames ??= new Map<string, BrowserFrame>();
 
 export interface BrowserClickMarker { x: number; y: number; kind: "agent" | "human" }
 export interface BrowserHistoryStep {
