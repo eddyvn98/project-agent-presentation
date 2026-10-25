@@ -1,9 +1,12 @@
 # G2 — browser ownership, two-process recovery and host QA
 
-**STATUS: OPEN. Development-only source and executable QA harness landed,
-but neither the real Mongo/two-process run nor two Next.js/Chromium workers
-have been executed in the source-authoring environment.**
+**STATUS: G2 OPEN; ownership, takeover, Stop and Mongo recovery
+subgates passed in isolated host QA (operator-reported 2026-10-25).
+The two-Next.js worker crash -> quarantine -> reviewed browser
+recovery E2E has NOT been executed or accepted.**
 G1 single-worker/mock model/synthetic DOM remains accepted separately.
+The Presentation source-authored environment did not run the private
+AI-WEB-CHAT host tests; results below are local-operator evidence.
 
 ## Root cause and implemented mitigation
 
@@ -21,6 +24,15 @@ Stop revocation; expiry quarantine; explicit reviewed new-epoch claim.
 
 The session runtime binds a claimed token when opening Chromium, validates
 it before operations, and closes the local context on heartbeat loss.
+**Root-cause fix following host E2E:** `withBrowserOp(session, fn,
+countAgentAction, ownershipMode)` uses two independent parameters;
+`countAgentAction=false` no longer implies human ownership.
+The P7/P8 synthetic setup uses the default `agent` lease without
+incrementing the counter. Takeover/manual and personal-auth browser
+operations pass `"human"` explicitly. An inferred human lease previously
+closed the synthetic Chromium session during setup; host corrected it
+before the successful closeout. Source regression
+`tests/agent/g2-browser-op-mode.test.ts` checks this behavior.
 The manual takeover/handback path changes Mongo state and revision, not
 only RAM. Existing P7 Stop now revokes G2 ownership when the feature is
 enabled. The G2 owner does not auto-handback after the old RAM timer:
@@ -40,11 +52,35 @@ No production recovery endpoint was enabled by this change.
 
 | Command | Scope | Exit meaning |
 | --- | --- | --- |
-| `npm run test:g2:unit` | Four Node in-memory atomic-Mongo contract tests: claim race, revision/takeover, remote Stop, crash/quarantine/review | Source contract only |
-| `npm run test:g2:multiworker:db` | Five scenarios using **two real Node child processes**, same **real** isolated Mongo; action event ledger | Mongo/process proof, not Next/Chromium |
-| `npm run test:host:g2` | Two **separate Next.js QA server processes**, same Project/DB; Chromium ownership, owner-only manual takeover and remote Stop | Partial two-Next browser/control proof, not crash recovery |
+| `npm run test:g2:unit` | Four Node in-memory atomic-Mongo contract tests: claim race, revision/takeover, remote Stop, crash/quarantine/review | Operator reported 4/4 PASS |
+| `npm run test:g2:multiworker:db` | Five scenarios using **two real Node child processes**, same **real** isolated Mongo; action event ledger | Operator reported 5/5 PASS; not Next/Chromium crash E2E |
+| `npm run test:host:g2` | Two **separate Next.js QA server processes**, same Project/DB; Chromium ownership, owner-only manual takeover and remote Stop | Operator reported 1/1 PASS; not worker-crash recovery |
 | `npm run test:p7:multiworker:unit` | P7 task lease and Stop regression | Task ledger, not browser |
 | `npm run test:p8:unit`, `npm run test:g1:unit` | P8/G1 backward compatibility | Not a G2 E2E substitute |
+
+### Integrated QA evidence and limitations
+
+On AI-WEB-CHAT Next.js **14.2.16**, local agent used a private QA
+worktree based on host HEAD **`1e2f5c4a`** and Presentation source
+**`ba89dfdd`**. This host SHA is a **base commit**, not a reported
+G2 integration/push SHA; do not invent one.
+
+- G2 deterministic 4/4 PASS; two Node/Mongo worker 5/5 PASS;
+  two Next.js+Chromium worker `test:host:g2` 1/1 PASS after
+  fixing inferred ownershipMode.
+- Two-Next proof: duplicate owner rejected, nonmember Watch denied,
+  Agent click, takeover/manual/handback, remote Stop fenced subsequent
+  actions, QA cleanup returned HTTP 200.
+- Regression P7 **40/40**, P8 **40/40**, P8 QA **8/8**, G1 **8/8**
+  PASS; integrated TypeScript and `git diff --check` PASS.
+  Ported file limit <=299 (reported maximum **276**).
+- All synthetic Projects/tasks, two Mongo run DBs, PostgreSQL run DB,
+  auth storage states and QA env files were cleaned; both Next servers
+  stopped, ports 3005/3006 freed.
+- No real provider, real external mutation, multi-host SIGKILL/recovery,
+  Chromium-tab migration or machine-wide network audit was tested.
+  The source changes **after** this local host run need a focused
+  regression rerun before any new host acceptance claim.
 
 Source G1 test correction in this branch: the public task API strips
 `task.log`. `tests/host-browser/g1-goal-runtime.api.spec.ts` now
@@ -59,12 +95,15 @@ host's own Mongo adapter, auth code and Next.js 14.2.16 configuration:
 - New `lib/project-agent/runtime/browser-agent/g2-lease-core.mjs`,
   `g2-lease-core.d.mts`, `g2-ownership.ts`.
 - Changed `lib/project-agent/runtime/browser-agent/session.ts`,
-  `control.ts`, `manual.ts` and `lib/project-agent/task-stop.ts`.
+  `control.ts`, `manual.ts`, `personal-auth.ts` and
+  `lib/project-agent/task-stop.ts`.
 - New `tests/node/g2-browser-lease.test.mjs`,
   `scripts/g2-multiworker-browser-worker.mjs`,
   `scripts/g2-multiworker-browser-qa.mjs`.
 - New `tests/host-browser/g2-two-next.api.spec.ts`,
-  `scripts/g2-host-preflight.mjs`; three `package.json` scripts.
+  `scripts/g2-host-preflight.mjs`, `scripts/g2-host-origins.mjs`,
+  `tests/node/g2-host-origins.test.mjs` and focused ownership-mode test
+  `tests/agent/g2-browser-op-mode.test.ts`. QA scripts are opt-in.
 - G1 test parity correction in
   `tests/host-browser/g1-goal-runtime.api.spec.ts`.
 - This handoff and `P8_STATUS.md`/`P8_ROADMAP.md` are documentation.
@@ -85,6 +124,8 @@ No real Dify, Entra, browser websites or outside network calls.
 
 ```bash
 npm run test:g2:unit
+node --test tests/node/g2-host-origins.test.mjs
+npx vitest run --config vitest.agent.config.ts tests/agent/g2-browser-op-mode.test.ts
 npm run test:p7:multiworker:unit
 npm run test:p7:terminal
 npm run test:p8:unit
@@ -108,12 +149,15 @@ isolated QA run database is removed.
 
 ## Two genuine Next.js workers: host-specific gate
 
-Port G2 source/runtime and tests to a **disposable AI-WEB-CHAT QA
-worktree**, rebasing against current host code instead of overwriting
-host Mongo/auth adapters. Run two distinct Next.js 14.2.16 processes
-on `127.0.0.1:3005` and `127.0.0.1:3006`, sharing the same dedicated
-QA Mongo/PostgreSQL/Project and synthetic NextAuth owner/nonmember.
-Verify distinct **Node process IDs** separately via OS process list.
+Port G2 source/runtime and tests into **two separate disposable
+AI-WEB-CHAT QA checkouts/worktrees** (each with its **own .next/build
+directory**), rebasing against current host code instead of overwriting
+Mongo/auth adapters. Sharing one checkout/`.next` between concurrent
+Next dev servers causes build-cache interference and invalid evidence.
+Run independent Next.js 14.2.16 processes at ports 3005/3006 with
+one shared dedicated QA Mongo/PostgreSQL/Project and synthetic
+NextAuth owner/nonmember. Verify distinct Node OS PIDs in the process
+list; `pid` inside fixture is Node's `process.pid`, not Chromium PID.
 Do not use production Entra, Dify, real profiles, or a normal dev
 host. Host code is NOT independently available to this repository.
 
@@ -131,8 +175,8 @@ PROJECT_AGENT_P8_LOOP_REPORT_ONLY=0
 P8_QA_ISOLATED_HOST=1
 G2_ISOLATED_QA=1
 PROJECT_AGENT_G2_BROWSER_OWNERSHIP=1
-# Host A: P8_QA_ALLOWED_ORIGIN=http://127.0.0.1:3005
-# Host B: P8_QA_ALLOWED_ORIGIN=http://127.0.0.1:3006
+# Host A: P8_QA_ALLOWED_ORIGIN=http://localhost:3005
+# Host B: P8_QA_ALLOWED_ORIGIN=http://localhost:3006
 ```
 
 In an isolated QA terminal, supply these additional variables plus
@@ -140,9 +184,9 @@ the existing P8 owner/nonmember storage-state paths:
 
 ```bash
 P7_ISOLATED_QA=1
-P7_HOST_BASE_URL=http://127.0.0.1:3005
-G2_QA_OTHER_ORIGIN=http://127.0.0.1:3006
-P8_QA_ALLOWED_ORIGIN=http://127.0.0.1:3005
+P7_HOST_BASE_URL=http://localhost:3005
+G2_QA_OTHER_ORIGIN=http://localhost:3006
+P8_QA_ALLOWED_ORIGIN=http://localhost:3005
 P8_QA_ISOLATED_HOST=1
 P8_QA_ALLOW_CLOSEOUT=1
 P8_QA_EXPECT_REPORT_ONLY=0
@@ -156,6 +200,16 @@ PROJECT_AGENT_BROWSER_AGENT=1
 PROJECT_AGENT_DURABLE_QUEUE=0
 G2_QA_ALLOW_CLOSEOUT=1
 ```
+
+**Origin requirement:** Next 14 in the local host canonicalized
+`req.nextUrl.origin` to `http://localhost:<port>` even when bound
+to `127.0.0.1`. Prefer the exact `localhost` origins above for
+the entire QA run (server route origin, HTTP Origin header, NextAuth
+state verification, Playwright baseURL and P8_QA_ALLOWED_ORIGIN).
+The new preflight also accepts a consistent `127.0.0.1` pair
+on 3005/3006; never mix these hostnames or relax Origin/CSRF checks.
+`node --test tests/node/g2-host-origins.test.mjs` covers the rule
+(4/4 PASS in the source-authoring Node sandbox with matching Git blobs).
 
 Run `npm run test:host:g2`. Preflight validates authentic synthetic
 sessions at BOTH origins; test opens the same synthetic task on host A,
@@ -187,6 +241,13 @@ strictly to the host's NextAuth and task API behavior.
 5. Record host+source SHAs, distinct OS PIDs, Mongo collection/epoch
    transitions, exact PASS/FAIL/SKIP, task status and receipts, network
    scope and cleanup. Delete only synthetic Project/run DB/auth files.
+
+**Prior host pass covers ownership/takeover/Stop only.**
+The remaining blocker is a real Next browser-owning worker **SIGKILL**,
+lease expiry -> quarantine in shared Mongo, B denied pre-review,
+owner-reviewed fresh session on B, stale owner/ref fencing, and zero
+duplicate actions across both host processes. Record exact SHA/commands,
+cleanup and an independently verified result.
 
 **G2 stays OPEN until these host/runtime and failure-injection
 requirements pass.** A two-Node/Mongo CAS smoke by itself or two Next
