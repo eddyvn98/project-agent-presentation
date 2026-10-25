@@ -24,7 +24,7 @@ export function isolatedQaOrigin(baseURL, mutation = false, approvedOrigin) {
 export async function verifySyntheticNextAuthState(origin, filename, expected, requester) {
   if (!filename || !existsSync(resolve(filename)))
     throw new Error("Synthetic QA Playwright storage state file is missing");
-  if (resolve(filename).split(/[\\\\/]/).includes("public"))
+  if (resolve(filename).replaceAll("\\", "/").split("/").includes("public"))
     throw new Error("Never load QA authentication state from a public directory");
   const client = await requester.newContext({
     baseURL: origin, storageState: resolve(filename),
