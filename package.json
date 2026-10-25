@@ -19,12 +19,13 @@
     "p7:qa:browser": "node scripts/p7-browser-preflight.mjs",
     "p7:qa:readiness": "node scripts/p7-host-readiness.mjs",
     "p7:qa:sso": "node scripts/p7-sso-preflight.mjs",
+    "p7:qa:session": "node scripts/p7-session-preflight.mjs",
     "p7:qa:create": "node scripts/p7-qa-bootstrap.mjs create",
     "p7:qa:cleanup": "node scripts/p7-qa-bootstrap.mjs cleanup",
     "p7:qa:auth-tests": "node --test tests/node/p7-*.test.mjs",
     "test:p7:closeout": "vitest run --config vitest.agent.config.ts tests/agent/p7-qa-recovery-race.test.ts tests/agent/p7-qa-conditional-update.test.ts tests/agent/p7-qa-browser-cleanup.test.ts tests/agent/p7-qa-stop-cleanup.test.ts",
     "test:p7:host-schema": "node --test tests/host-schema/p7-task-collection.contract.mjs",
-    "test:host:p7:closeout": "playwright test --config playwright.host.config.ts tests/host-browser/p7-cas-stop.api.spec.ts --project=host-api"
+    "test:host:p7:closeout": "node scripts/p7-session-preflight.mjs --mutation && playwright test --config playwright.host.config.ts tests/host-browser/p7-cas-stop.api.spec.ts --project=host-api"
   },
   "peerDependencies": {
     "next": ">=14",
