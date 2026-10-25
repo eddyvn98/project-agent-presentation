@@ -13,7 +13,7 @@ import { loadDefaultMemoryContext, loadProjectChatContext } from "./project-chat
 import { loadProjectAgentTaskContext } from "./task-context"; import type { ProjectAgentTask, ProjectAgentTaskSource } from "./types";
 import { resolveDifyConversationId } from "./conversation";
 import { autoCompactIfNeeded } from "./auto-compact"; import { readProjectAgentTask, updateProjectAgentTask, recordGuardedTerminalTask } from "./task-store";
-import { routeModelSelector } from "./runtime/usage-pricing"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
+import { routeModelSelector } from "./runtime/usage-pricing"; import { isG1QaTask, type G1GoalReceipt } from "./runtime/g1-goal-check"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
 import { commitTaskTerminalIfActive, markTaskRunningIfQueued } from "./task-terminal-guard"; import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
 const MAX_VISUAL_REVIEW_PASSES = 4;
 export function projectAgentDifyUser(ownerEmail: string, projectId: string): string {
@@ -55,9 +55,9 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 	const task = await readProjectAgentTask(taskId);
 	if (!task) throw new Error(`Project Agent task not found: ${taskId}`);
 	let latestFiles: ProjectAgentTask["files"] = [];
-	let latestAnswer = "";
+	let latestAnswer = ""; let g1Receipt: G1GoalReceipt | undefined;
 	let wroteLesson = false; // reflect: fire-and-forget cheap-model lesson after the final status
-	const reflect = (finalTask: ProjectAgentTask) => { void reflectOnTask({ task: finalTask, user: projectAgentDifyUser(task.ownerEmail, task.projectId), wroteLesson, log: (logLine) => updateProjectAgentTask(task.id, { logLine }) }).catch(() => {}); return finalTask; };
+	const reflect = (finalTask: ProjectAgentTask) => { if (isG1QaTask(task)) return finalTask; void reflectOnTask({ task: finalTask, user: projectAgentDifyUser(task.ownerEmail, task.projectId), wroteLesson, log: (logLine) => updateProjectAgentTask(task.id, { logLine }) }).catch(() => {}); return finalTask; };
 	let runtimeSources: ProjectAgentTaskSource[] = [];
 	let partialQueue: Promise<void> = Promise.resolve();
 	const threadId = task.conversationId;
@@ -122,7 +122,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			const message = await runRuntimeAgent({
 				workspaceState, sources: runtimeSources, chatId: chatKey, taskId: task.id, projectId: task.projectId, user, ownerEmail: task.ownerEmail, scheduledRun: Boolean(task.scheduleRunId || task.workflowRunId), engines: task.engines, modelSelector: task.modelSelector || routeModelSelector(task.userPrompt ?? task.prompt), recoverChatContext: () => buildChatRecap(task), userPrompt: task.userPrompt ?? task.prompt, onBoard: (boardId) => { void updateProjectAgentTask(task.id, { workspaceBoardId: boardId }).catch(() => {}); }, boardId: task.boardId, onWorkspaceSaved, query, conversationId, signal,
 				onStep: (step) => { void updateProjectAgentTask(task.id, { logLine: step.tool === "model_step" ? `thinking :: ${step.detail}` : step.tool === "metrics" ? `metrics :: ${step.detail}` : step.tool === "trajectory" ? `trajectory :: ${step.detail}` : step.tool === "plan" ? `plan :: ${step.detail.slice(0, 1800)}` : step.tool === "tool_failed" ? `tool failed :: ${step.detail}` : step.tool === "progress_message" ? `progress_message :: ${step.detail.replace(/\s+/g, " ").slice(0, 240)}` : `using tool ${step.tool} :: ${step.detail.replace(/\s+/g, " ").slice(0, 200)}` }).catch(() => {}); },
-				onConversation: (id) => { conversationId = id; void updateProjectAgentTask(task.id, conversationPatch(id)).catch(() => {}); },
+				onConversation: (id) => { conversationId = id; void updateProjectAgentTask(task.id, conversationPatch(id)).catch(() => {}); }, onG1Receipt: value => { g1Receipt = value; },
 			});
 			runtimeSources = message.sources ?? runtimeSources;
 			return message;
@@ -263,7 +263,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		await updateProjectAgentTask(task.id, { logLine: "app_stage :: saving_results" });
 		const finished = await readProjectAgentTask(task.id).catch(() => null);
 		await saveTaskWorkLog(task.projectId, projectOwnerEmail, describeTaskWork(finished ?? task, latestFiles.map((file) => file.name), savedSources)).catch(() => {});
-		const accepted = await commitTaskTerminalIfActive(task, "done", {
+		if (isG1QaTask(task) && (!g1Receipt || g1Receipt.taskId !== task.id)) throw new Error("G1 checker receipt required before done"); const accepted = await commitTaskTerminalIfActive(task, "done", {
 			completedAt: new Date().toISOString(), ...conversationPatch(conversationId),
 			...(message.promptTokens ? { contextTokens: message.promptTokens } : {}),
 			resultText: latestAnswer, ...(runtimeSources.length ? { sources: runtimeSources } : {}),
@@ -275,7 +275,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		if (!completed) throw new Error("Project Agent task disappeared during completion");
 		if (!accepted) return completed; // Stop won the terminal CAS.
 		await recordGuardedTerminalTask(completed);
-		const saved = await retainProjectHindsight(completed);
+		const saved = isG1QaTask(task) ? false : await retainProjectHindsight(completed);
 		if (saved) void updateProjectAgentTask(task.id, { logLine: "hindsight :: retained completed task" }).catch(() => {}); return reflect(completed);
 	} catch (cause) {
 		await partialQueue;
