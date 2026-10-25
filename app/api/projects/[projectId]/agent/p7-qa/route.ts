@@ -5,7 +5,7 @@ import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { createProjectAgentTask, deleteProjectAgentConversation, readProjectAgentTask,
   updateProjectAgentTask, writeProjectAgentFile } from "@/lib/project-agent/task-store";
 import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask, P7_QA_PREFIX } from "@/lib/project-agent/p7-qa-guard";
-import { recoverP7SyntheticBrowser } from "@/lib/project-agent/p7-qa-recovery";
+import { recoverP7SyntheticBrowser, withP7SyntheticRecoverySlot } from "@/lib/project-agent/p7-qa-recovery";
 import { PROJECT_AGENT_BOOT_ID } from "@/lib/project-agent/boot";
 import { markP7BrowserRunningIfCurrent } from "@/lib/project-agent/p7-qa-conditional-update";
 import { p7SyntheticPdf } from "@/lib/project-agent/p7-synthetic-pdf";
@@ -91,7 +91,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { projectId:
   if (body.kind === "recover") {
     const { browserControlState } = await import("@/lib/project-agent/runtime/browser-agent/control");
     try {
-      const recovered = await recoverP7SyntheticBrowser({
+      const recovered = await withP7SyntheticRecoverySlot(task.id, () => recoverP7SyntheticBrowser({
         task, projectId: params.projectId, owner: allowed.owner!,
         controlPaused: () => browserControlState(task.id).paused,
         prepare: () => prepareP7BrowserFixture(task.id, allowed.owner!),
@@ -104,7 +104,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { projectId:
           clearBrowserControl(task.id);
           await closeBrowserSession(task.id);
         },
-      });
+      }));
+      if (!recovered) return reply({ error: "Synthetic browser recovery already in progress" }, 409);
       if (!recovered.ok) return reply({ error: recovered.reason === "human_takeover" ?
         "Release human browser control before recovering the fixture" :
         "Synthetic browser task was stopped or changed during recovery" }, 409);
