@@ -10,6 +10,7 @@ type ProjectAgentSourceLinkProps = { href: string; host: string; label: string; 
 export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgentSourceLinkProps) {
   const linkRef = useRef<HTMLAnchorElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const openRef = useRef(false);
   // Keyboard activation can reopen after focus is restored while layout/scroll
   // has moved the trigger outside the viewport. Position the popup only after
   // bringing its anchor back into view; never focus popup children with scrolling.
@@ -29,15 +30,16 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
     // Recheck after one and two paints, not after a fixed sleep. Stop if the
     // user changed focus, reopened the popover, or navigated away.
     requestAnimationFrame(() => {
-      if (!trigger.isConnected || document.activeElement !== trigger) return;
+      if (openRef.current || !trigger.isConnected || document.activeElement !== trigger) return;
       revealTrigger();
       requestAnimationFrame(() => {
-        if (trigger.isConnected && document.activeElement === trigger) revealTrigger();
+        if (!openRef.current && trigger.isConnected && document.activeElement === trigger)
+          revealTrigger();
       });
     });
   };
   if (!safePresentationUrl(href) || !/^https?:\/\//i.test(href)) return <span>{label}</span>;
-  return <Popover.Root onOpenChange={(open) => { if (open) revealTrigger(); }}>
+  return <Popover.Root onOpenChange={(open) => { openRef.current = open; if (open) revealTrigger(); }}>
     <Popover.Trigger asChild><button ref={triggerRef} type="button" aria-label={`Show source: ${title} (${host})`}
       className="not-prose mx-0.5 inline-flex min-h-6 max-w-[14rem] items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 align-baseline text-xs leading-5 text-slate-600 focus-visible:ring-2 focus-visible:ring-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
       <Globe2 aria-hidden className="h-3 w-3 shrink-0" /><span className="truncate">{label}</span>
