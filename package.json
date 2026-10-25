@@ -42,7 +42,9 @@
     "test:g2:origin": "node --test tests/node/g2-host-origins.test.mjs",
     "test:g2:mode:unit": "vitest run --config vitest.agent.config.ts tests/agent/g2-browser-op-mode.test.ts",
     "test:g2:crash:unit": "node --test tests/node/g2-refs.test.mjs tests/node/g2-crash-hosts.test.mjs",
-    "test:host:g2:crash": "node scripts/g2-crash-e2e.mjs"
+    "test:host:g2:crash": "node scripts/g2-crash-e2e.mjs",
+    "test:inspiration:agent": "vitest run --config vitest.agent.config.ts tests/agent/browser-visual-viewport.test.ts tests/agent/browser-webmcp-readonly.test.ts",
+    "test:inspiration:presentation": "vitest run tests/presentation-scene3d.test.tsx"
   },
   "peerDependencies": {
     "next": ">=14",
