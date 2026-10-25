@@ -164,7 +164,8 @@ New executable QA evidence:
   `g2-lease-core.mjs`).
 - **Two real Node processes + Mongo:** `test:g2:multiworker:db`
   authored, **NOT RUN** (Mongo QA and host-installed driver unavailable
-  here). Four cases: atomic ownership, human revision, Stop, crash/review.
+  here). Five cases: atomic ownership, human revision, Stop, crash/review,
+  and crash after a recorded effect with no automatic replay.
 - **Two genuine Next.js processes + Chromium:** `test:host:g2`
   authored, **NOT RUN** (host NextAuth/DB/browser unavailable here).
   It covers owner contention, in-owner handback and remote Stop,
