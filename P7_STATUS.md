@@ -99,13 +99,37 @@ The harness checks one claim/one action, crash/expiry quarantine and
 remote Stop blocking the next action. It is restricted to a fresh
 `p7_multiworker_qa_*` database on `127.0.0.1:27019`.
 
-**Not yet executed against the local QA Mongo server by ChatGPT**:
-this environment has no MongoDB process/driver and cannot access the
-operator's localhost. The DB harness also does not exercise the full
-two-Next-host Agent runtime. See
-[P7.6.2 QA runbook](P7_6_2_MULTIWORKER_QA.md). Keep the production gate
-open until the local agent returns clean SHA-specific results, including
-proof that Stop cannot be overwritten by a late `done` status update.
+**Local QA on exact source SHA `602f8cca`: partial PASS.**
+Focused source-module/unit tests **10/10 PASS** with atomic Mongo fake.
+Two real Node child processes and QA Mongo `127.0.0.1:27019`:
+**3/3 PASS** (one claim/one action; crash+expiry quarantine with zero replay;
+remote Stop fences old/new workers and zero action). Temporary
+`p7_multiworker_qa_*` database was deleted after the run; existing
+`p7qa_project` was preserved. TypeScript/diff check passed.
+The first run used `node --input-type=module` and a fork inherited the flag;
+the supported direct script entrypoint subsequently passed 3/3.
+This is **Mongo/process smoke acceptance only**, not two Next.js
+workers using the real Agent runtime. The source-module unit tests
+and process harness cover complementary boundaries.
+
+**Latest terminal-write hardening (not yet QA-run):** Stop and late
+model success/failure now compete on the same Mongo task document using
+conditional status writes; old workers cannot overwrite Stop's
+`failed/cancelled` state with `done`. Added regression for both
+race orders, lost lease and ownership. A complete two-Next.js-worker
+run with loopback mock is still required; the production gate remains OPEN.
+See [P7.6.2 QA runbook](P7_6_2_MULTIWORKER_QA.md).
+
+## P7.6.3 — Local security review in progress
+
+Focused source hardening adds credential-bearing URL rejection,
+fail-closed production browser audit logging, origin-only Browser Watch
+location/diagnostics, redacted page console text, and strict dev/test-only
+synthetic QA fixture identity checks. New SSRF/authz/secrets/audit/production
+guard tests have been committed, but **not yet run in the operator's
+integrated host clone**. This is not a complete security audit.
+See [P7.6.3 security review](P7_6_3_SECURITY_REVIEW.md) for
+remaining DNS rebinding, authenticated route and retention gates.
 
 ## Acceptance gates remaining before production
 
@@ -114,7 +138,7 @@ proof that Stop cannot be overwritten by a late `done` status update.
 | P0 | Microsoft Entra authentication and authorization | Dev synthetic session/metadata only | Authorized test-tenant sign-in/out, callback URI, expiry/revocation and owner/nonmember isolation |
 | P0 | Real Dify / app calculator transport | Loopback stub API flow only; 3 model tasks `failed` | **Wait for explicit API-key/external Dify approval**, then controlled real tool dispatch, exact receipt, timeouts, permissions and cost |
 | P0 | Task creation, retry, Stop and idempotency | **7/7 API PASS**, **P7.6.1 one-worker mock E2E PASS**, CAS/Stop closeout **2/2 PASS** | Durable cross-worker lease, Stop fencing, no duplicate external action after restart |
-| P0 | Chromium crash and multi-worker recovery | **1/1 single-session PASS**; P7.6.2 QA harness/Stop revocation committed, unexecuted | Two-worker QA DB results, full runtime, concurrent takeover, terminal Stop fencing, restart and resource ownership |
+| P0 | Chromium crash and multi-worker recovery | **1/1 single-session PASS**, **10/10 source unit PASS**, **3/3 two-OS-process Mongo smoke PASS** | Two Next.js workers with loopback mock, terminal CAS regression on integrated host, heartbeat/Stop/takeover resource ownership |
 | P0 | Security and data isolation | **10 safety PASS** plus host ACL/Origin/artifact checks | Full threat review, SSRF/ACL regression breadth, audit/secrets/retention, QA route disabled in production |
 | P1 | Operational release controls | Isolated development QA only | Production-like staging smoke, build, rollback, monitoring, capacity and failure-response runbook |
 
