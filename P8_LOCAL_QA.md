@@ -1,5 +1,13 @@
 # P8 local QA and integration handoff (no external services)
 
+**Status 2026-10-25:** local agent reports Next 14.2.16 synthetic host
+L1/L2 + takeover/handback accepted. Host `feat/project-agent-local-business`
+P8 code `4aec99a4`, status `ca65a8e1`; focused 115 PASS / 1 SKIP;
+P8 guard/session 8/8 PASS; L1 and L2 1/1 each. These results were not
+rerun in this source repository. See [P8_STATUS.md](P8_STATUS.md) for
+remaining real-runtime, distributed ownership and release gates.
+
+
 This document is for a **clean isolated test clone**, not the dirty main
 AI-WEB-CHAT checkout. P7's 67/67 local QA remains accepted; every new P8
 code path needs a fresh local test result before P8 acceptance.
@@ -91,9 +99,10 @@ listed in the synthetic manifest; leave any dirty development checkout alone.
 
 ## 4A. Active Chromium session closeout (same Next control route)
 
-The first Next 14 host QA had a synthetic fixture without a shared active
+The earlier Next 14 host QA had a synthetic fixture without a shared active
 session and correctly received `409: Agent has not opened a browser session
-yet`. The isolated, owner-only P8 session fixture now opens Chromium
+yet`. Local-agent acceptance subsequently passed on L1 and L2. The
+isolated, owner-only P8 session fixture opens Chromium
 *inside the browser control route*, shares process-local state across
 bundled route modules and exercises real takeover/handback.
 Use [P8 active-session closeout](P8_ACTIVE_SESSION_CLOSEOUT.md).
