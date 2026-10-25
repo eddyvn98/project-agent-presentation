@@ -38,7 +38,9 @@
     "test:host:g1": "node scripts/g1-host-preflight.mjs && playwright test --config playwright.host.config.ts tests/host-browser/g1-goal-runtime.api.spec.ts --project=host-api",
     "test:g2:unit": "node --test tests/node/g2-browser-lease.test.mjs",
     "test:g2:multiworker:db": "node scripts/g2-multiworker-browser-qa.mjs",
-    "test:host:g2": "node scripts/g2-host-preflight.mjs && playwright test --config playwright.host.config.ts tests/host-browser/g2-two-next.api.spec.ts --project=host-api"
+    "test:host:g2": "node scripts/g2-host-preflight.mjs && playwright test --config playwright.host.config.ts tests/host-browser/g2-two-next.api.spec.ts --project=host-api",
+    "test:g2:origin": "node --test tests/node/g2-host-origins.test.mjs",
+    "test:g2:mode:unit": "vitest run --config vitest.agent.config.ts tests/agent/g2-browser-op-mode.test.ts"
   },
   "peerDependencies": {
     "next": ">=14",
