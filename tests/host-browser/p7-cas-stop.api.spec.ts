@@ -28,7 +28,7 @@ test("explicit Stop purges synthetic JPEG and Chromium before rejecting recovery
   const taskId = (await created.json() as { taskId: string; hasFrame: boolean }).taskId;
   const watch = taskBase() + "/" + encodeURIComponent(taskId) + "/browser";
   try {
-    const first = await (await request.get(watch())).json() as
+    const first = await (await request.get(watch)).json() as
       { preview: { hasImage: boolean } | null };
     expect(first.preview?.hasImage).toBe(true);
     const stop = await request.post(taskBase() + "/" + taskId + "/stop", {
@@ -38,7 +38,7 @@ test("explicit Stop purges synthetic JPEG and Chromium before rejecting recovery
     const state = await request.get(taskBase() + "/" + taskId);
     expect((await state.json() as { task: { status: string; cancelled?: boolean } }).task)
       .toMatchObject({ status: "failed", cancelled: true });
-    const after = await (await request.get(watch())).json() as
+    const after = await (await request.get(watch)).json() as
       { preview: unknown; control: { paused: boolean } };
     expect(after.preview).toBeNull();
     expect(after.control.paused).toBe(false);
