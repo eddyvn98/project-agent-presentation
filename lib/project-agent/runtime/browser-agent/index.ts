@@ -16,7 +16,7 @@ import type { BrowserAction } from "./action-parser";
 import { getBrowserSession, scheduleIdleClose, withBrowserOp, restorePersonalBrowserSession, assertPersonalBrowserPermission, type BrowserSession } from "./session";
 import { captureBrowserWatch, finishBrowserWatch, type BrowserClickMarker } from "./watch";
 import { invalidateVisualFrame, observeVisualFrame, visualClick, visualType } from "./visual";
-import { browserRetryStalled, recordBrowserDomFailure, clearBrowserStall, P8_STALL_GUIDANCE } from "./stall-guard";
+import { browserRetryStalled, recordBrowserDomFailure, clearBrowserStall, P8_STALL_GUIDANCE } from "./stall-guard"; import { runP8BrowserLoopStep } from "./loop-step";
 
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 function snapshotRefLine(snapshot: string, ref: string): string {
@@ -158,12 +158,12 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 		let marker: BrowserClickMarker | undefined;
 		await assertPersonalBrowserPermission(session, action.op);
     await checkAgentBrowserPolicy(input, session, action.op, action.url);
-    if (process.env.PROJECT_AGENT_P8_STALL_GUARD === "1" &&
+    if ((process.env.PROJECT_AGENT_P8_STALL_GUARD === "1" || process.env.PROJECT_AGENT_P8_LOOP === "1") &&
         browserRetryStalled(id, action.op, action.ref ?? "", session.page.url(), session.lastSnapshot))
       return { text: P8_STALL_GUIDANCE, failed: true };
 		if (session.authMode === "read" && ["click", "type", "press", "select", "upload", "drag", "visual_click", "visual_type"].includes(action.op))
 			return { text: "Personal login is read-only. Grant interaction access before changing the website.", failed: true };
-		const result = await withBrowserOp(session, async () => {
+		const result = await runP8BrowserLoopStep(id, session, action, input.onStep, () => withBrowserOp(session, async () => {
 			if (!["visual_click", "visual_type", "visual_observe"].includes(action.op)) invalidateVisualFrame(session);
 			if (action.op !== "open") {
 				const challenge = await checkCaptcha(session);
@@ -274,11 +274,11 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			if (challenge) { await session.close(); return { text: challenge, failed: true }; }
 			const currentSnapshot = await snapshot(session);
 			return { text: extra ? `${extra}\n\n${currentSnapshot}` : currentSnapshot };
-		});
+		}));
 		const authIssue = await checkSavedBrowserHealth(session);
     if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op, marker);
     scheduleIdleClose(session, id);
-    if (!result.failed || action.op === "snapshot") clearBrowserStall(id);
+    if (!result.failed && action.op !== "snapshot") clearBrowserStall(id);
     return authIssue ? { text: authIssue, failed: true } : result;
 	} catch (cause) {
 		if (cause instanceof Error && /timed out after 30 seconds/.test(cause.message)) await session.close();
@@ -287,7 +287,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			/ref|locator|element|stale|not attached|timeout/i.test(failureText) &&
 			!/captcha|password|sensitive|confirm|policy|permission|blocked/i.test(failureText);
 		const refreshed = domFailure ? await snapshot(session).catch(() => "") : "";
-		const stalled = process.env.PROJECT_AGENT_P8_STALL_GUARD === "1" && domFailure && Boolean(refreshed) &&
+		const stalled = (process.env.PROJECT_AGENT_P8_STALL_GUARD === "1" || process.env.PROJECT_AGENT_P8_LOOP === "1") && domFailure && Boolean(refreshed) &&
 			recordBrowserDomFailure(id, action.op, action.ref ?? "", session.page.url(), session.lastSnapshot);
 		const observed = domFailure && !stalled ? await observeVisualFrame(input, session).catch(() => null) : null;
 		return { text: "Browser " + action.op + " failed: " + failureText +
