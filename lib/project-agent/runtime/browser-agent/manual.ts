@@ -1,5 +1,6 @@
 import { activeBrowserSession, withBrowserOp } from "./session";
 import { randomUUID } from "node:crypto";
+import { changeG2HumanControl } from "./g2-ownership";
 import { browserControlState, requestBrowserTakeover, releaseBrowserControl, claimHumanBrowserAction } from "./control";
 import { browserWatchStatus, captureBrowserWatch, setBrowserWatch } from "./watch";
 
@@ -35,6 +36,7 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
   if (action.op === "release") {
     challenges.delete(taskId);
     try { await withBrowserOp(session, async () => {}, false); } catch { /* handback should not strand Agent */ }
+    await changeG2HumanControl(session, "human", "agent");
     session.refs.clear(); session.snapshotUrl = ""; session.lastSnapshot = "";
     releaseBrowserControl(taskId);
     return { ok: true, paused: false };
@@ -42,9 +44,10 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
   if (action.op === "takeover") {
     challenges.delete(taskId);
     if (!browserWatchStatus(taskId)?.watching) setBrowserWatch(taskId, true);
+    await changeG2HumanControl(session, "agent", "human");
     requestBrowserTakeover(taskId);
     try { await withBrowserOp(session, async () => {}, false); }
-    catch { releaseBrowserControl(taskId); return { error: "The browser is busy or unavailable; takeover was cancelled" }; }
+    catch { await changeG2HumanControl(session, "human", "agent").catch(() => {}); releaseBrowserControl(taskId); return { error: "The browser is busy or unavailable; takeover was cancelled" }; }
     await captureBrowserWatch(taskId, session.page, "human_takeover");
     return { ok: true, paused: true };
   }
