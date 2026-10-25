@@ -173,8 +173,13 @@ async function run() {
           headers: { Origin: bOrigin }, data: { taskId },
           failOnStatusCode: false })],
       ]) {
-        try { await expectReply(await action(), 200); }
-        catch (error) { failures.push(label + ": " + error.message); }
+        try {
+          const receipt = await expectReply(await action(), 200);
+          if (succeeded && label === "lease-ledger") {
+            assert.equal(receipt.leaseDeleted, 1, "Only marked browser lease must be deleted");
+            assert.equal(receipt.receiptsDeleted, 2, "Exactly two synthetic receipts cleaned");
+          }
+        } catch (error) { failures.push(label + ": " + error.message); }
       }
       if (failures.length) cleanupError = new Error(
         "Synthetic cleanup incomplete: " + failures.join("; "));
