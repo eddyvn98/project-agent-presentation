@@ -5,6 +5,8 @@ import { guardedRequest } from "../guarded-fetch";
 import { assertPublicWebSocketUrl, bindAbort } from "./safety";
 import { readPersonalBrowserGrant, vaultHost } from "./personal-vault";
 import { checkBrowserSitePolicy } from "../../browser-security-policy";
+import { publicBrowserWatchLocation } from "./watch";
+import { safeBrowserConsoleEntry } from "./privacy";
 
 const MAX_CONTEXTS = 3;
 const OP_TIMEOUT_MS = 30_000;
@@ -54,12 +56,9 @@ function trackPageTraffic(session: BrowserSession, page: Page): void {
   };
   page.on("console", message => {
     if (!session.authHost && ["error", "warning"].includes(message.type()))
-      append(session.console, `${message.type()}: ${message.text()}`);
+      append(session.console, safeBrowserConsoleEntry(message.type()));
   });
-  const redactedUrl = (raw: string) => {
-    try { const u = new URL(raw); return u.origin + u.pathname.slice(0, 140); }
-    catch { return "[unavailable]"; }
-  };
+  const redactedUrl = publicBrowserWatchLocation;
   page.on("requestfailed", request =>
     append(session.network, `FAILED ${request.method()} ${redactedUrl(request.url())}`));
   page.on("response", response =>
