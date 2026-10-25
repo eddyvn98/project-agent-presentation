@@ -73,9 +73,11 @@ export async function g2CrashQaOperation(op: Operation, taskId: string,
     return { quarantined: true };
   }
   if (op === "qa_g2_review") {
-    if (raw.reviewed !== true || !await acknowledgeBrowserRecovery(
-      lease, taskId, owner, true))
-      throw new Error("G2 reviewed recovery requires explicit owner confirmation");
+    const ticket = process.env.G2_QA_REVIEW_TICKET ?? "";
+    if (raw.reviewed !== true || !/^[a-f0-9]{24}$/.test(ticket) ||
+        raw.reviewTicket !== ticket || row.state !== "quarantined" ||
+        !await acknowledgeBrowserRecovery(lease, taskId, owner, true))
+      throw new Error("G2 reviewed recovery requires explicit operator ticket");
     return { reviewed: true, freshSessionRequired: true };
   }
   if (op === "qa_g2_stale") {
