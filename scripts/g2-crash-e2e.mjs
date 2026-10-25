@@ -164,17 +164,20 @@ async function run() {
     // The QA child group is owned by this harness; never delete a live lease.
     if (hosts[0]) await killCrashHost(hosts[0]).catch(() => {});
     if (ownerB && taskId && bOrigin) {
-      try {
-        const endpoint = control(taskId);
-        await expectReply(await post(ownerB, endpoint, bOrigin,
-          { op: "qa_cleanup" }), 200);
-        const cleaned = await expectReply(await post(ownerB, endpoint, bOrigin,
-          { op: "qa_g2_cleanup", confirmKilled: true }), 200);
-        assert.equal(cleaned.cleaned, true);
-        await expectReply(await ownerB.delete(fixture(), {
+      const failures = [], endpoint = control(taskId);
+      for (const [label, action] of [
+        ["browser", () => post(ownerB, endpoint, bOrigin, { op: "qa_cleanup" })],
+        ["lease-ledger", () => post(ownerB, endpoint, bOrigin,
+          { op: "qa_g2_cleanup", confirmKilled: true })],
+        ["synthetic-task", () => ownerB.delete(fixture(), {
           headers: { Origin: bOrigin }, data: { taskId },
-          failOnStatusCode: false }), 200);
-      } catch (error) { cleanupError = error; }
+          failOnStatusCode: false })],
+      ]) {
+        try { await expectReply(await action(), 200); }
+        catch (error) { failures.push(label + ": " + error.message); }
+      }
+      if (failures.length) cleanupError = new Error(
+        "Synthetic cleanup incomplete: " + failures.join("; "));
     }
     for (const ctx of [outsider, ownerA, ownerB]) await ctx?.dispose().catch(() => {});
     for (const host of hosts.reverse()) {
