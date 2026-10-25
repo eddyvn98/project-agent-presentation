@@ -62,3 +62,7 @@ For environments with a preinstalled compatible Chromium, set `PLAYWRIGHT_CHROMI
 ## P7 signed-in host acceptance (separate from demo)
 
 Run the optional `npm run check:host:p7` and `npm run test:host:p7` commands only against an isolated AI-WEB-CHAT QA host with explicitly supplied Playwright login state. See [P7_HOST_E2E_HANDOFF.md](P7_HOST_E2E_HANDOFF.md) for environment flags and expected evidence. Read-only security/UI assertions run by default; synthetic task creation, calculator execution and browser takeover require separate opt-ins. The neutral snapshot does not provide host authentication or Dify/Mongo services. Never commit QA cookies or screenshots containing personal data.
+
+## P7.2–P7.5 integrated QA
+
+See [P7_INTEGRATED_LOCAL_HANDOFF.md](P7_INTEGRATED_LOCAL_HANDOFF.md) for authenticated synthetic Chromium Watch/Takeover, host SSO preflight, QA bootstrap/cleanup, and concurrent task idempotency. These test endpoints require nonproduction synthetic credentials and do not enable localhost navigation in the browser's public-network guard.
