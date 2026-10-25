@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+vi.mock("../../lib/project-agent/task-store", () => ({ updateProjectAgentTask: vi.fn(async () => null) }));
+import { updateProjectAgentTask } from "../../lib/project-agent/task-store";
 import { readP8LoopCounters } from "../../lib/project-agent/p8-loop-metrics";
 import { finalizeP8BrowserLoop } from "../../lib/project-agent/runtime/browser-agent/loop-finalize";
 import { authorizeBrowserLoopAction, recordBrowserLoopOutcome,
@@ -22,18 +24,20 @@ describe("P8 durable numeric receipt hook", () => {
       "using tool p8_loop_metrics :: actions=15000",
     ]).actions).toBe(10000);
   });
-  it("finalizes an opt-in browser task and emits a sanitized counter receipt", () => {
+  it("finalizes an opt-in browser task and writes a sanitized durable receipt", async () => {
     const original = process.env.PROJECT_AGENT_P8_LOOP;
     process.env.PROJECT_AGENT_P8_LOOP = "1";
     try {
       authorizeBrowserLoopAction(task, "click");
       recordBrowserLoopOutcome(task, "click", "verified");
       const events: Array<{ tool: string; detail: string }> = [];
-      finalizeP8BrowserLoop(task, (event) => events.push(event));
+      await finalizeP8BrowserLoop(task, (event) => events.push(event));
       expect(browserLoopStatus(task)?.phase).toBe("closed");
       expect(events[0]).toMatchObject({ tool: "p8_loop_metrics" });
       expect(events[0].detail).toContain("verified=1");
       expect(events[0].detail).not.toContain("https");
+      expect(updateProjectAgentTask).toHaveBeenCalledWith(task,
+        expect.objectContaining({ logLine: expect.stringContaining("verified=1") }));
     } finally {
       clearBrowserLoop(task);
       if (original === undefined) delete process.env.PROJECT_AGENT_P8_LOOP;
