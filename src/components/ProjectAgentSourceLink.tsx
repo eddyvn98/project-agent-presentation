@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { ExternalLink, Globe2, X } from "lucide-react";
 import { safePresentationUrl } from "./ProjectAgentFigure";
@@ -11,6 +11,8 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
   const linkRef = useRef<HTMLAnchorElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const openRef = useRef(false);
+  const stopCloseGuard = useRef<(() => void) | null>(null);
+  useEffect(() => () => stopCloseGuard.current?.(), []);
   // Keyboard activation can reopen after focus is restored while layout/scroll
   // has moved the trigger outside the viewport. Position the popup only after
   // bringing its anchor back into view; never focus popup children with scrolling.
@@ -24,22 +26,42 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
   const restoreTrigger = () => {
     const trigger = triggerRef.current;
     if (!trigger) return;
+    stopCloseGuard.current?.();
     trigger.focus({ preventScroll: true });
     revealTrigger();
-    // Radix unmount/focus-scope cleanup can finish after onCloseAutoFocus.
-    // Recheck after one and two paints, not after a fixed sleep. Stop if the
-    // user changed focus, reopened the popover, or navigated away.
-    requestAnimationFrame(() => {
-      if (openRef.current || !trigger.isConnected || document.activeElement !== trigger) return;
-      revealTrigger();
-      requestAnimationFrame(() => {
-        if (!openRef.current && trigger.isConnected && document.activeElement === trigger)
-          revealTrigger();
+    // Radix/native scroll restoration can run AFTER focus is returned.
+    // Observe those scrolls while the trigger retains keyboard focus.
+    let frame: number | null = null;
+    const stop = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      document.removeEventListener("scroll", schedule, true);
+      window.removeEventListener("scroll", schedule, true);
+      for (const type of ["wheel", "touchstart", "pointerdown", "keydown"])
+        window.removeEventListener(type, stop, true);
+      trigger.removeEventListener("blur", stop);
+      if (stopCloseGuard.current === stop) stopCloseGuard.current = null;
+    };
+    const schedule = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        if (openRef.current || !trigger.isConnected || document.activeElement !== trigger) {
+          stop(); return;
+        }
+        revealTrigger();
       });
-    });
+    };
+    stopCloseGuard.current = stop;
+    trigger.addEventListener("blur", stop, { once: true });
+    document.addEventListener("scroll", schedule, { capture: true, passive: true });
+    window.addEventListener("scroll", schedule, { capture: true, passive: true });
+    // Never fight a person's intentional scroll, click, or key navigation.
+    for (const type of ["wheel", "touchstart", "pointerdown", "keydown"])
+      window.addEventListener(type, stop, { capture: true, passive: true });
+    schedule();
   };
   if (!safePresentationUrl(href) || !/^https?:\/\//i.test(href)) return <span>{label}</span>;
-  return <Popover.Root onOpenChange={(open) => { openRef.current = open; if (open) revealTrigger(); }}>
+  return <Popover.Root onOpenChange={(open) => { openRef.current = open; if (open) { stopCloseGuard.current?.(); revealTrigger(); } }}>
     <Popover.Trigger asChild><button ref={triggerRef} type="button" aria-label={`Show source: ${title} (${host})`}
       className="not-prose mx-0.5 inline-flex min-h-6 max-w-[14rem] items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 align-baseline text-xs leading-5 text-slate-600 focus-visible:ring-2 focus-visible:ring-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
       <Globe2 aria-hidden className="h-3 w-3 shrink-0" /><span className="truncate">{label}</span>
