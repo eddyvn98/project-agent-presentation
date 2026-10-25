@@ -118,7 +118,7 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 
 const CALLOUT_ICON: Record<RichTone, typeof Info> = { neutral: Info, info: Info, success: CheckCircle2, warning: AlertTriangle, danger: OctagonAlert };
 
-function RichBlock({ source }: { source: string }) {
+function RichBlock({ source, enable3DViewer = false }: { source: string; enable3DViewer?: boolean }) {
 	const block = useMemo(() => parseRichUiBlock(source), [source]);
 	if (!block) {
 		return <VisualFallback />;
@@ -214,7 +214,7 @@ function RichBlock({ source }: { source: string }) {
 		case "explorer":
 			return <ProjectAgentExplorer block={block} />;
 		case "scene3d":
-			return <ProjectAgentScene3D block={block} />;
+			return enable3DViewer ? <ProjectAgentScene3D block={block} /> : <VisualFallback />;
 		case "ask":
 			return <AskBlock block={block} />;
 		case "form":
@@ -236,6 +236,6 @@ class VisualBoundary extends Component<{ children: ReactNode }, { failed: boolea
   render() { return this.state.failed ? <VisualFallback /> : this.props.children; }
 }
 
-export function ProjectAgentRichBlock({ source }: { source: string }) {
-  return <VisualBoundary key={source}><RichBlock source={source} /></VisualBoundary>;
+export function ProjectAgentRichBlock({ source, enable3DViewer = false }: { source: string; enable3DViewer?: boolean }) {
+  return <VisualBoundary key={source}><RichBlock source={source} enable3DViewer={enable3DViewer} /></VisualBoundary>;
 }
