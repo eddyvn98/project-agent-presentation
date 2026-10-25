@@ -11,14 +11,15 @@ export async function markP7BrowserRunningIfCurrent(task: P7RecoverTask, bootId:
   if (!/^pat_[a-f0-9]{12}$/.test(task.id) ||
       task.prompt !== `${P7_QA_PREFIX} browser fixture - local synthetic data only` ||
       task.cancelled || !["running", "failed"].includes(task.status) ||
-      !task.ownerEmail.trim().toLowerCase().endsWith("@project-agent.test"))
+      !task.ownerEmail.trim().toLowerCase().endsWith("@project-agent.test") ||
+      !task.updatedAt || !Number.isFinite(Date.parse(task.updatedAt)))
     return false;
   const db = await getMongoAiDb();
   const now = new Date().toISOString();
   const result = await db.collection("projectAgentTasks").updateOne({
     _id: task.id, projectId: task.projectId, ownerEmail: task.ownerEmail,
     prompt: task.prompt, status: task.status, cancelled: { $ne: true },
-    ...(task.updatedAt ? { updatedAt: task.updatedAt } : {}),
+    updatedAt: task.updatedAt,
   }, {
     $set: { status: "running", bootId, updatedAt: now },
     $unset: { error: "", completedAt: "", cancelled: "" },
