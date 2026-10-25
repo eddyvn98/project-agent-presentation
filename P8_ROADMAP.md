@@ -119,36 +119,50 @@ review: OPEN; G4 staging and production readiness: OPEN.** See
    Next version, browser version, PASS/FAIL/SKIP, retry count and elapsed time.
    The report must distinguish *observed progress* from *goal completion*.
 
-## G2 Mongo browser ownership development (acceptance OPEN)
+## G2 — Two-worker ownership QA PASSED; recovery remains OPEN
 
-Existing P7 Mongo task leases prevent double task dispatch but do
-not share live P8 Chromium sessions between Next OS processes. G2 adds
-an **off-by-default, synthetic-only** browser ownership CAS ledger:
-`projectAgentBrowserOwnership`, lease token, worker ID, epoch/revision,
-owner-checked agent/human transitions, heartbeat, remote Stop revocation,
-expiry quarantine and explicit reviewed **fresh-session** recovery.
-The RAM-only automatic handback cannot bypass Mongo in G2 mode.
+G2 introduces the **off-by-default, synthetic-only** Mongo browser
+ownership CAS ledger (token/epoch/revision, lease heartbeat, Stop
+fencing and human control), without pretending that live Chromium,
+Watch screenshots or tab references are shared across processes.
 
-Focused Node test `npm run test:g2:unit`: **4/4 PASS** from
-byte-identical source/test GitHub blobs. The suite validates atomic
-claim, stale revision, Stop fencing and quarantine/review. Tests are
-not evidence of real Chromium recovery. Added:
-`npm run test:g2:multiworker:db` (two actual Node processes + real
-isolated Mongo) and `npm run test:host:g2` (two actual Next workers +
-Chromium control and remote Stop). Both **NOT RUN** here: no QA Mongo,
-host dependencies/auth or two Next processes available. Integrated
-TypeScript and P7/P8/G1 focused host regressions are **NOT RUN** here.
-A controlled Next-worker crash/restart and explicit review remain a
-separate host acceptance gate. See
-[G2 detailed QA handoff](G2_MULTIWORKER_QA.md) and
-[P8 status](P8_STATUS.md). Do not close G2 until host evidence exists.
+Local agent reports QA on AI-WEB-CHAT Next.js 14.2.16,
+based on host HEAD `1e2f5c4a` with Presentation source
+`ba89dfdd`: G2 unit **4/4 PASS**, two Node workers + isolated
+Mongo **5/5 PASS**, two independent Next workers + real Chromium
+`test:host:g2` **1/1 PASS** for owner contention, nonmember isolation,
+Agent click, takeover/manual/handback and remote Stop fencing.
+Post-fix host regressions: P7 **40/40**, P8 **40/40**, P8 QA **8/8**,
+G1 **8/8**, TypeScript and diff check PASS (local-agent reported).
+Two Mongo and one Postgres run DB, synthetic tasks/auth/env were
+cleaned; Next servers stopped and ports freed.
+
+**Root-cause correction ported to Presentation:** `withBrowserOp`
+no longer infers human ownership from `countAgentAction=false`.
+Uncounted fixture setup uses `agent`; takeover/manual/personal-auth
+uses explicit `human`. Regression coverage added.
+The Next 14 host canonicalizes `req.nextUrl.origin` to `localhost`
+on some setups; G2 preflight and host test accept strictly matched
+loopback hostnames on 3005/3006. Use **separate Next checkout/build
+directories**; never share `.next` across both dev servers.
+The origin policy's new Node tests ran **4/4 PASS** in source-authoring
+environment. The new browser-mode Vitest test and post-port full host
+regression are **NOT RUN here**, requiring local agent validation.
+
+**G2 remains OPEN:** No *two-Next-host* worker crash -> lease
+quarantine -> owner-reviewed fresh browser restart -> old-action
+fencing/no-replay E2E has passed. Existing 5/5 Mongo/Node QA
+cannot replace that acceptance. G3 real Dify/Entra/security and G4
+staging/production release are also OPEN. See
+[G2 multi-worker handoff](G2_MULTIWORKER_QA.md)
+and [P8 status](P8_STATUS.md).
 
 ## Release gates remaining after P8 + bounded G1 synthetic acceptance
 
-- State is **process-local RAM** (30-minute TTL, 16 events/task, 64 tasks).
-  Summary metrics persist through the existing task log, but live budgets,
-  takeover and Watch are NOT multi-host synchronized. Durable shared-state
-  and distributed human ownership require a verified host adapter.
+- P8 loop budgets, Watch frames, Chromium tab and local browser controls
+  remain process-local. G2 shares Mongo *ownership/revision*, not the
+  live page or UI frames. Multi-host browser-worker crash/recovery still
+  requires dedicated host E2E and a reviewed fresh-session design.
 - Read-only checker is deterministic, **not a separate independent model**.
   Complex semantic goals need explicit acceptance assertions or human
   verification before declaring task success.
