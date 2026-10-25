@@ -1,7 +1,9 @@
 import { p7QaAllowed, p7SyntheticTask, type P7QaContext, P7_QA_PREFIX } from "./p7-qa-guard";
 
 export const P8_QA_PROMPT = `${P7_QA_PREFIX} p8 browser fixture - local synthetic data only`;
-export const P8_QA_OPERATIONS = new Set(["qa_prepare", "qa_probe", "qa_step", "qa_cleanup"]);
+export const P8_QA_OPERATIONS = new Set(["qa_prepare", "qa_probe", "qa_step", "qa_cleanup",
+  "qa_g2_status", "qa_g2_expire", "qa_g2_quarantine", "qa_g2_review",
+  "qa_g2_stale", "qa_g2_cleanup"]);
 /** Must be a separate synthetic host, never normal dev port 3004. */
 export function p8QaDedicatedOrigin(origin: string, allowed: string | undefined,
   isolated: string | undefined): boolean {
