@@ -90,6 +90,10 @@ async function scenarioRestart() {
     $unset: { leaseToken: "", leaseUntil: "" },
   });
   assert.equal(changed.modifiedCount, 1);
+  await database.collection("project_agent_tasks").updateOne({
+    _id: id, status: { $in: ["queued", "running"] },
+  }, { $set: { status: "failed", error: "Worker interrupted; review side effects" } });
+  assert.equal((await database.collection("project_agent_tasks").findOne({ _id: id })).status, "failed");
   const b = spawn(id); assert.equal(await b.next(), "ready"); b.send("go");
   assert.equal(await b.next(), "lost");
   assert.equal(await actions(id), 0);
