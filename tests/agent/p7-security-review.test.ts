@@ -3,6 +3,7 @@ vi.mock("@/services/mongodb/client", () => ({ getMongoAiDb: vi.fn() }));
 import { getMongoAiDb } from "@/services/mongodb/client";
 import { assertPublicHttpUrl } from "../../lib/project-agent/runtime/web-security";
 import { publicBrowserWatchLocation } from "../../lib/project-agent/runtime/browser-agent/watch";
+import { safeBrowserConsoleEntry } from "../../lib/project-agent/runtime/browser-agent/privacy";
 import { p7QaAllowed, p7QaRequestOrigin } from "../../lib/project-agent/p7-qa-guard";
 import { recordBrowserSecurityAudit } from "../../lib/project-agent/browser-security-policy";
 
@@ -43,6 +44,11 @@ describe("P7.6.3 local security review regression", () => {
     const url = "https://public.example/account/private-id?access_token=very-secret#fragment";
     expect(publicBrowserWatchLocation(url)).toBe("https://public.example");
     expect(publicBrowserWatchLocation("data:text/plain,secret")).toBe("");
+  });
+  it("console diagnostics never include arbitrary untrusted page text", () => {
+    expect(safeBrowserConsoleEntry("error")).toBe("error: [page message redacted]");
+    expect(safeBrowserConsoleEntry("warning")).toBe("warning: [page message redacted]");
+    expect(safeBrowserConsoleEntry("log")).toBe("");
   });
   it("QA mutations are denied without exact same Origin, including in production", () => {
     expect(p7QaAllowed(devQa)).toBe(true);
