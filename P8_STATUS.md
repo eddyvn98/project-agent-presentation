@@ -3,9 +3,12 @@
 ## Decision
 
 **P8 SYNTHETIC LOCAL HOST ACCEPTANCE: CLOSED (operator-reported PASS).**
-**P8 REAL MODEL/RUNTIME GOAL ACCEPTANCE: OPEN.**
-**P8 MULTI-WORKER BROWSER RECOVERY: OPEN.**
-**P8 PRODUCTION RELEASE: NOT APPROVED.**
+**G1 SINGLE-WORKER + LOOPBACK MOCK MODEL + SYNTHETIC DOM: ACCEPTED
+(operator-reported PASS).**
+**REAL DIFY/MODEL SEMANTIC GOAL ACCEPTANCE: OPEN.**
+**G2 MULTI-WORKER BROWSER RECOVERY: OPEN.**
+**G3 SECURITY/AUTHORIZED INTEGRATION: OPEN.**
+**G4 PRODUCTION RELEASE: NOT APPROVED.**
 
 This status supersedes the older "P8 host QA not accepted" wording in the
 active-session handoff and roadmap. It is a bounded development QA decision,
@@ -15,7 +18,9 @@ not a production or end-to-end semantic-goal success claim.
 
 - Source handoff: `eddyvn98/project-agent-presentation`, branch
   `gpt/full-project-agent`, source commit
-  `8ae555e541cd2fc596b543ffb850254166f79e32`.
+  `8ae555e541cd2fc596b543ffb850254166f79e32` for P8 browser
+  fixture, and `dbf91fc2fd2f7b54d0308e418869723b6273aa79` for
+  the G1 source implementation/test handoff.
 - Host target: `AI-WEB-CHAT`, Next.js **14.2.16**, QA worktree based on
   `fbefcd2c`; integration branch `feat/project-agent-local-business`.
 - Host P8 implementation commit **`4aec99a4`**; status/index commit
@@ -48,10 +53,52 @@ not a production or end-to-end semantic-goal success claim.
 - Operator reports cleanup of the synthetic Project/task, two separate
   Mongo databases, QA NextAuth storage states and QA environment files;
   QA server stopped. No real Dify/Entra or external actions were used.
-- Host-specific commit and test results above are **reported by the local
-  agent**, not independently executed in this Presentation repository.
+- G1 host integration was reported committed/pushed as `580ab334`,
+  followed by status/index documentation at `1e2f5c4a`, on
+  `feat/project-agent-local-business`. Those are the operator-reported
+  G1 host commits, not Presentation commits. No PR/merge was reported.
+- Host-specific commit and test results above and below are **reported
+  by the local agent**, not independently executed in this Presentation repository.
   The current GitHub connector could not read the private AI-WEB-CHAT
   commit/branch, so remote HEAD was not independently corroborated here.
+
+## G1 local host goal acceptance (operator-reported, 2026-10-25)
+
+**ACCEPTED only for one Next.js 14.2.16 worker, a local mock model
+and an in-memory synthetic Chromium DOM goal.** Host used a dedicated
+synthetic Project, Mongo/PostgreSQL run databases and NextAuth states.
+The Dify-shaped SSE mock listened only on `127.0.0.1:3998`.
+`PROJECT_AGENT_DURABLE_QUEUE=0` excludes durable multi-worker lease QA.
+
+- `npm run test:host:g1`: **2/2 PASS**, **0 FAIL, 0 SKIP reported**.
+  Positive case: real worker and runtime model transport performed three
+  SSE turns (`snapshot`, `click`, `final`), followed by P8 verification
+  and independent Chromium DOM checker; the persisted task became `done`
+  and the final answer contained the application-authored receipt.
+- Negative case: model claimed completion before any qualifying DOM change.
+  Checker rejected the claim; persisted task became `failed`, with
+  **no trusted receipt**. The test independently counted **4 total HTTP
+  model POSTs** across both cases (three positive, one negative).
+- On the integrated host checkout: G1 unit **8/8 PASS**, P8 unit
+  **40/40 PASS**, P8 QA guard/session **8/8 PASS**, host TypeScript
+  **PASS**, `git diff --check` **PASS**; all source files **<=299 lines**.
+  Do not add overlapping suite subsets as independent pass totals.
+- Host test correction only: the public task API intentionally strips
+  `task.log`; the original Presentation E2E source incorrectly asserted
+  on that field. The local host test removed that assertion and instead
+  asserted a positive numeric `p8Verified` inside the trusted final
+  receipt (**observed 2**). **No runtime guard changed.** The original
+  source test therefore needs parity correction before reuse unchanged.
+  Public task access does NOT prove task-log visibility or persistence.
+- Local operator reports cleanup of QA Project/tasks, synthetic run
+  Mongo/PostgreSQL databases, auth storage states and `.env.local`;
+  the isolated server was stopped. No real Dify/Entra traffic or external
+  mutations were performed. No machine-wide network audit was done.
+
+This evidence proves bounded **mock-model task-goal completion through
+the real single-worker/tool-continuation path**, not semantic completion
+on arbitrary websites, external model performance, exactly-once
+transactions, cross-worker recovery, full security or deployment readiness.
 
 **Recorded SKIP:** one focused-suite skip remains a SKIP, not a PASS.
 Obtain its test name/reason in the next closeout report; do not silently
@@ -66,44 +113,31 @@ outputs, SHA and redacted fixture receipts with the local QA handoff.
 | P8 synthetic Next 14 host L2 no-progress escalation | CLOSED, operator-reported |
 | Owner/nonmember Watch access and same-process takeover/handback | CLOSED, operator-reported |
 | Synthetic fixture cleanup and page-context zero-request check | CLOSED, operator-reported |
-| Successful goal completion by an actual model and task runner | OPEN |
-| Ordinary Dify action dispatch/continuation under real model responses | OPEN |
+| G1 goal completion: real single worker + local mock SSE + synthetic Chromium DOM | CLOSED, operator-reported 2/2 |
+| G1 premature model-final rejection / trusted receipt gate | CLOSED, operator-reported |
+| Real provider / ordinary Dify goal completion and tool continuation | OPEN, requires separate authorization |
 | Real multi-Next-worker browser session ownership, failover and Stop fencing | OPEN |
 | Real Entra, real Dify, security audit, staging and production rollout | OPEN, separately authorized |
 
 ## Next gates, in order
 
-### G1 — Runtime task-goal E2E (next development acceptance)
+### G1 — Synthetic runtime task-goal E2E: ACCEPTED (bounded)
 
-**Implementation update:** deterministic G1 loopback SSE model, guarded
-synthetic worker fixture, app-owned DOM checker and terminal receipt contract
-are committed on this Presentation development branch. See
-[G1 local runtime QA](G1_LOCAL_RUNTIME_QA.md). The host E2E suite must still
-run in an isolated Next 14 host before this gate can be accepted.
-No G1 host PASS, model execution or production approval is claimed here.
+The isolated AI-WEB-CHAT host closed the **single-worker / localhost
+mock-model / synthetic DOM** G1 acceptance on the operator's report.
+See [G1 local runtime QA](G1_LOCAL_RUNTIME_QA.md) for exact scenario
+and reproducible setup. The positive and premature-final negative tests
+both PASS; four localhost model POSTs were counted. The original source
+test's public `task.log` assertion was removed **only in the integrated
+host test** and replaced with a trusted receipt `p8Verified > 0` check
+(observed 2). No G1 runtime guard was weakened.
 
-Run from a separate, disposable AI-WEB-CHAT QA clone. First use a local
-Dify-shaped model mock with the **actual task/worker/tool continuation**
-path and synthetic in-memory Chromium HTML. Confirm at least:
-
-1. A queued HTTP task runs through the worker, model turn(s), browser action
-   transport, maker/checker, durable task receipts and terminal `done`.
-   Independently assert the desired DOM state; never equate `verified`
-   activity with successful user-goal completion.
-2. A changing DOM/ref requires a refreshed snapshot after handback; the
-   stale model action must not execute. Test no-progress escalation and
-   Stop/cancellation with zero later browser mutation.
-3. Inject tool failure, malformed model action, timeout and model-declared
-   success without goal evidence. None may be counted as independently
-   completed goals. Confirm task-log metrics and owner-only observability.
-4. Keep all test pages local/in-memory, all credentials synthetic and
-   irreversible/external operations disabled. Report total tasks,
-   goal assertions, retries, interventions, failures, tokens and latency.
-
-Then, **only with separate explicit authorization**, run controlled
-real-model/ordinary-Dify continuation and check tool dispatch, result
-correlation, retry discipline, cost and task termination. A local mock
-PASS does not close the real-model portion of G1.
+**Still outside this G1 acceptance:** production-like tool failure,
+malformed responses, timeout and Stop race matrices; handback/stale-plan
+behavior remains covered separately by P8 synthetic takeover QA.
+A local mock cannot establish success with a real model or ordinary Dify;
+that belongs to authorized integration/security acceptance (G3).
+No additional external Dify/Entra/model calls are authorized here.
 
 ### G2 — Two genuine Next.js workers and session recovery
 
