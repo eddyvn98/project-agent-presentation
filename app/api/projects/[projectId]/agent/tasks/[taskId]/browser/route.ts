@@ -4,6 +4,7 @@ import { readProjectAgentTask } from "@/lib/project-agent/task-store";
 import { browserWatchImage, browserWatchStatus, captureBrowserWatch, setBrowserWatch } from "@/lib/project-agent/runtime/browser-agent/watch";
 import { activeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
 import { browserControlState, releaseBrowserControl } from "@/lib/project-agent/runtime/browser-agent/control";
+import { browserLoopEnabled, browserLoopStatus } from "@/lib/project-agent/runtime/browser-agent/loop-state";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,7 +36,8 @@ export async function GET(req: NextRequest, { params }: Params) {
       headers: { ...HEADERS, "Content-Type": "image/jpeg", "Content-Disposition": "inline" },
     });
   }
-  return NextResponse.json({ preview: browserWatchStatus(params.taskId), control: browserControlState(params.taskId) }, { headers: HEADERS });
+  return NextResponse.json({ preview: browserWatchStatus(params.taskId), control: browserControlState(params.taskId),
+    ...(browserLoopEnabled() ? { loop: browserLoopStatus(params.taskId) } : {}) }, { headers: HEADERS });
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
