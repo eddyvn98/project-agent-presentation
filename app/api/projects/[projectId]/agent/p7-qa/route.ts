@@ -4,7 +4,7 @@ import * as projectCap from "@/lib/capabilities/project";
 import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { createProjectAgentTask, deleteProjectAgentConversation, readProjectAgentTask,
   updateProjectAgentTask, writeProjectAgentFile } from "@/lib/project-agent/task-store";
-import { p7QaAllowed, p7SyntheticTask, P7_QA_PREFIX } from "@/lib/project-agent/p7-qa-guard";
+import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask, P7_QA_PREFIX } from "@/lib/project-agent/p7-qa-guard";
 import { p7SyntheticPdf } from "@/lib/project-agent/p7-synthetic-pdf";
 import { prepareP7BrowserFixture } from "@/lib/project-agent/runtime/browser-agent/p7-fixture";
 import { closeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
@@ -23,7 +23,8 @@ async function authorized(req: NextRequest, projectId: string) {
   const permitted = project.ok && Boolean(project.data) && p7QaAllowed({
     runtime: process.env.PROJECT_AGENT_RUNTIME, browser: process.env.PROJECT_AGENT_BROWSER_AGENT,
     fixture: process.env.PROJECT_AGENT_P7_QA_FIXTURE, nodeEnv: process.env.NODE_ENV,
-    projectId, projectName: project.data?.name ?? "", owner, origin: req.headers.get("origin"),
+    projectId, projectName: project.data?.name ?? "", owner,
+    origin: p7QaRequestOrigin(req.method, req.headers.get("origin"), req.nextUrl.origin),
     requestOrigin: req.nextUrl.origin, expectedProjectId: process.env.PROJECT_AGENT_P7_QA_PROJECT_ID,
   });
   return permitted ? { owner } : { response: reply({ error: "P7 synthetic QA is disabled" }, 403) };
