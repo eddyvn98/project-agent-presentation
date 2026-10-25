@@ -23,3 +23,17 @@ export async function waitTask(request: APIRequestContext, id: string, timeoutMs
   expect(["done", "failed"].includes(last.status), `Unfinished task ${id}: ${last.status}`).toBeTruthy();
   return last;
 }
+
+/** Never mutate a real agent task; rehydrate only an explicit dev synthetic fixture. */
+export async function restoreSyntheticBrowserFixture(request: APIRequestContext, baseURL?: string) {
+  if (process.env.P7_SYNTHETIC_BROWSER_TASK !== "1") return;
+  const taskId = process.env.P7_RUNNING_BROWSER_TASK_ID;
+  if (!taskId || !baseURL) throw new Error("Synthetic browser recovery requires task ID and QA origin");
+  const endpoint = `/api/projects/${encodeURIComponent(projectId())}/agent/p7-qa`;
+  const response = await request.patch(endpoint, {
+    headers: { Origin: new URL(baseURL).origin }, data: { kind: "recover", taskId },
+    failOnStatusCode: false,
+  });
+  expect(response.status(), "Synthetic browser rehydration failed").toBe(200);
+  expect((await response.json() as { hasFrame: boolean }).hasFrame).toBe(true);
+}
