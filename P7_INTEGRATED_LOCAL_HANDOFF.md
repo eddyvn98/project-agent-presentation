@@ -185,6 +185,34 @@ metadata do not demonstrate real Microsoft Entra sign-in. A local in-memory
 fixture does not prove unrestricted autonomous browsing on public websites.
 SSRF/public-address protections and production authentication remain unchanged.
 
+## P7 post-prepare recovery race regression (follow-up)
+
+Local QA identified a race in the originally pushed `p7-qa` recovery route: it
+checked Stop/takeover **before** awaiting Chromium preparation, then wrote
+`running` from a stale task snapshot. The recovered fixture now fetches the task
+again after a real JPEG frame exists and checks ownership, Project identity,
+exact synthetic browser prompt, current status/cancelled state, and live human
+takeover immediately before the `running` update. If Stop, deletion, task
+completion or takeover wins **during preparation**, the recovery returns 409
+without changing task status. Stop must not be undone by setting `cancelled:false`.
+
+The focused regression `tests/agent/p7-qa-recovery-race.test.ts` delays
+Chromium preparation while simulating concurrent Stop, owner/Project change,
+deletion, completion and takeover. It also verifies a successful unchanged
+recovery and takeover during task re-read.
+
+This protection closes the observed async preparation window. It is not a
+MongoDB compare-and-swap: a separate Stop exactly **after** the final read and
+while the task update is in flight still requires a conditional database write
+in the host integration to provide a strict linearizable guarantee. Do not
+interpret a passing in-memory regression as proof of that stronger property.
+
+Run the focused check before the host suite:
+
+```bash
+npx vitest run --config vitest.agent.config.ts tests/agent/p7-qa-recovery-race.test.ts
+```
+
 ## Known limitations
 
 The development-only fixture tests Chromium/watch/handback mechanics; it does not demonstrate an AI model autonomously selecting a browser tool on a real public site. Ordinary Dify workflow and production Entra sign-in require separate integration verification. All new tests must be run in the actual Next.js QA host, not just the neutral demo. Source-level edits made through GitHub alone do not prove host PASS. Respect the 300-line file policy and never include credentials in logs or reports.
