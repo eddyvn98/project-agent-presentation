@@ -1,9 +1,20 @@
 # P8 owner-only active Chromium host closeout (Next.js 14.2.16)
 
-**Code delivered for isolated local QA, not host acceptance yet.**
-The earlier QA fixture did not keep an active browser session available
-to the `/browser/control` route. That 409 is a fixture/process boundary
-until reproduced under a connected in-memory session.
+**Host synthetic acceptance CLOSED, based on local-agent report dated 2026-10-25.**
+The previous `409: Agent has not opened a browser session yet` fixture
+blocker was resolved in the isolated Next 14 host closeout; it was not
+established as a product defect. L2 and L1 each passed 1/1. This file
+remains the reproducible runbook, not a production approval.
+See [P8 status and outstanding gates](P8_STATUS.md) for exact provenance.
+
+Host integration was reported on `AI-WEB-CHAT` branch
+`feat/project-agent-local-business`: P8 code `4aec99a4`,
+status/index `ca65a8e104664536216183d8bfd102f730ea9376`,
+from Presentation source `8ae555e541cd2fc596b543ffb850254166f79e32`.
+P7+P8 focused 115 PASS / 1 SKIP; P8 guard/session 8/8 PASS;
+TypeScript, Mongo schema and line/diff checks PASS.
+Local QA reports synthetic data and environments were removed afterward.
+These are operator-reported results and were not independently rerun here.
 
 ## Design
 
@@ -124,7 +135,14 @@ shared host to switch modes; doing so would invalidate the evidence.
   real Dify execution, semantic goal completion, multi-worker recovery
   or production readiness.
 
-Report commit SHA for Presentation and for dirty integrated host,
+Report commit SHA for Presentation and integrated host,
 Next version, Chromium version, exact PASS/FAIL/SKIP and whether cleanup
 left the isolated QA database/project empty. Stop only QA instances and
-delete only synthetic data. **No CI, staging, push/merge in AI-WEB-CHAT.**
+delete only synthetic data. The operator reports that P8 was already pushed
+to the non-release host integration branch. **Do not initiate additional CI,
+PR/merge, staging, production actions or external services for this closeout.**
+
+**Evidence precision:** the fixture's `pid` property is Node/Next
+`process.pid`, not Chromium's operating-system PID. `networkAttempts=0`
+covers requests intercepted from the QA browser context; it is not an
+OS-level audit of all outbound traffic.
