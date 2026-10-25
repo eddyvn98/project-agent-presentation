@@ -13,7 +13,7 @@ export function p7QaRequestOrigin(method: string, headerOrigin: string | null,
   return method === "GET" && headerOrigin === null ? requestOrigin : headerOrigin;
 }
 export function p7QaAllowed(context: P7QaContext): boolean {
-  if (context.nodeEnv === "production" || context.fixture !== "1" ||
+  if (!["development", "test"].includes(context.nodeEnv ?? "") || context.fixture !== "1" ||
       context.runtime !== "sandbox" || context.browser !== "1") return false;
   if (!context.owner.toLowerCase().endsWith(P7_QA_DOMAIN) ||
       !context.projectName.startsWith(P7_PROJECT_PREFIX)) return false;
@@ -26,7 +26,9 @@ export function p7QaAllowed(context: P7QaContext): boolean {
 }
 export function p7SyntheticTask(task: { prompt: string; projectId: string; ownerEmail: string },
  projectId: string, owner: string): boolean {
-  return task.prompt.startsWith(P7_QA_PREFIX) && task.projectId === projectId &&
+  return [`${P7_QA_PREFIX} browser fixture - local synthetic data only`,
+    `${P7_QA_PREFIX} pdf fixture - local synthetic data only`].includes(task.prompt) &&
+    task.projectId === projectId &&
     task.ownerEmail.trim().toLowerCase() === owner.trim().toLowerCase();
 }
 
