@@ -119,6 +119,19 @@ export async function scanDurableQueue(limit = 100) {
   }
   return { queued, uncertain };
 }
+/** Explicit Stop revokes the active cross-process token so lease-fenced tools fail closed. */
+export async function revokeDurableTaskLease(id: string): Promise<boolean> {
+  if (!validTask(id)) throw new Error("Invalid task ID");
+  const coll = await collection();
+  const result = await coll.updateOne({
+    _id: id, state: { $in: ["queued", "running"] },
+  }, {
+    $set: { state: "failed", completedAt: iso(), error: "Stopped by you." },
+    $unset: { leaseToken: "", leaseUntil: "" },
+  });
+  return result.modifiedCount === 1;
+}
+
 /** Optional one-time data migration. Never replay legacy running work automatically. */
 export async function importLegacyQueueReceipt(receipt: QueueReceipt) {
   if (!validTask(receipt.taskId)) throw new Error("Invalid task ID");
