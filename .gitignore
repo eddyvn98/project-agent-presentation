@@ -7,3 +7,9 @@ test-results/
 coverage/
 .env*
 !.env.example
+
+# P7 host QA signed-in sessions and local evidence
+playwright/.auth/
+.p7-auth/
+.p7-evidence/
+*.p7-storage-state.json
