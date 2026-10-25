@@ -32,7 +32,7 @@ describe("safe click-to-load 3D presentation", () => {
     expect(container.querySelector("iframe")).toBeNull();
   });
   it("threads host opt-in through the actual Markdown agent-ui rendering path", async () => {
-    const markdown = "Before\\n\\n\`\`\`agent-ui\\n" + source + "\\n\`\`\`\\n\\nAfter";
+    const markdown = "Before\n\n```agent-ui\n" + source + "\n```\n\nAfter";
     const { container, rerender } = render(<ProjectAgentAnswer markdown={markdown} />);
     expect(container.querySelector("iframe")).toBeNull();
     expect(screen.queryByRole("button", { name: "Open 3D viewer" })).toBeNull();
