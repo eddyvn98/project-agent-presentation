@@ -1,9 +1,34 @@
 # P7 acceptance status — 2026-10-25
 
+## Final milestone decision — 2026-10-25
+
+**P7 DEVELOPMENT / ISOLATED LOCAL QA: CLOSED. P8 DEVELOPMENT: OPEN.**
+**P7 PRODUCTION RELEASE: NOT APPROVED.**
+
+The user authorized moving to P8 after local QA on a separate AI-WEB-CHAT clone:
+
+- P7 integrated regression **67/67 PASS**, TypeScript **PASS**, diff check **PASS**.
+- Host Mongo contract **1/1 PASS** (collection `project_agent_tasks`).
+- CAS/Stop and Chromium cleanup E2E **2/2 PASS**.
+- Project owner received HTTP **200**; nonmember received **404**.
+- Initial blocker was mismatched credentials for the QA Mongo instance.
+  The operator used isolated Mongo/PostgreSQL and synthetic accounts,
+  cleaned the created Project, tasks, database and login-state files;
+  ports 3000–3006 were reported closed after QA.
+- Main AI-WEB-CHAT checkout and its dirty edits were preserved; the
+  dedicated QA clone remained uncommitted. No external Entra/Dify or staging
+  tests were run. These are **operator-reported**, not freshly run here.
+
+Scope boundary: P7 closure means the agreed local development/QA work is
+accepted. Release gates (Entra SSO, real Dify, production-like staging,
+full security review, two full Next.js Agent workers) stay in a separate
+release backlog. No production deployment is authorized by this decision.
+See [P8 roadmap](P8_ROADMAP.md).
+
 ## Decision
 
 **P7 synthetic integration QA: ACCEPTED with documented skips.**
-**P7 production readiness: NOT ACCEPTED.**
+**P7 production readiness: NOT ACCEPTED; this is a release gate, not a blocker to starting P8 development.**
 
 Evidence comes from the local AI-WEB-CHAT integration worktree on branch
 `feat/project-agent-local-business`. The worktree is **dirty/uncommitted**;
@@ -112,7 +137,7 @@ This is **Mongo/process smoke acceptance only**, not two Next.js
 workers using the real Agent runtime. The source-module unit tests
 and process harness cover complementary boundaries.
 
-**Latest terminal-write hardening (not yet QA-run):** Stop and late
+**Terminal-write hardening (later locally regressed):** Stop and late
 model success/failure now compete on the same Mongo task document using
 conditional status writes; old workers cannot overwrite Stop's
 `failed/cancelled` state with `done`. Added regression for both
@@ -120,7 +145,7 @@ race orders, lost lease and ownership. A complete two-Next.js-worker
 run with loopback mock is still required; the production gate remains OPEN.
 See [P7.6.2 QA runbook](P7_6_2_MULTIWORKER_QA.md).
 
-## P7.6.3 — Local security review in progress
+## P7.6.3 — Focused local security review
 
 Focused source hardening adds credential-bearing URL rejection,
 fail-closed production browser audit logging, origin-only Browser Watch
@@ -159,7 +184,7 @@ for API-key use and non-loopback traffic. Real Entra login requires an
 authorized test tenant and must not be replaced by synthetic session evidence.
 For every gate retain SHA, environment, PASS/FAIL/SKIP and a redacted receipt.
 
-**P8 — Assisted autonomous browser workflows (after P7.6 gates).**
+**P8 — Assisted autonomous browser workflows (development now authorized).**
 Use a small benchmark of authorized real-world web tasks to select DOM-first
 automation, screenshot/computer-use fallback, live Watch timeline, human
 takeover/handback and safe retry policy. Track completion, intervention,
