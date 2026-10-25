@@ -26,3 +26,19 @@ export async function markP7BrowserRunningIfCurrent(task: P7RecoverTask, bootId:
   });
   return result.matchedCount === 1;
 }
+
+/** Read-only cross-check against the host's authoritative task repository schema. */
+export async function verifyP7TaskStoreMapping(task: P7RecoverTask): Promise<boolean> {
+  if (!/^pat_[a-f0-9]{12}$/.test(task.id) ||
+      task.prompt !== `${P7_QA_PREFIX} browser fixture - local synthetic data only` ||
+      !task.ownerEmail.trim().toLowerCase().endsWith("@project-agent.test") ||
+      !task.updatedAt) return false;
+  const db = await getMongoAiDb();
+  const doc = await db.collection("projectAgentTasks").findOne(
+    { _id: task.id },
+    { projection: { _id: 1, projectId: 1, ownerEmail: 1, prompt: 1, status: 1, updatedAt: 1 } },
+  );
+  return doc?.projectId === task.projectId && doc?.ownerEmail === task.ownerEmail &&
+    doc?.prompt === task.prompt && doc?.status === task.status &&
+    doc?.updatedAt === task.updatedAt;
+}
