@@ -10,7 +10,7 @@ vi.mock("../../lib/project-agent/runtime/browser-agent/p8-qa-fixture", () => ({
   p8QaBrowserProbe: mocks.probe,
 }));
 import { checkG1SyntheticGoal, formatG1Receipt, g1QaPrompt, isG1QaIdentity,
-  isG1QaTask } from "../../lib/project-agent/runtime/g1-goal-check";
+  isG1QaTask, g1QaActionAllowed } from "../../lib/project-agent/runtime/g1-goal-check";
 import type { RuntimeInput } from "../../lib/project-agent/runtime/run-agent-types";
 
 const taskId = "pat_fedcba987654", owner = "g1-owner@project-agent.test";
@@ -46,6 +46,15 @@ describe("G1 synthetic goal is checked outside the model", () => {
     expect(isG1QaIdentity({ ...input, userPrompt: "Counter target=1" })).toBe(false);
     vi.stubEnv("NODE_ENV", "production");
     expect(isG1QaIdentity(input)).toBe(false);
+  });
+  it("denies external/non-browser tool dispatch even if the mock model asks", () => {
+    for (const action of [{ action: "shell", command: "echo no" },
+      { action: "web_fetch", url: "https://example.com" },
+      { action: "browser", op: "open" },
+      { action: "browser", op: "type" }])
+      expect(g1QaActionAllowed(input, action)).toBe(false);
+    expect(g1QaActionAllowed(input, { action: "browser", op: "snapshot" })).toBe(true);
+    expect(g1QaActionAllowed(input, { action: "browser", op: "click" })).toBe(true);
   });
   it("returns a bounded receipt only from actual synthetic DOM and P8 evidence", async () => {
     const receipt = await checkG1SyntheticGoal(input);
