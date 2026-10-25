@@ -90,6 +90,7 @@ async function run() {
     const first = await expectReply(await sendA({ op: "qa_step",
       kind: "click" }), 200);
     assert.equal(first.count, 1);
+    assert.ok(first.loop?.verified >= 1, "P8 checker must independently verify the first click");
     const proofA = await expectReply(await sendA({ op: "qa_g2_status" }), 200);
     assert.equal(proofA.state, "agent");
     assert.equal(proofA.epoch, 1);
