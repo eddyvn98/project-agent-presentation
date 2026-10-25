@@ -287,6 +287,8 @@ Re-run the synthetic Stop-during-prepare, takeover-during-prepare,
 crash/recover and Watch JPEG scenarios on the isolated QA host. Prior host
 31/31 results do **not** certify this new commit.
 
+For the final post-\`a6f84864\` conditional Mongo CAS / Stop resource cleanup acceptance, use [P7_CLOSEOUT_QA.md](P7_CLOSEOUT_QA.md) and its isolated-host regression commands. These checks have not been executed on the remote branch by ChatGPT.
+
 ## Known limitations
 
 The development-only fixture tests Chromium/watch/handback mechanics; it does not demonstrate an AI model autonomously selecting a browser tool on a real public site. Ordinary Dify workflow and production Entra sign-in require separate integration verification. All new tests must be run in the actual Next.js QA host, not just the neutral demo. Source-level edits made through GitHub alone do not prove host PASS. Respect the 300-line file policy and never include credentials in logs or reports.
