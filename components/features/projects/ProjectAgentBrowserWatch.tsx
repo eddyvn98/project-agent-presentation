@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Eye, EyeOff, Expand, Loader2, X } from "lucide-react";
 import type { ActivityLanguage } from "@/lib/project-agent/activity-language";
 import { browserActionLabel } from "@/lib/project-agent/browser-watch-labels";
+import { browserLoopLabels, browserLoopPhaseLabel } from "@/lib/project-agent/browser-loop-labels";
 import { browserAssistText } from "@/lib/project-agent/browser-assist-labels";
 
 type Preview = {
@@ -11,6 +12,8 @@ type Preview = {
   history: Array<{ sequence: number; action: string; updatedAt: number; location: string; marker?: { x: number; y: number; kind: "agent" | "human" } }>;
   action: string; location: string; hasImage: boolean; finished: boolean;
 };
+type LoopTelemetry = { phase: string; actions: number; verified: number; unverified: number; failed: number; interventions: number;
+  events: Array<{ sequence: number; kind: string; operation: string; outcome?: string }> };
 const LABEL: Record<ActivityLanguage, { watch: string; stop: string; waiting: string; last: string; enlarge: string; close: string; privacy: string }> = {
   en: { watch: "Watch browser", stop: "Stop watching", waiting: "Waiting for the agent to open a webpage", last: "Last browser frame", enlarge: "Expand screenshot", close: "Close preview", privacy: "Only you can see these frames. Form fields are hidden." },
   vi: { watch: "Xem Agent thao tác web", stop: "Dừng xem", waiting: "Đang chờ Agent mở trang web", last: "Ảnh trình duyệt gần nhất", enlarge: "Phóng to ảnh", close: "Đóng ảnh", privacy: "Chỉ bạn xem được ảnh này. Các ô nhập liệu đã được che." },
@@ -37,6 +40,7 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
   const [live, setLive] = useState(false);
   const [liveEpoch, setLiveEpoch] = useState(0);
   const [control, setControl] = useState({ paused: false, revision: 0 });
+  const [loop, setLoop] = useState<LoopTelemetry | null>(null);
   const [entry, setEntry] = useState("");
   const [loginSecret, setLoginSecret] = useState("");
   const [loginReady, setLoginReady] = useState(false);
@@ -44,18 +48,18 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
   const [allowAutomation, setAllowAutomation] = useState(false);
   const [ssoHosts, setSsoHosts] = useState("");
   const [grantMode, setGrantMode] = useState<"read" | "interact">("read");
-  const ui = LABEL[language], actions = browserAssistText(language);
+  const ui = LABEL[language], actions = browserAssistText(language), loopUi = browserLoopLabels(language);
   const base = "/api/projects/" + encodeURIComponent(projectId) + "/agent/tasks/" + encodeURIComponent(taskId) + "/browser";
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch(base, { cache: "no-store", signal });
     if (response.ok) {
-      const data = await response.json() as { preview: Preview | null; control?: { paused: boolean; revision: number } };
-      if (!signal?.aborted) { setPreview(data.preview); if (data.control) setControl(data.control); }
+      const data = await response.json() as { preview: Preview | null; control?: { paused: boolean; revision: number }; loop?: LoopTelemetry | null };
+      if (!signal?.aborted) { setPreview(data.preview); setLoop(data.loop ?? null); if (data.control) setControl(data.control); }
     }
   }, [base]);
   useEffect(() => {
     const controller = new AbortController();
-    setPreview(null); setError(""); setExpanded(false);
+    setPreview(null); setLoop(null); setError(""); setExpanded(false);
     void refresh(controller.signal).catch(() => {});
     return () => controller.abort();
   }, [refresh]);
@@ -152,6 +156,16 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
         {control.paused && <span role="status" className="text-xs text-orange-600">{actions.click}</span>}
       </div>}
       <p role="status" className="text-xs text-slate-500">{preview.hasImage ? ui.last + ": " + browserActionLabel(preview.action, language) : ui.waiting}</p>
+      {loop && <div aria-label="Agent loop verification" className="rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
+        <p role="status" className="font-medium text-slate-700 dark:text-slate-200">{browserLoopPhaseLabel(loop.phase, language)}</p>
+        <p className="mt-1 text-slate-500">{loopUi.actions}: {loop.actions} · {loopUi.verified}: {loop.verified} · {loopUi.review}: {loop.unverified} · {loopUi.failed}: {loop.failed}</p>
+        {loop.events.length > 0 && <ol aria-label="Browser action verification timeline" className="mt-1 space-y-1 text-slate-500">
+          {loop.events.slice(-4).map(step => <li key={step.sequence}>
+            {step.kind === "action" ? browserActionLabel(step.operation, language) : browserLoopPhaseLabel(step.kind === "takeover" ? "human_control" : step.kind === "escalation" ? "needs_help" : "active", language)}
+            {step.outcome ? " · " + (step.outcome === "verified" ? loopUi.verified : step.outcome === "unverified" ? loopUi.review : loopUi.failed) : ""}
+          </li>)}
+        </ol>}
+      </div>}
       {preview.location && <p className="truncate text-xs text-slate-400" title={preview.location}>{preview.location}</p>}
       {history.length > 1 && <div aria-label="Browser step history" className="flex gap-1.5 overflow-x-auto pb-1">
         {history.map((step) => <button type="button" key={step.sequence} disabled={control.paused}
