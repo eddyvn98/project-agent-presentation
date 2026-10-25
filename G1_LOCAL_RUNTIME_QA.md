@@ -21,6 +21,10 @@ Neither a source review nor G1 unit tests prove worker/model E2E.
   browser-context network requests. A model-provided string cannot
   construct the callback receipt. The app checks this callback before
   calling `commitTaskTerminalIfActive(..., "done")`.
+- A synthetic G1 task permits model-issued `browser.snapshot` and
+  `browser.click` only; other actions (shell, web, navigation, upload,
+  login, scheduling and other external work) fail at the actual runtime
+  dispatch before execution. This is a QA-specific restriction.
 - Both model endpoints must be `http://127.0.0.1:3998` with disposable
   value `g1-local-only` as token; no real Dify or Entra is used.
 - The source fixture uses P8's existing process-local Chromium registry.
