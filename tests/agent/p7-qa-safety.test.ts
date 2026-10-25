@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask } from "../../lib/project-agent/p7-qa-guard";
+import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask, canRecoverP7BrowserTask } from "../../lib/project-agent/p7-qa-guard";
 import { p7SyntheticPdf } from "../../lib/project-agent/p7-synthetic-pdf";
 import { assertPublicHttpUrl } from "../../lib/project-agent/runtime/web-security";
 const safe = { runtime: "sandbox", browser: "1", fixture: "1", nodeEnv: "development",
@@ -28,6 +28,17 @@ describe("P7 synthetic security boundaries", () => {
       projectId: safe.projectId }, safe.projectId, safe.owner)).toBe(true);
     expect(p7SyntheticTask({ prompt: "A real request", ownerEmail: safe.owner,
       projectId: safe.projectId }, safe.projectId, safe.owner)).toBe(false);
+  });
+  it("recovers only unfinished synthetic browser tasks, never explicitly stopped tasks", () => {
+    const browser = { prompt: "[P7_SYNTHETIC_QA] browser fixture - local synthetic data only",
+      status: "failed" };
+    expect(canRecoverP7BrowserTask(browser)).toBe(true);
+    expect(canRecoverP7BrowserTask({ ...browser, status: "running" })).toBe(true);
+    for (const variant of [
+      { status: "done" }, { status: "queued" }, { cancelled: true },
+      { prompt: "[P7_SYNTHETIC_QA] pdf fixture - local synthetic data only" },
+      { prompt: "user browser task" },
+    ]) expect(canRecoverP7BrowserTask({ ...browser, ...variant })).toBe(false);
   });
   it("does not loosen loopback/private network SSRF protections", async () => {
     for (const url of ["http://127.0.0.1:3004", "http://192.168.1.1", "http://[::1]"])
