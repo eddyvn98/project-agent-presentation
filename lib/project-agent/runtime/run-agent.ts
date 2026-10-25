@@ -31,7 +31,7 @@ import { runWait } from "./wait-action";
 import { prefetchReference } from "./reference-prefetch";
 import { proposeTaskReference } from "./reference-candidates";
 import { runBrowserAction } from "./browser-agent";
-import { closeBrowserSession } from "./browser-agent/session"; import { clearBrowserControl, browserControlState } from "./browser-agent/control"; import { resumedBrowserContext, browserPlanOutdated } from "./browser-agent/handback";
+import { closeBrowserSession } from "./browser-agent/session"; import { clearBrowserControl, browserControlState } from "./browser-agent/control"; import { finalizeP8BrowserLoop } from "./browser-agent/loop-finalize"; import { resumedBrowserContext, browserPlanOutdated } from "./browser-agent/handback";
 import { transcribeTables } from "./table-transcribe";
 import type { ProjectAgentTaskSource } from "../types";
 import type { RuntimeInput } from "./run-agent-types";
@@ -114,7 +114,7 @@ export async function runRuntimeAgent(input: RuntimeInput): Promise<DifyAgentMes
 		if (!input.depth) {
 			input.onStep?.({ tool: "trajectory", detail: trajectoryLine(analyzeTrajectory(input.trace!)) });
 			if (input.taskId) await writeTrace(input.taskId, input.trace!);
-			if (input.taskId) clearBrowserControl(input.taskId); await closeBrowserSession(input.taskId ?? input.chatId).catch(() => {});
+			if (input.taskId) clearBrowserControl(input.taskId); await closeBrowserSession(input.taskId ?? input.chatId).catch(() => {}); finalizeP8BrowserLoop(input.taskId, input.onStep);
 		}
 		const seconds = (ms: number) => Math.round(ms / 1000);
 		input.onStep?.({ tool: "metrics", detail: `total_s=${seconds(Date.now() - started)} model_s=${seconds(metrics.modelMs)} action_s=${seconds(metrics.actionMs)} reference_ms=${metrics.referenceMs} steps=${metrics.rounds} prompt_tokens=${metrics.promptTokens} step_tokens=${metrics.stepTokens.slice(0, 30).join("/")} out_max=${Math.max(0, ...metrics.stepOut)} out_total=${metrics.stepOut.reduce((a, b) => a + b, 0)} step_out=${metrics.stepOut.slice(0, 30).join("/")} compactions=${metrics.compactions} invalid=${metrics.invalid} failed=${metrics.failed} context_captures=${input.contextStats?.captures ?? 0} context_kept_bytes=${input.contextStats?.storedBytes ?? 0} context_returned_bytes=${input.contextStats?.returnedBytes ?? 0} model=${input.modelSelector || "default"} cost_usd=${estimatedModelCost(input.modelSelector || "default", metrics.promptTokens, metrics.stepOut.reduce((n,v)=>n+v,0))?.toFixed(6) ?? "unknown"} tools=${[...metrics.actions].map(([name, count]) => `${name}:${count}`).join(",") || "none"}${input.subUsage ? ` sub_runs=${input.subUsage.runs} sub_steps=${input.subUsage.steps} sub_tokens=${input.subUsage.tokens} sub_models=${[...input.subUsage.models].join(",")}` : ""}` });
