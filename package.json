@@ -28,6 +28,8 @@
     "test:p7:security": "vitest run --config vitest.agent.config.ts tests/agent/p7-security-review.test.ts tests/agent/p7-qa-safety.test.ts",
     "test:p7:multiworker:db": "node scripts/p7-multiworker-mongo-qa.mjs",
     "test:p8:unit": "vitest run --config vitest.agent.config.ts tests/agent/p8-browser-stall-guard.test.ts tests/agent/p8-browser-loop-state.test.ts tests/agent/p8-browser-loop-step.test.ts tests/agent/p8-browser-loop-route.test.ts tests/agent/p8-browser-scorecard.test.ts tests/agent/p8-loop-metrics.test.ts",
+    "test:p8:qa:unit": "vitest run --config vitest.agent.config.ts tests/agent/p8-qa-session-guard.test.ts",
+    "test:host:p8:closeout": "node scripts/p8-session-preflight.mjs && playwright test --config playwright.host.config.ts tests/host-browser/p8-loop-closeout.api.spec.ts --project=host-api",
     "test:p8:browser": "vitest run --config vitest.agent.config.ts tests/agent/p8-browser-real.test.ts",
     "test:p7:closeout": "vitest run --config vitest.agent.config.ts tests/agent/p7-qa-recovery-race.test.ts tests/agent/p7-qa-conditional-update.test.ts tests/agent/p7-qa-browser-cleanup.test.ts tests/agent/p7-qa-stop-cleanup.test.ts",
     "test:p7:host-schema": "node --test tests/host-schema/p7-task-collection.contract.mjs",
