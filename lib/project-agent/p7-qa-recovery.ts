@@ -42,3 +42,14 @@ export async function recoverP7SyntheticBrowser<T extends { hasFrame: boolean }>
     if (prepared && !accepted && !args.controlPaused()) await args.cleanup();
   }
 }
+
+/** A second QA request must not discard the first request's live Chromium session. */
+const inFlightRecoveries = new Set<string>();
+export async function withP7SyntheticRecoverySlot<T>(
+  taskId: string, run: () => Promise<T>,
+): Promise<T | null> {
+  if (inFlightRecoveries.has(taskId)) return null;
+  inFlightRecoveries.add(taskId);
+  try { return await run(); }
+  finally { inFlightRecoveries.delete(taskId); }
+}
