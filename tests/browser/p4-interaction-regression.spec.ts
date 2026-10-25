@@ -58,21 +58,32 @@ test.describe("P4 Presentation Lab interactive regression", () => {
 
   test("citation Enter, Tab, Escape and return-focus are keyboard accessible", async ({ page }) => {
     const trigger = page.getByRole("button", { name: /Show source:/ }).first();
-    await trigger.focus();
-    await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("link", { name: "Open source" })).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(dialog.getByRole("button", { name: "Close source details" })).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(dialog.getByRole("link", { name: "Open source" })).toBeFocused();
-    await page.keyboard.press("Escape");
-    await expect(dialog).toHaveCount(0);
-    await expect(trigger).toBeFocused();
-    await page.keyboard.press("Enter");
-    await expect(dialog).toBeVisible();
     const close = dialog.getByRole("button", { name: "Close source details" });
+    await test.step("first open: Enter, Tab, Tab and focus wrapping", async () => {
+      await trigger.focus();
+      await page.keyboard.press("Enter");
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("link", { name: "Open source" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(close).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(dialog.getByRole("link", { name: "Open source" })).toBeFocused();
+    });
+    await test.step("Escape: trigger focus AND onscreen anchor restored", async () => {
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+      const anchor = await trigger.evaluate(element => {
+        const { y, height } = element.getBoundingClientRect();
+        return { y, height, scrollY, viewportHeight: innerHeight };
+      });
+      console.log("P4 citation after Escape:", JSON.stringify(anchor));
+      await expect(trigger).toBeInViewport();
+    });
+    await test.step("second Enter: anchored popover and Close in viewport", async () => {
+      await page.keyboard.press("Enter");
+      await expect(dialog).toBeVisible();
     // Capture BEFORE Playwright tries to scroll into view. Record the popper
     // wrapper as well: Content can be visible while the positioned Close is not.
     const geometry = await dialog.evaluate((content) => {
@@ -103,11 +114,17 @@ test.describe("P4 Presentation Lab interactive regression", () => {
         placement: content.getAttribute("data-side"),
       };
     });
-    console.log("P4 citation second-open geometry:", JSON.stringify(geometry));
-    await expect(close, JSON.stringify(geometry, null, 2)).toBeInViewport();
-    await close.click();
-    await expect(dialog).toHaveCount(0);
-    await expect(trigger).toBeFocused();
+      console.log("P4 citation second-open geometry:", JSON.stringify(geometry));
+      await expect(trigger, JSON.stringify(geometry, null, 2)).toBeInViewport();
+      await expect(dialog, JSON.stringify(geometry, null, 2)).toBeInViewport();
+      await expect(close, JSON.stringify(geometry, null, 2)).toBeInViewport();
+    });
+    await test.step("pointer Close: dismiss and return visible trigger focus", async () => {
+      await close.click({ timeout: 7000 });
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+      await expect(trigger).toBeInViewport();
+    });
   });
 
   test("abnormal chart data has nonblank fallback and surrounding text", async ({ page }) => {
