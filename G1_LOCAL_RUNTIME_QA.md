@@ -107,7 +107,9 @@ npm run test:host:g1
 ```
 
 The preflight checks two NextAuth synthetic logins, origin and mock
-transport before Playwright mutates anything. The Playwright spec checks
+transport before Playwright mutates anything. The positive model script
+uses exactly three SSE turns (snapshot, click, final); the negative uses
+one forged-final turn. Expected total: **four localhost model POSTs**. The Playwright spec checks
 terminal task receipts in the real task route and cleans both tasks.
 Afterward delete **only** the synthetic QA Project/database/auth files
 under the recorded QA manifest and stop the QA server.
