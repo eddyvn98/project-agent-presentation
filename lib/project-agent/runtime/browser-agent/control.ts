@@ -2,7 +2,8 @@ import { browserLoopEnabled, noteBrowserLoopHandback, noteBrowserLoopTakeover } 
 import { clearBrowserStall } from "./stall-guard";
 /** Host-process user takeover gate. Only the initiating task owner can change it via the authenticated route. */
 type Control = { paused: boolean; revision: number; touched: number; manualCount: number; listeners: Set<() => void> };
-const active = new Map<string, Control>();
+const controlGlobal = globalThis as typeof globalThis & { __projectAgentBrowserControls?: Map<string, Control> };
+const active = controlGlobal.__projectAgentBrowserControls ??= new Map<string, Control>();
 const EXPIRY_MS = 4 * 60_000;
 
 function get(id: string): Control {
