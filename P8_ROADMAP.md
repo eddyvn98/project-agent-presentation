@@ -100,7 +100,9 @@ before being reused unchanged. These are **operator-reported** results.
 
 This does not authorize or prove real Dify/Entra, genuine internet tasks,
 multi-worker takeover recovery, machine-wide network egress audit,
-production security or release readiness. Continue G2–G4; see
+production security or release readiness. **G2 multi-worker browser
+recovery: OPEN; G3 authorized real Dify/Entra integration and security
+review: OPEN; G4 staging and production readiness: OPEN.** See
 [P8 status](P8_STATUS.md) and [G1 runbook](G1_LOCAL_RUNTIME_QA.md).
 
 ## Local acceptance gates
