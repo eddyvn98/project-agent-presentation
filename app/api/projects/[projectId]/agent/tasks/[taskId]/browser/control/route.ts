@@ -3,6 +3,11 @@ import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { readProjectAgentTask } from "@/lib/project-agent/task-store";
 import { beginPersonalLogin, enterPersonalLoginSecret, submitPersonalLoginField, savePersonalLogin, revokePersonalLogin, personalLoginStatus } from "@/lib/project-agent/runtime/browser-agent/personal-auth";
 import { humanBrowserOperation, parseHumanBrowserAction } from "@/lib/project-agent/runtime/browser-agent/manual";
+import * as projectCap from "@/lib/capabilities/project";
+import { p7QaRequestOrigin } from "@/lib/project-agent/p7-qa-guard";
+import { P8_QA_OPERATIONS, p8QaSessionAllowed } from "@/lib/project-agent/p8-qa-session-guard";
+import { prepareP8QaBrowser, p8QaBrowserProbe, runP8QaBrowserStep,
+  cleanupP8QaBrowser } from "@/lib/project-agent/runtime/browser-agent/p8-qa-fixture";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +31,48 @@ export async function POST(req: NextRequest,
   if (process.env.PROJECT_AGENT_RUNTIME !== "sandbox" || process.env.PROJECT_AGENT_BROWSER_AGENT !== "1")
     return NextResponse.json({ error: "Browser control is not enabled" }, { status: 409, headers: HEADERS });
   const raw = await req.json().catch(() => null) as Record<string, unknown> | null;
+  if (typeof raw?.op === "string" && P8_QA_OPERATIONS.has(raw.op)) {
+    const owner = auth.callerEmail!.trim().toLowerCase();
+    const project = await projectCap.getProject(params.projectId, auth.ownerEmail!);
+    const context = {
+      runtime: process.env.PROJECT_AGENT_RUNTIME,
+      browser: process.env.PROJECT_AGENT_BROWSER_AGENT,
+      fixture: process.env.PROJECT_AGENT_P7_QA_FIXTURE,
+      nodeEnv: process.env.NODE_ENV,
+      projectId: params.projectId, projectName: project.data?.name ?? "",
+      owner, requestOrigin: req.nextUrl.origin,
+      origin: p7QaRequestOrigin(req.method, origin, req.nextUrl.origin),
+      expectedProjectId: process.env.PROJECT_AGENT_P7_QA_PROJECT_ID,
+    };
+    const allowed = auth.ownerEmail?.trim().toLowerCase() === owner && project.ok &&
+      p8QaSessionAllowed(context, task, {
+        enabled: process.env.PROJECT_AGENT_P8_QA_SESSION,
+        loop: process.env.PROJECT_AGENT_P8_LOOP,
+        isolated: process.env.P8_QA_ISOLATED_HOST,
+        allowedOrigin: process.env.P8_QA_ALLOWED_ORIGIN,
+      });
+    if (!allowed) return NextResponse.json({ error: "Isolated P8 synthetic QA disabled" },
+      { status: 403, headers: HEADERS });
+    try {
+      if (raw.op === "qa_prepare")
+        return NextResponse.json(await prepareP8QaBrowser(task.id, owner), { headers: HEADERS });
+      if (raw.op === "qa_probe")
+        return NextResponse.json(p8QaBrowserProbe(task.id), { headers: HEADERS });
+      if (raw.op === "qa_cleanup") {
+        await cleanupP8QaBrowser(task.id);
+        return NextResponse.json({ ok: true, connected: false }, { headers: HEADERS });
+      }
+      if (raw.kind !== "click" && raw.kind !== "no_progress")
+        return NextResponse.json({ error: "Invalid synthetic step" }, { status: 400, headers: HEADERS });
+      return NextResponse.json(
+        await runP8QaBrowserStep(task.id, owner, task.projectId, raw.kind),
+        { headers: HEADERS });
+    } catch (error) {
+      return NextResponse.json({
+        error: error instanceof Error ? error.message.slice(0, 140) : "Synthetic QA action failed",
+      }, { status: 409, headers: HEADERS });
+    }
+  }
   const loginOp = typeof raw?.op === "string" && ["login_status","login_begin","login_secret","login_submit","login_save","login_revoke"].includes(raw.op);
   if (loginOp) {
     const { activeBrowserSession } = await import("@/lib/project-agent/runtime/browser-agent/session");
