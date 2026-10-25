@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { request } from "@playwright/test";
+import { createInterface } from "node:readline/promises";
+import { execFileSync } from "node:child_process";
 import { startCrashHosts, killCrashHost, stopCrashHost } from "./g2-crash-hosts.mjs";
 import { verifySyntheticNextAuthState } from "./p7-session-preflight.mjs";
 
@@ -9,6 +11,24 @@ const fixture = () => project() + "/agent/p7-qa";
 const control = taskId => project() + "/agent/tasks/" + taskId + "/browser/control";
 const post = (ctx, endpoint, origin, data) =>
   ctx.post(endpoint, { headers: { Origin: origin }, data, failOnStatusCode: false });
+function assertChildProcessGroup(host, runtimePid) {
+  assert.ok(Number.isSafeInteger(runtimePid) && runtimePid > 1);
+  const actual = Number(execFileSync("ps", ["-o", "pgid=", "-p", String(runtimePid)],
+    { encoding: "utf8" }).trim());
+  assert.equal(actual, host.child.pid,
+    "Next route runtime PID must belong to the harness-owned process group");
+}
+async function requirePostCrashReview(taskId, epoch, receipts) {
+  assert.equal(process.stdin.isTTY, true,
+    "Operator must use an interactive TTY to review quarantine proof AFTER the crash");
+  const expected = `REVIEW ${taskId} ${epoch} ${receipts}`;
+  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const typed = await terminal.question(
+      `G2 quarantined; verified ${receipts} pre-crash receipt(s). Type exactly "${expected}" to approve fresh synthetic browser: `);
+    assert.equal(typed.trim(), expected, "Operator did not approve reviewed recovery");
+  } finally { terminal.close(); }
+}
 async function expectReply(response, status) {
   const text = await response.text();
   assert.equal(response.status(), status, text.slice(0, 250));
@@ -77,6 +97,7 @@ async function run() {
     assert.equal(proofA.actions[0].counter, 1);
     assert.match(proofA.oldRef, /^e\d+$/);
     assert.equal(proofA.nodePid, preparedA.pid);
+    assertChildProcessGroup(hosts[0], proofA.nodePid);
     await expectReply(await sendB({ op: "qa_prepare" }), 409);
     const denied = await post(outsider, control(taskId), b,
       { op: "qa_g2_review", reviewed: true });
@@ -102,6 +123,7 @@ async function run() {
     assert.equal(quarantined.state, "quarantined");
     assert.equal(quarantined.actions.length, 1);
     await expectReply(await sendB({ op: "qa_prepare" }), 409);
+    await requirePostCrashReview(taskId, quarantined.epoch, quarantined.actions.length);
     await expectReply(await sendB({ op: "qa_g2_review", reviewed: true }), 409);
     await expectReply(await sendB({ op: "qa_g2_review", reviewed: true,
       reviewTicket: env.G2_QA_REVIEW_TICKET }), 200);
@@ -116,6 +138,7 @@ async function run() {
     assert.equal(proofB.state, "agent");
     assert.equal(proofB.epoch, proofA.epoch + 1);
     assert.notEqual(proofB.nodePid, proofA.nodePid);
+    assertChildProcessGroup(hosts[1], proofB.nodePid);
     assert.notEqual(proofB.oldRef, proofA.oldRef);
     assert.equal(proofB.actions.length, 1, "Old action must not replay");
     const stale = await expectReply(await sendB({
