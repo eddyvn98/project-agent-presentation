@@ -32,17 +32,27 @@ test("active owner browser status is available without exposing image content", 
 
 test("optional safe takeover and handback on a dedicated test session", async ({ request, baseURL }) => {
   test.skip(!allowControl() || !qaTask(), "Requires P7_ALLOW_BROWSER_CONTROL=1 and a running QA browser task");
-  const endpoint = taskBase() + "/" + encodeURIComponent(qaTask()) + "/browser/control";
   const origin = new URL(baseURL!).origin;
-  const takeover = await request.post(endpoint, { headers: { Origin: origin },
-    data: { op: "takeover" }, failOnStatusCode: false });
-  expect(takeover.ok()).toBe(true);
+  const watch = taskBase() + "/" + encodeURIComponent(qaTask()) + "/browser";
+  const endpoint = watch + "/control";
+  const enabled = await request.post(watch, { headers: { Origin: origin },
+    data: { watch: true }, failOnStatusCode: false });
+  expect(enabled.ok()).toBe(true);
+  let acquired = false;
   try {
-    const status = await request.get(taskBase() + "/" + encodeURIComponent(qaTask()) + "/browser");
+    const takeover = await request.post(endpoint, { headers: { Origin: origin },
+      data: { op: "takeover" }, failOnStatusCode: false });
+    expect(takeover.ok()).toBe(true);
+    acquired = true;
+    const status = await request.get(watch);
     expect((await status.json() as { control?: { paused?: boolean } }).control?.paused).toBe(true);
   } finally {
-    const release = await request.post(endpoint, { headers: { Origin: origin },
-      data: { op: "release" }, failOnStatusCode: false });
-    expect(release.ok()).toBe(true);
+    if (acquired) {
+      const release = await request.post(endpoint, { headers: { Origin: origin },
+        data: { op: "release" }, failOnStatusCode: false });
+      expect(release.ok()).toBe(true);
+    }
+    await request.post(watch, { headers: { Origin: origin },
+      data: { watch: false }, failOnStatusCode: false });
   }
 });
