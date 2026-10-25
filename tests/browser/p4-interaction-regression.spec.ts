@@ -60,7 +60,7 @@ test.describe("P4 Presentation Lab interactive regression", () => {
     const trigger = page.getByRole("button", { name: /Show source:/ }).first();
     const dialog = page.getByRole("dialog");
     const close = dialog.getByRole("button", { name: "Close source details" });
-    await test.step("first open: Enter, Tab, Tab and focus wrapping", async () => {
+    await test.step("first open: Enter and Tab focus cycle", async () => {
       await trigger.focus();
       await page.keyboard.press("Enter");
       await expect(dialog).toBeVisible();
@@ -70,7 +70,7 @@ test.describe("P4 Presentation Lab interactive regression", () => {
       await page.keyboard.press("Tab");
       await expect(dialog.getByRole("link", { name: "Open source" })).toBeFocused();
     });
-    await test.step("Escape: trigger focus AND onscreen anchor restored", async () => {
+    await test.step("Escape: trigger focus and viewport restoration", async () => {
       await page.keyboard.press("Escape");
       await expect(dialog).toHaveCount(0);
       await expect(trigger).toBeFocused();
@@ -81,50 +81,61 @@ test.describe("P4 Presentation Lab interactive regression", () => {
       console.log("P4 citation after Escape:", JSON.stringify(anchor));
       await expect(trigger).toBeInViewport();
     });
-    await test.step("second Enter: anchored popover and Close in viewport", async () => {
+    await test.step("second Enter: anchor, popover and Close within viewport", async () => {
       await page.keyboard.press("Enter");
       await expect(dialog).toBeVisible();
-    // Capture BEFORE Playwright tries to scroll into view. Record the popper
-    // wrapper as well: Content can be visible while the positioned Close is not.
-    const geometry = await dialog.evaluate((content) => {
-      const rect = (element: Element | null) => {
-        if (!element) return null;
-        const { x, y, width, height, top, right, bottom, left } = element.getBoundingClientRect();
-        return { x, y, width, height, top, right, bottom, left };
-      };
-      const trigger = document.querySelector('button[aria-label^="Show source:"]');
-      const closeButton = content.querySelector('button[aria-label="Close source details"]');
-      const wrapper = content.closest('[data-radix-popper-content-wrapper]');
-      const style = (element: Element | null) => {
-        if (!element) return null;
-        const computed = getComputedStyle(element);
-        return { position: computed.position, transform: computed.transform,
-          overflow: computed.overflow, maxHeight: computed.maxHeight };
-      };
-      return {
-        viewport: { width: innerWidth, height: innerHeight,
-          visualWidth: visualViewport?.width ?? null,
-          visualHeight: visualViewport?.height ?? null },
-        scroll: { x: scrollX, y: scrollY },
-        activeElement: document.activeElement?.getAttribute("aria-label") ??
-          document.activeElement?.tagName ?? null,
-        trigger: rect(trigger), content: rect(content), close: rect(closeButton),
-        wrapper: rect(wrapper),
-        contentStyle: style(content), wrapperStyle: style(wrapper),
-        placement: content.getAttribute("data-side"),
-      };
-    });
+      // Observe layout before actionability auto-scrolling changes the evidence.
+      const geometry = await dialog.evaluate(content => {
+        const rect = (element: Element | null) => {
+          if (!element) return null;
+          const { x, y, width, height } = element.getBoundingClientRect();
+          return { x, y, width, height };
+        };
+        const trigger = document.querySelector('button[aria-label^="Show source:"]');
+        const button = content.querySelector('button[aria-label="Close source details"]');
+        const wrapper = content.closest('[data-radix-popper-content-wrapper]');
+        return { viewport: { width: innerWidth, height: innerHeight }, scrollY,
+          active: document.activeElement?.tagName ?? null,
+          trigger: rect(trigger), content: rect(content), close: rect(button),
+          wrapper: rect(wrapper), placement: content.getAttribute("data-side"),
+          wrapperTransform: wrapper ? getComputedStyle(wrapper).transform : null };
+      });
       console.log("P4 citation second-open geometry:", JSON.stringify(geometry));
-      await expect(trigger, JSON.stringify(geometry, null, 2)).toBeInViewport();
-      await expect(dialog, JSON.stringify(geometry, null, 2)).toBeInViewport();
-      await expect(close, JSON.stringify(geometry, null, 2)).toBeInViewport();
+      await expect(trigger, JSON.stringify(geometry)).toBeInViewport();
+      await expect(dialog, JSON.stringify(geometry)).toBeInViewport();
+      await expect(close, JSON.stringify(geometry)).toBeInViewport();
     });
-    await test.step("pointer Close: dismiss and return visible trigger focus", async () => {
+    await test.step("pointer Close: dismiss and return focus", async () => {
       await close.click({ timeout: 7000 });
       await expect(dialog).toHaveCount(0);
       await expect(trigger).toBeFocused();
       await expect(trigger).toBeInViewport();
     });
+  });
+
+  test("citation keyboard reopen from offscreen focused trigger reanchors popup", async ({ page }) => {
+    const trigger = page.getByRole("button", { name: /Show source:/ }).first();
+    const dialog = page.getByRole("dialog");
+    const close = dialog.getByRole("button", { name: "Close source details" });
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+
+    // Simulate a dynamic page/scroll change after focus restoration.
+    // Keyboard Enter still activates the focused button even when offscreen.
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await expect(trigger).not.toBeInViewport();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
+    await expect(trigger).toBeInViewport();
+    await expect(dialog).toBeInViewport();
+    await expect(close).toBeInViewport();
+    await close.click({ timeout: 7000 });
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
   });
 
   test("abnormal chart data has nonblank fallback and surrounding text", async ({ page }) => {
