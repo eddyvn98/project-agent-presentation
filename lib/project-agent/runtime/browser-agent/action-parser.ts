@@ -1,9 +1,9 @@
-export type BrowserOp = "open" | "back" | "snapshot" | "click" | "type" | "press" | "select" | "scroll" | "screenshot" | "extract" | "download" | "console" | "network" | "wait" | "close" | "upload" | "drag" | "tabs" | "new_tab" | "switch_tab" | "close_tab" | "visual_observe" | "visual_click" | "visual_type";
+export type BrowserOp = "open" | "back" | "snapshot" | "click" | "type" | "press" | "select" | "scroll" | "screenshot" | "extract" | "download" | "console" | "network" | "wait" | "close" | "upload" | "drag" | "tabs" | "new_tab" | "switch_tab" | "close_tab" | "visual_observe" | "visual_click" | "visual_type" | "inspect_scene";
 export interface BrowserAction { action: "browser"; op: BrowserOp; /** wait: seconds (1-30) to wait for `find` text to appear, or for the network to go quiet when no text is given. */ seconds?: number; url?: string; ref?: string; text?: string; key?: string; value?: string; direction?: "up" | "down"; submit?: boolean; find?: string; offset?: number; tabIndex?: number; targetRef?: string; path?: string; frame?: number; x?: number; y?: number; note?: string }
 
 export function parseBrowserAction(raw: Record<string, unknown>): BrowserAction | { error: string } {
 	const op = String(raw.op ?? "") as BrowserOp;
-	if (!["open", "back", "snapshot", "click", "type", "press", "select", "scroll", "screenshot", "extract", "download", "console", "network", "wait", "close", "upload", "drag", "tabs", "new_tab", "switch_tab", "close_tab", "visual_observe", "visual_click", "visual_type"].includes(op)) return { error: "browser needs a supported op" };
+	if (!["open", "back", "snapshot", "click", "type", "press", "select", "scroll", "screenshot", "extract", "download", "console", "network", "wait", "close", "upload", "drag", "tabs", "new_tab", "switch_tab", "close_tab", "visual_observe", "visual_click", "visual_type", "inspect_scene"].includes(op)) return { error: "browser needs a supported op" };
 	const action: BrowserAction = {
 		action: "browser", op,
 		url: typeof raw.url === "string" ? raw.url.trim() : undefined,
