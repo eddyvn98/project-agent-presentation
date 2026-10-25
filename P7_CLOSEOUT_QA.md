@@ -1,0 +1,94 @@
+# P7 closeout acceptance — CAS and Stop cleanup
+
+Scope: `gpt/full-project-agent`, isolated AI-WEB-CHAT QA host only. Do **not**
+merge to `main`/`staging`, run CI, reuse employee sessions, or enable QA
+fixture mode in a production process.
+
+## What changed since the 31/31 local synthetic QA report
+
+- Explicit Stop of an orphan synthetic browser task now cleans its Watch JPEG,
+  control entry, and Chromium session immediately after marking the task
+  cancelled. This is limited to a non-production host with
+  `PROJECT_AGENT_P7_QA_FIXTURE=1`, an exact synthetic browser prompt and
+  a `@project-agent.test` task owner. Employee tasks are not affected.
+- Synthetic Mongo recovery CAS now **requires `updatedAt`**. A missing
+  version is a conflict, never an unconditional write.
+- Owner-only `GET /api/projects/:projectId/agent/p7-qa?taskId=...&verifyCas=1`
+  compares the stored synthetic task with the expected collection, `_id`,
+  owner, Project, prompt, status and timestamp. It returns
+  `{casMappingVerified:true}` (200), otherwise 409. No DB writes.
+- Focused host test creates a disposable browser fixture, calls the normal
+  Stop route, checks task `cancelled`, verifies the frame is gone and
+  Chromium is disconnected, then rejects `recover`. Cleanup is in
+  `finally`.
+
+## Preconditions
+
+Use a clean, isolated QA host and two synthetic dev identities. Do not
+use real Entra credentials or customer data. Start its host with:
+
+```bash
+PROJECT_AGENT_RUNTIME=sandbox
+PROJECT_AGENT_BROWSER_AGENT=1
+PROJECT_AGENT_P7_QA_FIXTURE=1
+# Set NEXTAUTH_URL to the actual isolated QA origin.
+```
+
+Chromium must be installed for the **host process**. Keep the established
+SSRF/private-network guards unchanged.
+
+## Single local-agent QA pass
+
+```bash
+git fetch origin gpt/full-project-agent
+git switch gpt/full-project-agent
+git pull --ff-only
+git diff --check
+npm ci
+npm run check:lines
+npm run check:agent-routes
+npm run test:p7:closeout
+npm run test:agent
+npx tsc --noEmit
+```
+
+Set the same authenticated QA variables documented in
+`P7_INTEGRATED_LOCAL_HANDOFF.md`. In particular, provide
+`P7_HOST_BASE_URL`, `P7_OWNER_STORAGE_STATE`, `P7_OTHER_STORAGE_STATE`,
+and `P7_PROJECT_ID`. If synthetic fixtures have not been created, run the
+QA bootstrap on the **isolated host** only and source its private variables:
+
+```bash
+export P7_ISOLATED_QA=1
+npm run p7:qa:create
+. .p7-auth/p7-vars.sh
+export P7_ALLOW_QA_STOP=1
+npm run test:host:p7:closeout
+npm run test:host:p7 -- --project=host-api
+npm run test:host:p7 -- --project=desktop-ui
+npm run test:host:p7 -- --project=mobile-ui
+```
+
+If the fixture was created for this run, invoke
+`npm run p7:qa:cleanup` once testing finishes, including after a failure.
+Never delete an untracked Project or reuse a production database.
+
+## Acceptance gates
+
+1. Host schema probe returns HTTP 200 and `casMappingVerified:true`.
+   If it returns 409, check the **host-owned** task repository's collection
+   name, `_id` type and `updatedAt` representation. There is no fallback
+   to an unconditional `markRunning` update.
+2. Stop synthetic browser test confirms no saved Watch frame, no live
+   browser context and recovery 409 after Stop.
+3. Race tests preserve active human takeover; rejected Chromium preparation
+   clears resources and a stale Mongo version cannot update state.
+4. All focused tests and existing Agent tests PASS without new unexpected
+   SKIPs; report exact counts, current Git SHA and QA host SHA.
+5. Entra login with a real account is a **separate acceptance gate**.
+   NextAuth provider/callback metadata and synthetic login do not count.
+
+The earlier 31/31 Playwright result belongs to the previously tested host
+worktree, not to this later Git commit. P7 can be marked complete for
+**synthetic QA** only after the new host regression passes. Do not claim
+production readiness or begin a dependent P8 rollout from source-only checks.
