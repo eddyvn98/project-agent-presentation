@@ -2,6 +2,9 @@ import { getMongoAiDb } from "@/services/mongodb/client";
 import { P7_QA_PREFIX } from "./p7-qa-guard";
 import type { P7RecoverTask } from "./p7-qa-recovery";
 
+/** Match services/mongodb/projectAgentTasks.repo.ts in the AI-WEB-CHAT host. */
+export const PROJECT_AGENT_TASK_COLLECTION = "project_agent_tasks" as const;
+
 /**
  * Mongo compare-and-set: Stop updates cancelled/status on the same document,
  * so a later synthetic recovery cannot overwrite the stopped task.
@@ -16,7 +19,7 @@ export async function markP7BrowserRunningIfCurrent(task: P7RecoverTask, bootId:
     return false;
   const db = await getMongoAiDb();
   const now = new Date().toISOString();
-  const result = await db.collection("projectAgentTasks").updateOne({
+  const result = await db.collection(PROJECT_AGENT_TASK_COLLECTION).updateOne({
     _id: task.id, projectId: task.projectId, ownerEmail: task.ownerEmail,
     prompt: task.prompt, status: task.status, cancelled: { $ne: true },
     updatedAt: task.updatedAt,
@@ -35,7 +38,7 @@ export async function verifyP7TaskStoreMapping(task: P7RecoverTask): Promise<boo
       !task.ownerEmail.trim().toLowerCase().endsWith("@project-agent.test") ||
       !task.updatedAt) return false;
   const db = await getMongoAiDb();
-  const doc = await db.collection("projectAgentTasks").findOne(
+  const doc = await db.collection(PROJECT_AGENT_TASK_COLLECTION).findOne(
     { _id: task.id },
     { projection: { _id: 1, projectId: 1, ownerEmail: 1, prompt: 1, status: 1, updatedAt: 1 } },
   );
