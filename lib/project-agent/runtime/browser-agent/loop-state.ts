@@ -56,7 +56,7 @@ export function authorizeBrowserLoopAction(taskId: string, operation: string): s
   const state = ensure(taskId);
   if (process.env.PROJECT_AGENT_P8_LOOP_REPORT_ONLY === "1") {
     if (!READ_ONLY.has(operation)) state.actions++;
-    if (state.actions >= ACTION_LIMIT && state.phase === "active") {
+    if ((state.actions >= ACTION_LIMIT || Date.now() - state.startedAt - state.humanWaitMs > TIME_LIMIT_MS) && state.phase === "active") {
       state.phase = "needs_help"; event(state, "escalation");
     }
     return null; // L1 observes but never interferes with P7 operations.
@@ -95,7 +95,7 @@ export function noteBrowserLoopHandback(taskId: string): void {
   state.consecutiveUnverified = 0;
   state.humanWaitMs += Math.max(0, Date.now() - (state.humanStartedAt ?? Date.now()));
   delete state.humanStartedAt;
-  state.phase = state.actions >= ACTION_LIMIT || Date.now() - state.startedAt > TIME_LIMIT_MS
+  state.phase = state.actions >= ACTION_LIMIT || Date.now() - state.startedAt - state.humanWaitMs > TIME_LIMIT_MS
     ? "needs_help" : "active";
   event(state, "handback");
 }
