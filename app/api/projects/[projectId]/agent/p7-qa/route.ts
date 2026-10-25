@@ -40,12 +40,21 @@ export async function POST(req: NextRequest, { params }: { params: { projectId: 
   const allowed = await authorized(req, params.projectId);
   if (allowed.response) return allowed.response;
   const body = await req.json().catch(() => null) as { kind?: unknown } | null;
-  if (body?.kind !== "browser" && body?.kind !== "pdf") return reply({ error: "Expected browser or pdf" }, 400);
+  if (!["browser", "pdf", "p8_browser"].includes(String(body?.kind))) return reply({ error: "Expected browser, pdf or p8_browser" }, 400);
+  if (body?.kind === "p8_browser" &&
+      (process.env.PROJECT_AGENT_P8_QA_SESSION !== "1" || process.env.PROJECT_AGENT_P8_LOOP !== "1"))
+    return reply({ error: "P8 synthetic session fixture disabled" }, 403);
   const owner = allowed.owner!, kind = body.kind;
   const task = await createProjectAgentTask({ projectId: params.projectId, ownerEmail: owner,
-    prompt: `${P7_QA_PREFIX} ${kind} fixture - local synthetic data only`,
+    prompt: `${P7_QA_PREFIX} ${kind === "p8_browser" ? "p8 browser" : kind} fixture - local synthetic data only`,
     userPrompt: `Synthetic P7 ${kind} fixture`, projectOwnerEmail: owner });
   try {
+    if (kind === "p8_browser") {
+      // Create the task record ONLY. The /browser/control route creates the
+      // active session in its own module/process for genuine takeover QA.
+      await updateProjectAgentTask(task.id, { status: "running", logLine: "p8_synthetic :: session not yet opened" });
+      return reply({ taskId: task.id, kind, prepared: false }, 201);
+    }
     if (kind === "browser") {
       await updateProjectAgentTask(task.id, { status: "running", logLine: "p7_synthetic :: browser fixture" });
       const prepared = await prepareP7BrowserFixture(task.id, owner);
