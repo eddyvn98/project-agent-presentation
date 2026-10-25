@@ -61,7 +61,7 @@ async function verifySessions(a, b) {
 }
 async function run() {
   let hosts = [], ownerA, ownerB, outsider, taskId, bOrigin;
-  let succeeded = false, cleanupError;
+  let succeeded = false, cleanupError, successSummary;
   try {
     hosts = await startCrashHosts(env);
     assert.notEqual(hosts[0].child.pid, hosts[1].child.pid);
@@ -155,11 +155,11 @@ async function run() {
     assert.deepEqual(final.actions.map(x => x.epoch), [proofA.epoch, proofB.epoch]);
     assert.deepEqual(final.actions.map(x => x.counter), [1, 1]);
     succeeded = true;
-    console.log(JSON.stringify({ g2CrashE2E: "PASS", actualNextProcessCount: 2,
+    successSummary = { actualNextProcessCount: 2,
       aRuntimePid: proofA.nodePid, bRuntimePid: proofB.nodePid,
       oldEpoch: proofA.epoch, newEpoch: proofB.epoch,
       oldActionCountBeforeBClick: 1, finalExplicitActions: 2,
-      staleRefRejected: true, externalActions: false }, null, 2));
+      staleRefRejected: true, externalActions: false };
   } finally {
     // The QA child group is owned by this harness; never delete a live lease.
     if (hosts[0]) await killCrashHost(hosts[0]).catch(() => {});
@@ -193,6 +193,9 @@ async function run() {
     if (cleanupError) throw cleanupError;
   }
   assert.equal(succeeded, true);
+  console.log(JSON.stringify({ g2CrashE2E: "PASS",
+    ...successSummary, cleanup: "synthetic task, ownership and receipts removed",
+    spawnedNextGroupsStopped: true }, null, 2));
 }
 run().catch(error => {
   console.error("G2 crash/Next host acceptance FAIL:", error.message);
