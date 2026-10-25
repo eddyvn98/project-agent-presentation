@@ -22,6 +22,7 @@ function synthetic() {
     P8_QA_ALLOWED_ORIGIN: "http://localhost:3005",
     P7_PROJECT_ID: projectId, PROJECT_AGENT_P7_QA_PROJECT_ID: projectId,
     G2_QA_RUN_ID: runId, G2_QA_REVIEW_TICKET: "b".repeat(24),
+    G2_QA_DB_ISOLATION_ATTESTED: "1", NODE_ENV: "test",
     G2_QA_CHECKOUT_A: roots[0], G2_QA_CHECKOUT_B: roots[1],
     PROJECT_AGENT_RUNTIME: "sandbox", PROJECT_AGENT_DURABLE_QUEUE: "0",
     PROJECT_AGENT_P8_LOOP_REPORT_ONLY: "0" };
