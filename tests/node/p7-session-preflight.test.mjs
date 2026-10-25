@@ -78,3 +78,13 @@ test("empty NextAuth response aborts before testing nonmember or any mutation", 
     assert.equal(disposed, 1);
   } finally { rmSync(folder, { recursive: true, force: true }); }
 });
+test("a matching host origin without Stop opt-in cannot start destructive acceptance", async () => {
+  const env = {
+    P7_ISOLATED_QA: "1",
+    P7_HOST_BASE_URL: "http://127.0.0.1:3005",
+    P7_QA_MUTATION_ALLOWED_ORIGIN: "http://127.0.0.1:3005",
+  };
+  await assert.rejects(p7SessionPreflight(env, {
+    newContext: () => { throw new Error("should not connect"); },
+  }, true), /P7_ALLOW_QA_STOP/);
+});
