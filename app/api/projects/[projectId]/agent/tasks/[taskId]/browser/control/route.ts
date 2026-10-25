@@ -73,7 +73,7 @@ export async function POST(req: NextRequest,
       if (raw.kind !== "click" && raw.kind !== "no_progress")
         return NextResponse.json({ error: "Invalid synthetic step" }, { status: 400, headers: HEADERS });
       const step = await runP8QaBrowserStep(task.id, owner, task.projectId, raw.kind);
-      if (raw.kind === "click" && step.ok && typeof step.count === "number")
+      if (raw.kind === "click" && step.ok && "count" in step && typeof step.count === "number")
         await g2QaClickReceipt(task.id, owner, step.count);
       return NextResponse.json(step, { headers: HEADERS });
     } catch (error) {
