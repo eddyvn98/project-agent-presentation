@@ -13,6 +13,29 @@ test("detects a host that cannot be reached", async () => {
   assert.equal(result.blocker, "HOST_UNREACHABLE");
   assert.equal(result.ready, false);
 });
+test("distinguishes a timed-out /assistant after auth providers responded", async () => {
+  const request = async url => {
+    if (url.pathname.includes("/api/auth/providers"))
+      return new Response(JSON.stringify({ "azure-ad": {} }), { status: 200 });
+    throw Object.assign(new Error("deadline"), { name: "TimeoutError" });
+  };
+  const result = await inspectP7Host("http://127.0.0.1:3004", request);
+  assert.equal(result.blocker, "CHAT_ROUTE_TIMEOUT");
+  assert.deepEqual(result.checks.map(item => item.name), ["auth_providers", "chat_route"]);
+  assert.equal(result.checks[0].status, 200);
+  assert.equal(result.checks[1].status, null);
+});
+test("distinguishes a route-specific network failure and guards bad timeouts", async () => {
+  const request = async url => {
+    if (url.pathname.includes("/api/auth/providers"))
+      return new Response(JSON.stringify({ "azure-ad": {} }), { status: 200 });
+    throw new TypeError("route disconnected");
+  };
+  assert.equal((await inspectP7Host("http://127.0.0.1:3004", request)).blocker,
+    "CHAT_ROUTE_NETWORK_ERROR");
+  await assert.rejects(inspectP7Host("http://127.0.0.1:3004", request, "/assistant", 0),
+    /readiness timeout/);
+});
 test("identifies NextAuth provider HTTP 500 and chat HTTP 500 separately", async () => {
   assert.equal((await inspectP7Host("http://127.0.0.1:3004",
     requestWith(500))).blocker, "HOST_SERVER_ERROR");
