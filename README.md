@@ -58,3 +58,7 @@ npm run test:e2e
 The synthetic demo is served at the URL printed by Vite. Browser tests run at desktop (1280×720) and Pixel 7 (393×727) viewports, covering figure sizes, actual zoom dimensions, math, eight-state navigation, Mermaid, citation positioning/focus and failure fallbacks. Component tests cover safe Markdown/TeX, image adapters and strict chart data validation. Every source/demo/test file stays under 300 lines.
 
 For environments with a preinstalled compatible Chromium, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/absolute/path/to/chromium` when running browser tests. The production demo may emit a large-chunk warning from existing rendering dependencies; it is a review fixture, not a deployment bundle. Real content accuracy, source validity and image rights remain the host author's responsibility.
+
+## P7 signed-in host acceptance (separate from demo)
+
+Run the optional `npm run check:host:p7` and `npm run test:host:p7` commands only against an isolated AI-WEB-CHAT QA host with explicitly supplied Playwright login state. See [P7_HOST_E2E_HANDOFF.md](P7_HOST_E2E_HANDOFF.md) for environment flags and expected evidence. Read-only security/UI assertions run by default; synthetic task creation, calculator execution and browser takeover require separate opt-ins. The neutral snapshot does not provide host authentication or Dify/Mongo services. Never commit QA cookies or screenshots containing personal data.
