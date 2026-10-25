@@ -3,14 +3,21 @@ import { stopProjectAgentTask } from "./task-runner";
 import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
 import { cleanupP7DiscardedBrowser } from "./p7-qa-browser-cleanup";
 import { p7SyntheticTask, P7_QA_PREFIX } from "./p7-qa-guard";
+import { revokeDurableTaskLease } from "./durable-mongo-queue";
 
 /** Stops a task: aborts it when this process runs it, otherwise marks it stopped so the UI is unblocked. "completed" means it had already finished. */
 export async function stopProjectAgentTaskNow(task: ProjectAgentTask): Promise<"requested" | "completed"> {
 	if (task.status === "done" || task.status === "failed") return "completed";
-	if (stopProjectAgentTask(task.id)) return "requested";
+	if (stopProjectAgentTask(task.id)) {
+    if (process.env.PROJECT_AGENT_DURABLE_QUEUE !== "0")
+      await revokeDurableTaskLease(task.id);
+    return "requested";
+  }
 	const latest = await readProjectAgentTask(task.id);
 	if (!latest || latest.status === "done" || latest.status === "failed") return "completed";
 	await updateProjectAgentTask(task.id, { status: "failed", cancelled: true, completedAt: new Date().toISOString(), error: "Stopped by you.", logLine: "stopped by user" });
+  if (process.env.PROJECT_AGENT_DURABLE_QUEUE !== "0")
+    await revokeDurableTaskLease(task.id);
   // QA fixture has no task runner or AbortSignal to close its in-memory browser.
   // Explicit Stop must discard its Watch/frame/context even without a recovery call.
   if (process.env.NODE_ENV !== "production" && process.env.PROJECT_AGENT_P7_QA_FIXTURE === "1" &&
