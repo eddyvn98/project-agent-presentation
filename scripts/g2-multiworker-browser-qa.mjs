@@ -121,6 +121,23 @@ async function crashRecover() {
   b.send("close"); assert.equal((await b.next()).event, "closed");
   return { case: "crash_quarantine_explicit_fresh_restart", pass: true };
 }
+async function crashAfterAction() {
+  const id = newTask(), a = await ready(id, "effect-before-crash");
+  a.send("claim"); assert.equal((await a.next()).event, "claimed");
+  a.send("agent"); assert.equal((await a.next()).event, "agent_action");
+  assert.equal((await events(id)).length, 1);
+  await new Promise(resolve => { a.child.once("exit", resolve); a.child.kill("SIGKILL"); });
+  const coll = db.collection("projectAgentBrowserOwnership");
+  await coll.updateOne({ _id: id, state: "agent" },
+    { $set: { leaseUntil: "2000-01-01T00:00:00.000Z" } });
+  assert.equal(await quarantineExpiredBrowser(coll, id), true);
+  const b = await ready(id, "no-replay");
+  b.send("claim"); assert.equal((await b.next()).event, "lost");
+  b.send("agent"); assert.equal((await b.next()).event, "fenced");
+  assert.equal((await events(id)).length, 1);
+  assert.equal((await coll.findOne({ _id: id })).state, "quarantined");
+  return { case: "crash_after_effect_quarantines_without_replay", pass: true };
+}
 async function remoteStop() {
   const id = newTask(), a = await ready(id, "stopped-a"), b = await ready(id, "stopped-b");
   a.send("claim"); assert.equal((await a.next()).event, "claimed");
@@ -141,7 +158,7 @@ try {
   });
   created = true;
   const cases = [await race(), await humanTakeover(),
-    await crashRecover(), await remoteStop()];
+    await crashRecover(), await crashAfterAction(), await remoteStop()];
   console.log(JSON.stringify({ scope: "two_node_processes_real_mongo",
     cases, chromium: false, nextWorkers: false, externalCalls: false }, null, 2));
 } finally {
