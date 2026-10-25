@@ -17,7 +17,12 @@ export async function commitTaskTerminalIfActive(
 ): Promise<boolean> {
   if (!/^pat_[a-f0-9]{12}$/.test(task.id)) throw new Error("Invalid terminal task id");
   if (fields.status && fields.status !== status) throw new Error("Terminal status mismatch");
-  await assertActiveTaskLease();
+  try { await assertActiveTaskLease(); }
+  catch (error) {
+    if (error instanceof Error && /MongoDB task lease expired or changed/.test(error.message))
+      return false;
+    throw error;
+  }
   const db = await getMongoAiDb(), now = new Date().toISOString();
   const { logLine, status: _ignored, ...patch } = fields;
   const result = await db.collection(PROJECT_AGENT_TASKS_COLLECTION).updateOne({
@@ -26,6 +31,23 @@ export async function commitTaskTerminalIfActive(
   }, {
     $set: { ...patch, status, updatedAt: now, completedAt: patch.completedAt ?? now },
     ...(logLine ? { $push: { log: `${now} ${logLine}` } } : {}),
+  });
+  return result.modifiedCount === 1;
+}
+
+/** Stop and model completion compete on the SAME Mongo task record. */
+export async function stopTaskIfActive(
+  task: Pick<ProjectAgentTask, "id" | "projectId" | "ownerEmail">,
+): Promise<boolean> {
+  if (!/^pat_[a-f0-9]{12}$/.test(task.id)) throw new Error("Invalid Stop task id");
+  const db = await getMongoAiDb(), now = new Date().toISOString();
+  const result = await db.collection(PROJECT_AGENT_TASKS_COLLECTION).updateOne({
+    _id: task.id, projectId: task.projectId, ownerEmail: task.ownerEmail,
+    status: { $in: ["queued", "running"] }, cancelled: { $ne: true },
+  }, {
+    $set: { status: "failed", cancelled: true, completedAt: now, updatedAt: now,
+      error: "Stopped by you." },
+    $push: { log: `${now} stopped by user` },
   });
   return result.modifiedCount === 1;
 }
