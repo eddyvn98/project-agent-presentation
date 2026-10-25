@@ -7,6 +7,7 @@ import { createProjectAgentTask, deleteProjectAgentConversation, readProjectAgen
 import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask, P7_QA_PREFIX } from "@/lib/project-agent/p7-qa-guard";
 import { recoverP7SyntheticBrowser } from "@/lib/project-agent/p7-qa-recovery";
 import { PROJECT_AGENT_BOOT_ID } from "@/lib/project-agent/boot";
+import { markP7BrowserRunningIfCurrent } from "@/lib/project-agent/p7-qa-conditional-update";
 import { p7SyntheticPdf } from "@/lib/project-agent/p7-synthetic-pdf";
 import { prepareP7BrowserFixture } from "@/lib/project-agent/runtime/browser-agent/p7-fixture";
 import { closeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
@@ -95,12 +96,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { projectId:
         controlPaused: () => browserControlState(task.id).paused,
         prepare: () => prepareP7BrowserFixture(task.id, allowed.owner!),
         readTask: () => readProjectAgentTask(task.id),
-        markRunning: async () => {
-          await updateProjectAgentTask(task.id, {
-            status: "running", bootId: PROJECT_AGENT_BOOT_ID,
-            cancelled: false, error: undefined, completedAt: undefined,
-            logLine: "p7_synthetic :: browser fixture restored after host restart",
-          });
+        markRunning: latest => markP7BrowserRunningIfCurrent(latest, PROJECT_AGENT_BOOT_ID),
+        cleanup: async () => {
+          // Never erase frames or close a session under live human takeover.
+          if (browserControlState(task.id).paused) return;
+          setBrowserWatch(task.id, false);
+          clearBrowserControl(task.id);
+          await closeBrowserSession(task.id);
         },
       });
       if (!recovered.ok) return reply({ error: recovered.reason === "human_takeover" ?
