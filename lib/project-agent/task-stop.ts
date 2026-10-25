@@ -5,6 +5,7 @@ import { stopTaskIfActive } from "./task-terminal-guard";
 import { cleanupP7DiscardedBrowser } from "./p7-qa-browser-cleanup";
 import { p7SyntheticTask, P7_QA_PREFIX } from "./p7-qa-guard";
 import { revokeDurableTaskLease } from "./durable-mongo-queue";
+import { revokeG2BrowserOwnership } from "./runtime/browser-agent/g2-ownership";
 
 /** Stop is an atomic terminal transition, never an unconditional stale write. */
 export async function stopProjectAgentTaskNow(task: ProjectAgentTask): Promise<"requested" | "completed"> {
@@ -18,6 +19,7 @@ export async function stopProjectAgentTaskNow(task: ProjectAgentTask): Promise<"
   if (finalTask) await recordGuardedTerminalTask(finalTask);
   if (process.env.PROJECT_AGENT_DURABLE_QUEUE !== "0")
     await revokeDurableTaskLease(task.id);
+  await revokeG2BrowserOwnership(task.id, task.ownerEmail);
   // An orphan synthetic fixture has no runner/AbortSignal of its own.
   if (process.env.NODE_ENV !== "production" && process.env.PROJECT_AGENT_P7_QA_FIXTURE === "1" &&
       latest.prompt === `${P7_QA_PREFIX} browser fixture - local synthetic data only` &&
