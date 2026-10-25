@@ -65,6 +65,8 @@ async function events(id) {
 }
 async function race() {
   const id = newTask(), a = await ready(id, "race-a"), b = await ready(id, "race-b");
+  assert.ok(a.child.pid && b.child.pid && a.child.pid !== b.child.pid,
+    "G2 requires two distinct OS worker processes");
   a.send("claim"); b.send("claim");
   const states = [await a.next(), await b.next()];
   assert.deepEqual(states.map(x => x.event).sort(), ["claimed", "lost"]);
