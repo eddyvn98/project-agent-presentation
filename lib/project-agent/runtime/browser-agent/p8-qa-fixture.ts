@@ -13,6 +13,10 @@ const lifetime = globalThis as typeof globalThis & {
   __projectAgentP8QaTimers?: Map<string, ReturnType<typeof setTimeout>>;
 };
 const timers = lifetime.__projectAgentP8QaTimers ??= new Map<string, ReturnType<typeof setTimeout>>();
+const requestsGlobal = globalThis as typeof globalThis & {
+  __projectAgentP8QaRequests?: Map<string, number>;
+};
+const requests = requestsGlobal.__projectAgentP8QaRequests ??= new Map<string, number>();
 /** Local-only, no navigation or fetch. The underlying P7 page blocks all external resources. */
 export async function prepareP8QaBrowser(taskId: string, owner: string) {
   const prior = activeBrowserSession(taskId);
@@ -21,7 +25,11 @@ export async function prepareP8QaBrowser(taskId: string, owner: string) {
     const session = await getBrowserSession(taskId, undefined, owner);
     // Last-installed context route has precedence over production guardedRequest:
     // the fixture never sends a request, including DNS, redirects or WebSockets.
-    await session.context.route("**/*", route => route.abort("blockedbyclient"));
+    requests.set(taskId, 0);
+    await session.context.route("**/*", route => {
+      requests.set(taskId, (requests.get(taskId) ?? 0) + 1);
+      return route.abort("blockedbyclient");
+    });
     const fixture = await prepareP7BrowserFixture(taskId, owner);
     if (!fixture.hasFrame) throw new Error("Synthetic Chromium did not produce a frame");
     clickPoint = fixture.clickPoint;
@@ -39,12 +47,13 @@ export async function prepareP8QaBrowser(taskId: string, owner: string) {
       y: (bounds.y + bounds.height / 2) / vp.height } : null;
   }
   return { connected: true, hasFrame: Boolean(browserWatchStatus(taskId)?.hasImage),
-    clickPoint, pid: process.pid };
+    clickPoint, networkAttempts: requests.get(taskId) ?? 0, pid: process.pid };
 }
 export function p8QaBrowserProbe(taskId: string) {
   const session = activeBrowserSession(taskId);
   return { connected: Boolean(session?.browser.isConnected() && !session.page.isClosed()),
-    pid: process.pid, watching: Boolean(browserWatchStatus(taskId)?.watching),
+    pid: process.pid, networkAttempts: requests.get(taskId) ?? 0,
+    watching: Boolean(browserWatchStatus(taskId)?.watching),
     hasFrame: Boolean(browserWatchStatus(taskId)?.hasImage),
     control: browserControlState(taskId), loop: browserLoopStatus(taskId) };
 }
@@ -83,6 +92,7 @@ export async function runP8QaBrowserStep(taskId: string, owner: string,
 }
 export async function cleanupP8QaBrowser(taskId: string): Promise<void> {
   clearTimeout(timers.get(taskId)); timers.delete(taskId);
+  requests.delete(taskId);
   await closeBrowserSession(taskId).catch(() => {});
   setBrowserWatch(taskId, false); clearBrowserControl(taskId);
   clearBrowserLoop(taskId); clearBrowserStall(taskId);
