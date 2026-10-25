@@ -102,7 +102,8 @@ export async function createProjectAgentTask(input: CreateProjectAgentTaskInput)
     if (existing) {
       if (existing.ownerEmail !== input.ownerEmail ||
         existing.idempotencyKey !== input.idempotencyKey ||
-        existing.projectId !== input.projectId)
+        existing.projectId !== input.projectId ||
+        (Boolean(input.requestFingerprint) && existing.requestFingerprint !== input.requestFingerprint))
         throw new Error("Idempotency task identity collision");
       return existing;
     }
@@ -115,6 +116,7 @@ export async function createProjectAgentTask(input: CreateProjectAgentTaskInput)
 		ownerEmail: input.ownerEmail,
 		...(input.scheduleRunId ? { scheduleRunId: input.scheduleRunId } : {}),
     ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+    ...(input.requestFingerprint ? { requestFingerprint: input.requestFingerprint } : {}),
     ...(input.retryOfTaskId ? { retryOfTaskId: input.retryOfTaskId } : {}),
     ...(input.workflowRunId ? { workflowRunId: input.workflowRunId } : {}),
 		projectOwnerEmail: input.projectOwnerEmail,
@@ -151,7 +153,10 @@ export async function createProjectAgentTask(input: CreateProjectAgentTaskInput)
 				await adoptProjectAgentInputUpload(id, file, input.projectId, input.ownerEmail);
 			}
 		}
-		await saveProjectAgentTask(task);
+		try { await saveProjectAgentTask(task); }
+		catch (cause) {
+			if (!input.idempotencyKey || !/E11000|duplicate key/i.test(cause instanceof Error ? cause.message : String(cause))) throw cause;
+		}
 		await writeLegacySnapshot(task).catch(() => {});
 	} catch (error) {
 		await fs.rm(path.join(INPUTS_DIR, id), { recursive: true, force: true }).catch(() => {});
@@ -161,7 +166,8 @@ export async function createProjectAgentTask(input: CreateProjectAgentTaskInput)
   if (input.idempotencyKey) {
     const persisted = await findProjectAgentTask(id);
     if (persisted && (persisted.idempotencyKey !== input.idempotencyKey ||
-      persisted.ownerEmail !== input.ownerEmail))
+      persisted.ownerEmail !== input.ownerEmail ||
+      (Boolean(input.requestFingerprint) && persisted.requestFingerprint !== input.requestFingerprint)))
       throw new Error("Task identity collision after concurrent insert");
     return persisted ?? task;
   }
