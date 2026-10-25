@@ -16,7 +16,7 @@ for (const [index, file] of targets.entries()) {
   console.log(`[agent-qa ${index + 1}/${targets.length}] ${file}`);
   const started = Date.now();
   const result = spawnSync(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "--config",
-    "vitest.agent.config.ts", file, "--pool=forks", "--maxWorkers=1", "--minWorkers=1"], {
+    "vitest.agent.config.ts", file, "--pool=forks", "--maxWorkers=1"], {
     cwd: root, timeout: timeoutMs, encoding: "utf8", maxBuffer: 8 * 1024 * 1024,
     env: { ...process.env, PROJECT_AGENT_P3_BROWSER_QA: "0" },
   });
