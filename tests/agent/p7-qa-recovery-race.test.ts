@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recoverP7SyntheticBrowser, type P7RecoverTask } from "../../lib/project-agent/p7-qa-recovery";
+import { recoverP7SyntheticBrowser, withP7SyntheticRecoverySlot, type P7RecoverTask } from "../../lib/project-agent/p7-qa-recovery";
 
 const projectId = "proj_p7_synthetic", owner = "p7-owner@project-agent.test";
 const source = (): P7RecoverTask => ({
@@ -92,6 +92,29 @@ describe("P7 synthetic browser recovery race", () => {
     expect(result).toEqual({ ok: false, reason: "human_takeover" });
     expect(writes).toBe(0);
     expect(cleans).toBe(0);
+  });
+  it("rejects concurrent recovery without discarding the winning Chromium session", async () => {
+    let entered!: () => void, unblock!: () => void, prepared = 0;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const gate = new Promise<void>(resolve => { unblock = resolve; });
+    const first = withP7SyntheticRecoverySlot(source().id, async () => {
+      prepared++; entered(); await gate; return "accepted";
+    });
+    await started;
+    expect(await withP7SyntheticRecoverySlot(source().id, async () => {
+      prepared++; return "discarded";
+    })).toBeNull();
+    expect(prepared).toBe(1);
+    unblock();
+    expect(await first).toBe("accepted");
+    expect(await withP7SyntheticRecoverySlot(source().id, async () => "fresh")).toBe("fresh");
+  });
+  it("releases the recovery slot when Chromium preparation fails", async () => {
+    const id = source().id;
+    await expect(withP7SyntheticRecoverySlot(id, async () => {
+      throw new Error("frame failed");
+    })).rejects.toThrow("frame failed");
+    expect(await withP7SyntheticRecoverySlot(id, async () => 42)).toBe(42);
   });
   it("cleans when preparation throws after creating a browser session", async () => {
     let cleans = 0;
