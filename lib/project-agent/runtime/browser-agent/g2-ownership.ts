@@ -45,23 +45,24 @@ export async function bindG2BrowserOwnership(
     closed = true;
     clearInterval(heartbeat);
     leases.delete(session);
+    // Close Chromium FIRST even if Mongo is unavailable or slow.
+    await close();
     // Old crashed/stopped worker cannot clear a newer worker's lease.
     await collection().then(coll => finishBrowserLease(coll, claim)).catch(() => {});
-    await close();
   };
 }
 export async function assertG2BrowserOwnership(session: BrowserSession,
   mode: "agent" | "human"): Promise<void> {
-  if (!g2OwnershipEnabled()) return;
   const owned = leases.get(session);
+  if (!owned && !g2OwnershipEnabled()) return;
   if (!owned) throw new Error("G2 session has no Mongo browser ownership");
   await assertBrowserLease(await collection(), owned.claim, mode);
 }
 export async function changeG2HumanControl(
   session: BrowserSession, from: "agent" | "human", to: "human" | "agent",
 ): Promise<void> {
-  if (!g2OwnershipEnabled()) return;
   const owned = leases.get(session);
+  if (!owned && !g2OwnershipEnabled()) return;
   if (!owned) throw new Error("G2 session has no Mongo browser ownership");
   await changeBrowserControl(await collection(), owned.claim, from, to);
 }
