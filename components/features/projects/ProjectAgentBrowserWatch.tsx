@@ -161,7 +161,7 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
         <p className="mt-1 text-slate-500">{loopUi.actions}: {loop.actions} · {loopUi.verified}: {loop.verified} · {loopUi.review}: {loop.unverified} · {loopUi.failed}: {loop.failed}</p>
         {loop.events.length > 0 && <ol aria-label="Browser action verification timeline" className="mt-1 space-y-1 text-slate-500">
           {loop.events.slice(-4).map(step => <li key={step.sequence}>
-            {step.kind === "action" ? browserActionLabel(step.operation, language) : browserLoopPhaseLabel(step.kind === "takeover" ? "human_control" : step.kind === "escalation" ? "needs_help" : "active", language)}
+            {step.kind === "action" ? browserActionLabel(step.operation, language) : browserLoopPhaseLabel(step.kind === "takeover" ? "human_control" : step.kind === "escalation" ? "needs_help" : step.kind === "closed" ? "closed" : "active", language)}
             {step.outcome ? " · " + (step.outcome === "verified" ? loopUi.verified : step.outcome === "unverified" ? loopUi.review : loopUi.failed) : ""}
           </li>)}
         </ol>}
