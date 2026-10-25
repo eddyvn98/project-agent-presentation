@@ -1,0 +1,90 @@
+# P8 — Assisted autonomous browser loops (development track)
+
+## Status / scope
+
+**P7: CLOSED for isolated synthetic/local QA, NOT approved for production.**
+Evidence: 67/67 P7 regressions, 1/1 Mongo contract, 2/2 host CAS/Stop,
+owner 200 / nonmember 404, typecheck PASS, as reported by the local operator.
+
+**P8: code implemented in Presentation branch; host QA NOT YET ACCEPTED.**
+The baseline DOM-first browser, visual fallback, Browser Watch,
+takeover/handback, approvals, per-task leases, runtime StallGuard,
+ActionReplayGuard and token/cost accounting already existed before P8.
+We extend those, not replace the app harness or install the
+Loop Engineering CLI in the production runtime.
+
+Inspired by [loop-engineering](https://github.com/cobusgreyling/loop-engineering)
+(Loop Design Checklist, Failure Modes, Safety, Maker/Checker and L1 → L2).
+It is a methodology/pattern reference, not a Playwright replacement.
+
+## Implemented behavior (all feature-flagged)
+
+| Feature | P8 contract |
+| --- | --- |
+| Maker → checker | Browser action executes, then a separate read-only checker compares input value, URL or DOM snapshot; tool return alone is not treated as verified progress |
+| L1 reporting | `PROJECT_AGENT_P8_LOOP=1` and `PROJECT_AGENT_P8_LOOP_REPORT_ONLY=1`: record evidence and warnings, do not block existing P7 operations |
+| L2 assisted safety | `PROJECT_AGENT_P8_LOOP=1` without report-only: cap at 48 active browser actions and 12 minutes of active work; repeated no-progress attempts recommend human help |
+| Stalled DOM operations | Same failed ref+page+snapshot cannot be retried indefinitely; a fresh snapshot/changed ref offers a different approach; existing `ActionReplayGuard` also protects external mutations |
+| Human takeover | Existing Watch control pauses the Agent and invalidates stale refs; P8 logs takeover/handback, resets the no-progress streak but does NOT refund its action budget |
+| Loop timeline | Owner-only GET Browser Watch includes bounded numeric/event metadata; React Watch panel shows progress, unverified steps and assistance status in current UI language |
+| Privacy | No raw DOM, form values, full URL or secrets in P8 telemetry; SHA-256 fingerprints live only in memory for the stall detector |
+| Run receipt | At run finalization emit `p8_loop_metrics` with numeric counts into existing task logs; 30-day account observability aggregates actions, progress and interventions |
+| Quality benchmark | Existing 40 isolated synthetic Chromium fixtures have independent DOM assertions; P8 scorecard only accepts complete 40/40 verified cases with bounded retries |
+
+Limits: an observed DOM/value change is **not** proof the user's overall
+task or external transaction succeeded. Do not let a model declare its own
+goal verified. High-impact actions still require approval in the existing
+browser safety pipeline. No auto-submit, auto-merge or unattended production
+actions are authorized by P8 flags alone.
+
+## Opt-in rollout
+
+Everything remains off by default; P7 behavior is unchanged without flags.
+
+```bash
+# L1: report-only while local QA collects evidence
+PROJECT_AGENT_P8_LOOP=1
+PROJECT_AGENT_P8_LOOP_REPORT_ONLY=1
+
+# L2: only after the isolated QA acceptance below
+PROJECT_AGENT_P8_LOOP=1
+PROJECT_AGENT_P8_LOOP_REPORT_ONLY=0
+```
+
+Existing `PROJECT_AGENT_P8_STALL_GUARD=1` can explicitly enable the
+old DOM retry guard independently; assisted P8 enables it automatically.
+The same root task continues through Watch and takeover. No new AI API key,
+scheduler, dependency or network access is needed.
+
+## Local acceptance gates
+
+1. Focused P8 Vitest tests PASS for checker, owner isolation, budget,
+   report-only parity, escalation, takeover, TTL, metrics and scorecard.
+2. TypeScript, per-file limit (<300), diff check, P7 regression suite PASS.
+3. Opt-in 40-fixture real Chromium benchmark PASS using local in-memory HTML.
+4. On the **isolated AI-WEB-CHAT QA host**: owner gets loop status, nonmember
+   404; report-only does not block baseline; assisted pauses after no-progress;
+   real user takeover/handback works with fresh snapshot, never replays a
+   stale click; Stop and screenshot cleanup still pass.
+5. Benchmark report must capture exact Presentation SHA, host checkout SHA,
+   Next version, browser version, PASS/FAIL/SKIP, retry count and elapsed time.
+   The report must distinguish *observed progress* from *goal completion*.
+
+## Release gates not completed by source-only P8 work
+
+- State is **process-local RAM** (30-minute TTL, 16 events/task, 64 tasks).
+  Summary metrics persist through the existing task log, but live budgets,
+  takeover and Watch are NOT multi-host synchronized. Durable shared-state
+  and distributed human ownership require a verified host adapter.
+- Read-only checker is deterministic, **not a separate independent model**.
+  Complex semantic goals need explicit acceptance assertions or human
+  verification before declaring task success.
+- Screenshot UI does not show a native streamed Chromium window; Watch
+  uses masked opt-in frames/live previews, not uncontrolled OS remote desktop.
+- Hard budgets are local guardrails, not proof of exactly-once transactions.
+  Already-dispatched external mutations cannot be rolled back.
+- Production-grade Entra, real Dify, staging, threat review, multi-worker
+  browser sessions, cost alerts and rollback remain separate release gates.
+
+See [P8 local QA](P8_LOCAL_QA.md) for executable commands. Do not run CI,
+access real external Dify/Entra, touch `main/staging`, or merge during P8 QA.
