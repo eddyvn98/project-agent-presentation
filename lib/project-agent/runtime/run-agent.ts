@@ -1,4 +1,4 @@
-import { assertActiveTaskLease } from "../lease-fence"; import { runCalculationStep } from "./calculate"; import { auditFinalAnswer } from "./final-audit"; import { enforceTaskBudget, estimatedModelCost } from "./usage-pricing";
+import { assertActiveTaskLease } from "../lease-fence"; import { runCalculationStep } from "./calculate"; import { auditFinalAnswer } from "./final-audit"; import { checkG1SyntheticGoal, formatG1Receipt } from "./g1-goal-check"; import { enforceTaskBudget, estimatedModelCost } from "./usage-pricing";
 import { agentScheduleAction } from "../scheduled-agent-tool"; import { agentWorkflowAction } from "../workflow-agent-tool";
 import { contextOutputAction, externalizeActionOutput } from "./context-output-manager"; import { runXerjAction } from "../xerj/runtime-action";
 import { recordContextCheckpoint } from "./context-checkpoint"; import { RuntimeTurnContext } from "./turn-context";
@@ -260,8 +260,8 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 					const stored = await storeLargePdfOutput({ chatId: input.chatId, ownerEmail: input.ownerEmail!, projectId: input.projectId, boardId: input.boardId }, item.absolute, item.name);
 					files.push({ name: item.name, bytes: new Uint8Array(0), resource: stored });
 				}
-				if (input.projectId) await saveScriptsOut(input.projectId, input.chatId).catch(() => 0);
-				return { answer: action.answer, conversationId, inlineFiles: files, promptTokens: totalPromptTokens ? estimateContextTokens(totalPromptTokens, rounds) : undefined, iterations: rounds, sources: input.sources };
+				const g1Receipt = await checkG1SyntheticGoal(input); if (g1Receipt) input.onG1Receipt?.(g1Receipt); if (input.projectId) await saveScriptsOut(input.projectId, input.chatId).catch(() => 0);
+				return { answer: g1Receipt ? action.answer + "\n\n" + formatG1Receipt(g1Receipt) : action.answer, conversationId, inlineFiles: files, promptTokens: totalPromptTokens ? estimateContextTokens(totalPromptTokens, rounds) : undefined, iterations: rounds, sources: input.sources };
 			}
 			const replayKey = spanKey(action.action, JSON.stringify({ ...action, note: undefined }));
 			const effectful = mayHaveExternalEffects(action), blocked = replay.before(action.action, replayKey, effectful);
