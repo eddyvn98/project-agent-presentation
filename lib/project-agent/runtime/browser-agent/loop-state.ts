@@ -53,6 +53,13 @@ export function browserLoopEnabled(): boolean {
 /** Called before an automated tool: hard caps are NOT reset by human handback. */
 export function authorizeBrowserLoopAction(taskId: string, operation: string): string | null {
   const state = ensure(taskId);
+  if (process.env.PROJECT_AGENT_P8_LOOP_REPORT_ONLY === "1") {
+    if (!READ_ONLY.has(operation)) state.actions++;
+    if (state.actions >= ACTION_LIMIT && state.phase === "active") {
+      state.phase = "needs_help"; event(state, "escalation");
+    }
+    return null; // L1 observes but never interferes with P7 operations.
+  }
   if (state.phase === "closed") return "Browser task has been closed.";
   if (state.phase === "human_control") return "Browser is controlled by the user; wait for handback.";
   if (READ_ONLY.has(operation)) return null;
