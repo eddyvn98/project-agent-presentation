@@ -22,7 +22,8 @@ const OPERATIONS = new Set([
   "download", "screenshot", "extract", "new_tab", "switch_tab", "close_tab",
   "visual_observe", "visual_click", "visual_type", ...READ_ONLY,
 ]);
-const states = new Map<string, LoopStatus>();
+const p8Global = globalThis as typeof globalThis & { __projectAgentP8Loop?: Map<string, LoopStatus> };
+const states = p8Global.__projectAgentP8Loop ??= new Map<string, LoopStatus>();
 function prune(now: number) {
   for (const [id, state] of states) if (now - state.updatedAt > TTL_MS) states.delete(id);
 }
