@@ -148,6 +148,43 @@ To run calculator and real HTTP task creation scenarios, use the previously docu
 5. Three concurrent requests with the same key return the same task ID; changed payload yields 409.
 6. Stop/Retry and PDF Range/owner isolation remain correct; safe manifest cleanup removes **only** this run's synthetic assets.
 
+## AI-WEB-CHAT host acceptance reported on 2026-10-25
+
+Local agent reported **30/30 Playwright PASS, 0 FAIL and 0 SKIP** on an isolated
+AI-WEB-CHAT QA worktree (host branch `feat/project-agent-local-business`, pre-test
+HEAD `352abde4`; two independent QA hosts at ports 3005/3006). It also reported
+10/10 Browser Watch/Takeover, 2/2 browser preview desktop/mobile, 7/7 focused
+Vitest, 6/6 auth/preflight Node, TypeScript and diff-check PASS. This is
+**reported host acceptance**, not a fresh execution of those tests against the
+subsequent standalone Presentation branch commit. Do not conflate the two runs.
+
+Two host-observed issues were propagated to this repository:
+
+- Watch-off **must purge private frames in RAM**. Do not change this privacy
+  behavior to keep tests green. The Playwright synthetic fixtures now call
+  an explicitly gated `PATCH p7-qa {kind:"recover"}` to reconstruct the
+  in-memory Chromium fixture and fresh masked JPEG before dependent tests.
+  Bootstrap exports `P7_SYNTHETIC_BROWSER_TASK=1` to prevent recovery calls
+  against ordinary employee Browser Agent tasks.
+- A restarted host can mark the previous synthetic browser task `failed`.
+  The QA-only recovery endpoint now verifies owner, exact synthetic browser
+  prompt, non-cancelled non-completed task, and absence of active manual
+  takeover. It restores Chromium and captures a real frame first, then marks
+  the **synthetic task only** `running` with the current process boot ID.
+  It must never revive a user's explicitly stopped task.
+
+The host report was kept in `P7_HOST_E2E_TEST_REPORT.md` within the
+AI-WEB-CHAT worktree and was **not committed** at the time of the report.
+Likewise, host-specific NextAuth hydration and QA Project/chat selection UI
+edits remain host-repository changes; they are not automatically imported
+into this portable Presentation repo. Commit them on the appropriate host
+development branch after its own review, not on `main`/`staging`.
+
+**Remaining acceptance limits:** Synthetic dev credentials and provider/callback
+metadata do not demonstrate real Microsoft Entra sign-in. A local in-memory
+fixture does not prove unrestricted autonomous browsing on public websites.
+SSRF/public-address protections and production authentication remain unchanged.
+
 ## Known limitations
 
 The development-only fixture tests Chromium/watch/handback mechanics; it does not demonstrate an AI model autonomously selecting a browser tool on a real public site. Ordinary Dify workflow and production Entra sign-in require separate integration verification. All new tests must be run in the actual Next.js QA host, not just the neutral demo. Source-level edits made through GitHub alone do not prove host PASS. Respect the 300-line file policy and never include credentials in logs or reports.
