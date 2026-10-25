@@ -60,6 +60,15 @@ describe("P8 bounded privacy-safe browser loop", () => {
       phase: "active", actions: 1, interventions: 1, consecutiveUnverified: 0,
     });
   });
+  it("does not consume the active-time budget while a user is taking over", () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-25T00:00:00Z"));
+    authorizeBrowserLoopAction(id, "scroll");
+    noteBrowserLoopTakeover(id);
+    vi.advanceTimersByTime(15 * 60_000);
+    noteBrowserLoopHandback(id);
+    expect(browserLoopStatus(id)?.humanWaitMs).toBe(15 * 60_000);
+    expect(authorizeBrowserLoopAction(id, "click")).toBeNull();
+  });
   it("hard action budget is non-negotiable and survives human handback", () => {
     for (let n = 0; n < 48; n++) {
       expect(authorizeBrowserLoopAction(id, "scroll")).toBeNull();
