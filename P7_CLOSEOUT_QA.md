@@ -122,6 +122,21 @@ If the fixture was created for this run, invoke
 `npm run p7:qa:cleanup` once testing finishes, including after a failure.
 Never delete an untracked Project or reuse a production database.
 
+## Latest controlled gate evidence
+
+The local AI-WEB-CHAT operator additionally reported **7/7 API
+creation/retry/idempotency PASS** using a loopback-only Dify stub, **1/1
+single-session Chromium crash/recovery PASS**, and **10 QA/SSRF safety checks
+PASS**. These do not erase historical skips in the previous 27-case host
+API suite. All **three model-execution tasks failed** because a real runtime
+was absent; do not interpret API PASS as model execution PASS.
+
+**External Dify remains BLOCKED:** user confirmation for using the local API
+key against any non-loopback Dify URL is pending. No request should be sent
+without explicit approval. Remaining release gates include multi-worker
+recovery, real Entra test tenant, full security review and production-like
+staging. See [P7_STATUS.md](P7_STATUS.md) for the gate-by-gate matrix.
+
 ## Acceptance gates
 
 1. Source-level host-schema contract PASS, then host schema probe returns
