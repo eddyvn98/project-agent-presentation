@@ -16,6 +16,7 @@ const timers = lifetime.__projectAgentP8QaTimers ??= new Map<string, ReturnType<
 /** Local-only, no navigation or fetch. The underlying P7 page blocks all external resources. */
 export async function prepareP8QaBrowser(taskId: string, owner: string) {
   const prior = activeBrowserSession(taskId);
+  let clickPoint: { x: number; y: number } | null = null;
   if (!prior) {
     const session = await getBrowserSession(taskId, undefined, owner);
     // Last-installed context route has precedence over production guardedRequest:
@@ -23,6 +24,7 @@ export async function prepareP8QaBrowser(taskId: string, owner: string) {
     await session.context.route("**/*", route => route.abort("blockedbyclient"));
     const fixture = await prepareP7BrowserFixture(taskId, owner);
     if (!fixture.hasFrame) throw new Error("Synthetic Chromium did not produce a frame");
+    clickPoint = fixture.clickPoint;
     registerP8QaBrowserSession(taskId, session);
   }
   clearTimeout(timers.get(taskId));
@@ -30,8 +32,14 @@ export async function prepareP8QaBrowser(taskId: string, owner: string) {
   timer.unref?.(); timers.set(taskId, timer);
   const session = activeBrowserSession(taskId);
   if (!session || !session.browser.isConnected()) throw new Error("QA browser not active");
+  if (!clickPoint) {
+    const bounds = await session.page.locator("#qa-count").boundingBox();
+    const vp = session.page.viewportSize() ?? { width: 1280, height: 800 };
+    clickPoint = bounds ? { x: (bounds.x + bounds.width / 2) / vp.width,
+      y: (bounds.y + bounds.height / 2) / vp.height } : null;
+  }
   return { connected: true, hasFrame: Boolean(browserWatchStatus(taskId)?.hasImage),
-    pid: process.pid };
+    clickPoint, pid: process.pid };
 }
 export function p8QaBrowserProbe(taskId: string) {
   const session = activeBrowserSession(taskId);
@@ -63,9 +71,11 @@ export async function runP8QaBrowserStep(taskId: string, owner: string,
   } else {
     // Intentionally NO DOM effect. Exercises independent checker, not an
     // invented successful browser action or an external site.
-    await runP8BrowserLoopStep(taskId, session,
+    const result = await runP8BrowserLoopStep(taskId, session,
       { action: "browser", op: "click", ref: "qa_no_progress" },
       undefined, async () => ({ text: "Synthetic no-op: no DOM change" }));
+    if (result.failed) return { ok: false, blocked: true,
+      loop: browserLoopStatus(taskId), connected: true, pid: process.pid };
   }
   const count = Number(await session.page.locator("#qa-output").textContent());
   return { ok: true, count, loop: browserLoopStatus(taskId),
