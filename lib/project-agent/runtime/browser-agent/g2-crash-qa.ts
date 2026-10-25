@@ -1,6 +1,7 @@
 import { getMongoAiDb } from "@/services/mongodb/client";
 import { PROJECT_AGENT_BOOT_ID } from "../../boot";
 import { activeBrowserSession } from "./session";
+import { browserLoopStatus } from "./loop-state";
 import { runBrowserAction } from "./index";
 import { quarantineExpiredBrowser, acknowledgeBrowserRecovery } from "./g2-lease-core.mjs";
 
@@ -28,7 +29,8 @@ async function collections() {
 export async function g2QaClickReceipt(taskId: string, owner: string, count: number) {
   if (!g2CrashQaAllowed(taskId, owner)) return;
   const session = activeBrowserSession(taskId);
-  if (!session?.g2RefEpoch || !Number.isSafeInteger(count) || count < 1)
+  if (!session?.g2RefEpoch || !Number.isSafeInteger(count) || count < 1 ||
+      (browserLoopStatus(taskId)?.verified ?? 0) < 1)
     throw new Error("Synthetic G2 action receipt missing browser epoch");
   const { actions, lease } = await collections();
   const row = await lease.findOne({ _id: taskId,
