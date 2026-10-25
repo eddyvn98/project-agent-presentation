@@ -15,7 +15,12 @@
     "test:agent": "vitest run --config vitest.agent.config.ts",
     "check:agent-routes": "node scripts/check-agent-routes.mjs",
     "check:host:p7": "node scripts/p7-host-preflight.mjs",
-    "test:host:p7": "playwright test --config playwright.host.config.ts"
+    "test:host:p7": "playwright test --config playwright.host.config.ts",
+    "p7:qa:browser": "node scripts/p7-browser-preflight.mjs",
+    "p7:qa:sso": "node scripts/p7-sso-preflight.mjs",
+    "p7:qa:create": "node scripts/p7-qa-bootstrap.mjs create",
+    "p7:qa:cleanup": "node scripts/p7-qa-bootstrap.mjs cleanup",
+    "p7:qa:auth-tests": "node --test tests/node/p7-*.test.mjs"
   },
   "peerDependencies": {
     "next": ">=14",
