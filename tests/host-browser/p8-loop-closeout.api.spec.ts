@@ -38,9 +38,10 @@ test("P8 isolated Watch loop and human takeover/handback closeout", async ({ req
     const prep = await send({ op: "qa_prepare" });
     expect(prep.status(), await prep.text()).toBe(200);
     const ready = await prep.json() as { connected: boolean; hasFrame: boolean;
-      pid: number; clickPoint: { x: number; y: number } | null };
+      pid: number; clickPoint: { x: number; y: number } | null; networkAttempts: number };
     expect(ready).toMatchObject({ connected: true, hasFrame: true });
     expect(ready.clickPoint).not.toBeNull();
+    expect(ready.networkAttempts).toBe(0);
 
     const initial = await request.get(browser);
     expect(initial.status()).toBe(200);
@@ -112,8 +113,8 @@ test("P8 isolated Watch loop and human takeover/handback closeout", async ({ req
     expect(done.ok).toBe(true); expect(done.count).toBe(3);
     expect(done.pid).toBe(ready.pid);
     const probe = await send({ op: "qa_probe" });
-    const same = await probe.json() as { pid: number; connected: boolean };
-    expect(same).toMatchObject({ pid: ready.pid, connected: true });
+    const same = await probe.json() as { pid: number; connected: boolean; networkAttempts: number };
+    expect(same).toMatchObject({ pid: ready.pid, connected: true, networkAttempts: 0 });
   } finally {
     await nonmember?.dispose();
     await send({ op: "qa_cleanup" }).catch(() => {});
