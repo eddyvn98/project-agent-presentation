@@ -51,6 +51,29 @@ Source G1 test correction in this branch: the public task API strips
 parses the public `G1_VERIFIED_RECEIPT` and asserts numeric
 `p8Verified > 0`, without exposing private logs or modifying G1 guards.
 
+## Exact integration manifest
+
+Port only these deltas into the isolated AI-WEB-CHAT host, retaining the
+host's own Mongo adapter, auth code and Next.js 14.2.16 configuration:
+
+- New `lib/project-agent/runtime/browser-agent/g2-lease-core.mjs`,
+  `g2-lease-core.d.mts`, `g2-ownership.ts`.
+- Changed `lib/project-agent/runtime/browser-agent/session.ts`,
+  `control.ts`, `manual.ts` and `lib/project-agent/task-stop.ts`.
+- New `tests/node/g2-browser-lease.test.mjs`,
+  `scripts/g2-multiworker-browser-worker.mjs`,
+  `scripts/g2-multiworker-browser-qa.mjs`.
+- New `tests/host-browser/g2-two-next.api.spec.ts`,
+  `scripts/g2-host-preflight.mjs`; three `package.json` scripts.
+- G1 test parity correction in
+  `tests/host-browser/g1-goal-runtime.api.spec.ts`.
+- This handoff and `P8_STATUS.md`/`P8_ROADMAP.md` are documentation.
+
+The G2 feature flag must be **OFF** in regular/production host
+environments. Do not assume the old P8 process-local session registry
+is globally shared: the new DB record coordinates *ownership only*,
+not pixel frames, user cookies, Playwright references or live tabs.
+
 ## Isolated Mongo/Node proof
 
 Requires existing disposable Mongo **only** at `127.0.0.1:27019`
