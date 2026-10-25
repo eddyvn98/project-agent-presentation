@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieCh
 import { AlertTriangle, CheckCircle2, Download, Info, Share2, Table2, OctagonAlert } from "lucide-react";
 import { AskBlock, FollowupsBlock } from "./ProjectAgentReply";
 import { ProjectAgentExplorer } from "./ProjectAgentExplorer";
+import { ProjectAgentScene3D } from "./ProjectAgentScene3D";
 import { ProjectAgentFormBlock } from "./ProjectAgentFormBlock";
 import { ProjectAgentMermaid } from "./ProjectAgentMermaid";
 import { parseRichUiBlock, type RichTone, type RichUiBlock } from "@/lib/project-agent/rich-ui";
@@ -212,6 +213,8 @@ function RichBlock({ source }: { source: string }) {
 			);
 		case "explorer":
 			return <ProjectAgentExplorer block={block} />;
+		case "scene3d":
+			return <ProjectAgentScene3D block={block} />;
 		case "ask":
 			return <AskBlock block={block} />;
 		case "form":
