@@ -1,9 +1,53 @@
 # G1 — Real worker + loopback model mock + independent browser goal checker
 
-**Development implementation only. G1 acceptance is NOT CLOSED.**
-The source branch contains an executable host closeout test, but it needs
-to be ported to the actual Next.js 14.2.16 AI-WEB-CHAT QA host and run.
-Neither a source review nor G1 unit tests prove worker/model E2E.
+**G1 ACCEPTED for isolated single-worker + local SSE mock model +
+synthetic Chromium DOM only (operator-reported 2026-10-25).**
+The real Next.js 14.2.16 AI-WEB-CHAT host test completed positive and
+premature-final negative cases. This acceptance does **not** include
+real Dify/Entra, multi-worker recovery, internet website tasks or
+production readiness. The results were reported by the local agent,
+not rerun or independently verified in this Presentation checkout.
+
+## Recorded acceptance and host code provenance
+
+- Source G1 handoff: `eddyvn98/project-agent-presentation`, branch
+  `gpt/full-project-agent`, implementation HEAD at handoff
+  `dbf91fc2fd2f7b54d0308e418869723b6273aa79`.
+- Integrated host `AI-WEB-CHAT`, branch
+  `feat/project-agent-local-business`: G1 code `580ab334`;
+  later status/index docs `1e2f5c4a` (both operator-reported).
+- `npm run test:host:g1`: **2 PASS, 0 FAIL, 0 SKIP**.
+  The positive case traversed real worker and tool continuation, three
+  localhost SSE steps (`snapshot/click/final`), P8 verification and an
+  independent Chromium DOM goal check. It stored `done` and the
+  application-authored final-answer receipt; `p8Verified=2`.
+- The negative case deliberately returned a model final too early;
+  checker rejected the model claim, task stored `failed` with no trusted
+  receipt. Test asserted **4 total localhost mock model POSTs**.
+- Integrated checkout: G1 unit **8/8 PASS**, P8 unit **40/40 PASS**,
+  P8 QA guard/session **8/8 PASS**, TypeScript **PASS**,
+  `git diff --check` **PASS** and all files **<=299 lines**.
+  Suite totals are not blindly additive where subsets overlap.
+- Host test fixed a **test-only mismatch**: public task response
+  intentionally omits `task.log`, so checking this field through
+  the public task API was invalid. The host E2E removed that assertion
+  and checked the receipt's positive numeric `p8Verified` instead
+  (observed 2). **No runtime guard changed.** This upstream
+  Presentation test file still contains the old `task.log` assertion
+  and requires the same test-only parity fix before direct reuse.
+  Neither the corrected E2E nor the public task route proves task-log
+  contents or persistence.
+- Cleanup reported complete: isolated QA Project/tasks, Mongo/PostgreSQL
+  run databases, synthetic auth state and `.env.local` removed;
+  host stopped. No real provider or outside browser actions took place.
+
+**Evidence limits:** one worker with
+`PROJECT_AGENT_DURABLE_QUEUE=0`, model mock only on
+`127.0.0.1:3998`, one synthetic DOM counter goal. `pid` from
+the fixture is Node/Next `process.pid` (not a Chromium PID);
+`networkAttempts=0` is a fixture browser-route counter (not
+a host-wide network egress audit). See [P8_STATUS.md](P8_STATUS.md)
+for still-open G2–G4 gates.
 
 ## Intent and exact boundaries
 
@@ -42,9 +86,10 @@ Neither a source review nor G1 unit tests prove worker/model E2E.
   dedicated Mongo/PostgreSQL and network-isolated development environment.
   Keep this suite on the sole QA process, not main/staging.
 
-## Host setup (dedicated loopback 3006)
+## Reproduce host acceptance (dedicated loopback 3006)
 
-Port the G1 files listed below into the isolated AI-WEB-CHAT QA worktree
+For a new clean run, port the G1 files listed below into the isolated
+AI-WEB-CHAT QA worktree
 without overwriting its Next/Auth/Mongo host adapters:
 
 - `lib/project-agent/runtime/g1-goal-check.ts`
@@ -109,8 +154,15 @@ npm run test:host:g1
 The preflight checks two NextAuth synthetic logins, origin and mock
 transport before Playwright mutates anything. The positive model script
 uses exactly three SSE turns (snapshot, click, final); the negative uses
-one forged-final turn. Expected total: **four localhost model POSTs**. The Playwright spec checks
-terminal task receipts in the real task route and cleans both tasks.
+one forged-final turn. The recorded run confirmed **four localhost model
+POSTs**. **Test source parity note:** the public task API omits
+`task.log`. Before rerunning the original Presentation-host test
+unchanged, remove the public `task.log` assertion and instead assert
+that the application-authored `G1_VERIFIED_RECEIPT` contains numeric
+`p8Verified > 0`. This was fixed in the integrated host test only;
+do not change the runtime guard or expose private logs publicly.
+The test checks terminal task status/receipt through the authenticated
+task route and cleans both tasks.
 Afterward delete **only** the synthetic QA Project/database/auth files
 under the recorded QA manifest and stop the QA server.
 
@@ -127,8 +179,10 @@ under the recorded QA manifest and stop the QA server.
 | Safety | Only synthetic owner/Project, no outside browser requests; no real Dify/Entra |
 | Cleanup | QA browser/session/task/DB/auth removed; no other QA data touched |
 
-**If any step is unrun, fails, or skipped, G1 remains OPEN.**
-Report exact host/source SHA, Next and Chromium versions, passed/failed/
-skipped counts, model mock request count, anonymized task receipts and
-cleanup outcome. Do not count this as verified production goal completion,
-staging, multi-worker or real-provider acceptance.
+**Decision:** G1 is CLOSED only for the reported single-worker/mock
+model/synthetic DOM scope above. A subsequent independent run that fails
+or skips a required assertion does not inherit this PASS. Record exact
+host/source SHA, Next/Chromium versions, PASS/FAIL/SKIP, the local model
+request count, anonymized goal receipt and cleanup outcome.
+G2 multi-worker, G3 authorized providers/security and G4 production
+release are **OPEN**. No real-provider or deployment acceptance is implied.
