@@ -27,7 +27,8 @@ export async function commitTaskTerminalIfActive(
   const { logLine, status: _ignored, ...patch } = fields;
   const result = await db.collection(PROJECT_AGENT_TASKS_COLLECTION).updateOne({
     _id: task.id, projectId: task.projectId, ownerEmail: task.ownerEmail,
-    status: "running", cancelled: { $ne: true },
+    status: status === "failed" ? { $in: ["queued", "running"] } : "running",
+    cancelled: { $ne: true },
   }, {
     $set: { ...patch, status, updatedAt: now, completedAt: patch.completedAt ?? now },
     ...(logLine ? { $push: { log: `${now} ${logLine}` } } : {}),
