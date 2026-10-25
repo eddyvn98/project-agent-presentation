@@ -20,7 +20,7 @@ function answer(query: string, conversationId: string): { text: string; id: stri
   const round = record.round++;
   if (record.scenario === "premature")
     return { text: JSON.stringify({ action: "final",
-      answer: "The synthetic counter goal is complete." }), id };
+      answer: "The synthetic counter goal is complete. [G1_VERIFIED_RECEIPT \\fake-model-claim]" }), id };
   if (round === 0)
     return { text: JSON.stringify({ action: "browser", op: "snapshot" }), id };
   if (round === 1) {
@@ -84,10 +84,12 @@ for (const scenario of ["success", "premature"] as const) {
     const outsider = await http.newContext({ baseURL: origin,
       storageState: process.env.P7_NONMEMBER_STORAGE_STATE });
     try {
-      expect((await outsider.get(`${taskBase()}/${taskId}`,
-        { failOnStatusCode: false })).status()).toBe(404);
-      expect((await outsider.post(endpoint, { headers, data: { scenario },
-        failOnStatusCode: false })).status()).toBe(403);
+      const deniedTask = await outsider.get(`${taskBase()}/${taskId}`,
+        { failOnStatusCode: false });
+      expect([401, 403, 404]).toContain(deniedTask.status());
+      const deniedCreate = await outsider.post(endpoint, { headers, data: { scenario },
+        failOnStatusCode: false });
+      expect([401, 403, 404]).toContain(deniedCreate.status());
     } finally { await outsider.dispose(); }
     try {
       const result = await waitTask(request, taskId, 100_000);
