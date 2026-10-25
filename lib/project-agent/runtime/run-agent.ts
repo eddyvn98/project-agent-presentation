@@ -1,4 +1,4 @@
-import { assertActiveTaskLease } from "../lease-fence"; import { runCalculationStep } from "./calculate"; import { auditFinalAnswer } from "./final-audit"; import { checkG1SyntheticGoal, formatG1Receipt } from "./g1-goal-check"; import { enforceTaskBudget, estimatedModelCost } from "./usage-pricing";
+import { assertActiveTaskLease } from "../lease-fence"; import { runCalculationStep } from "./calculate"; import { auditFinalAnswer } from "./final-audit"; import { checkG1SyntheticGoal, formatG1Receipt, g1QaActionAllowed } from "./g1-goal-check"; import { enforceTaskBudget, estimatedModelCost } from "./usage-pricing";
 import { agentScheduleAction } from "../scheduled-agent-tool"; import { agentWorkflowAction } from "../workflow-agent-tool";
 import { contextOutputAction, externalizeActionOutput } from "./context-output-manager"; import { runXerjAction } from "../xerj/runtime-action";
 import { recordContextCheckpoint } from "./context-checkpoint"; import { RuntimeTurnContext } from "./turn-context";
@@ -41,7 +41,7 @@ const DEADLINE_MS = 25 * 60_000, MAX_IMAGE_CALLS = 5;
 const MAX_DELEGATES = 3, SUB_AGENT_STEPS = 25, MAX_FILE_BYTES = 40 * 1024 * 1024;
 export const isRuntimeEnabled = () => process.env.PROJECT_AGENT_RUNTIME === "sandbox";
 async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { action: "final" }>, loopStep: number, imageCalls: { value: number }, budget: { delegates: number }): Promise<{ text: string; rawOutput?: string; image?: DifyChatFile; images?: DifyChatFile[]; failed?: boolean; sources?: ProjectAgentTaskSource[] }> {
-	const step = loopStep + (input.depth ? 100 * ((input.slot ?? 0) + 1) : 0);
+	const step = loopStep + (input.depth ? 100 * ((input.slot ?? 0) + 1) : 0); if (!g1QaActionAllowed(input, action)) return { text: "G1 QA permits only synthetic DOM snapshot/click actions", failed: true };
 	if (!input.depth && action.note && action.action !== "progress") input.onStep?.({ tool: "progress_message", detail: redactSecrets(action.note).replace(/\s+/g, " ").trim().slice(0, 200) });
 	if (action.action === "progress") { if (!input.depth) input.onStep?.({ tool: "progress_message", detail: redactSecrets(action.message) }); return { text: "Progress note shown to user; continue with the actions needed for the request." }; }
 	if (action.action === "calculate") return runCalculationStep(action.expression, input.onStep); if (action.action === "schedule") return agentScheduleAction(input, action); if (action.action === "workflow") return agentWorkflowAction(input, action);
