@@ -10,7 +10,7 @@ import { isCaptchaPage, isSensitiveField, resolveSafeRedirect, IRREVERSIBLE_PATT
 import { requireAgentApproval } from "../../agent-approvals";
 import { checkAgentBrowserPolicy } from "./policy-hook"; import { sensitiveScreenshotMask } from "./privacy";
 import { checkSavedBrowserHealth } from "./browser-session-health";
-import { g2InitialRef } from "./g2-refs.mjs";
+import { g2InitialRef } from "./g2-refs.mjs"; import { inspectWebMcpScene } from "./webmcp-readonly";
 import { workspaceDir } from "../sandbox";
 import type { RuntimeInput, RuntimeStep } from "../run-agent";
 import type { BrowserAction } from "./action-parser";
@@ -179,7 +179,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			switch (action.op) {
 				case "open": await assertPublicHttpUrl(action.url!); await restorePersonalBrowserSession(session, action.url!); await session.page.goto(action.url!, { waitUntil: "domcontentloaded", timeout: 20_000 }); break;
 				case "back": await session.page.goBack({ timeout: 20_000 }).catch(() => null); break;
-				case "snapshot": break;
+				case "snapshot": break; case "inspect_scene": return await inspectWebMcpScene(session);
 				case "click": {
 					const line = snapshotRefLine(session.lastSnapshot, action.ref!);
 					if (!line) throw new Error("DOM ref is not in the latest browser snapshot.");
