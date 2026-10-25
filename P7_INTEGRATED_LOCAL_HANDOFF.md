@@ -2,6 +2,8 @@
 
 Branch: `gpt/full-project-agent`. No merge to `main`/`staging`. Do not run CI.
 
+Current local QA: port 3004 is a shared development host; synthetic Stop acceptance must use an isolated host and pass `npm run p7:qa:session` first (see `P7_CLOSEOUT_QA.md`).
+
 ## Scope and root causes
 
 - **Browser:** `PROJECT_AGENT_BROWSER_AGENT=1` is absent in the local QA host environment. The existing Browser Action and Watch/Control routes fail closed when the flag is off. `playwright-core` runs Chromium **in the Next.js host process**, not automatically in the two running Docker sandbox containers. `browser-launcher.ts` now uses Playwright's installed binary or `PROJECT_AGENT_CHROMIUM_EXECUTABLE`, with an explicit host preflight. Browser QA uses an in-memory Chromium HTML fixture and a JPEG frame. **SSRF/private-network rules are unchanged.**
