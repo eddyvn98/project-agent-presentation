@@ -30,6 +30,11 @@ export function isG1QaTask(task: { id: string; ownerEmail: string; prompt: strin
     taskId: task.id, ownerEmail: task.ownerEmail, userPrompt: task.userPrompt,
   });
 }
+/** A synthetic goal run cannot dispatch shell, web, login, or outside actions. */
+export function g1QaActionAllowed(input: G1Identity, action: { action: string; op?: string }): boolean {
+  return !isG1QaIdentity(input) ||
+    (action.action === "browser" && ["snapshot", "click"].includes(action.op ?? ""));
+}
 /** Do not trust tool return, model claim, or a model-written receipt. */
 export async function checkG1SyntheticGoal(input: RuntimeInput): Promise<G1GoalReceipt | null> {
   if (input.depth || !isG1QaIdentity(input)) return null;
