@@ -73,7 +73,38 @@ test.describe("P4 Presentation Lab interactive regression", () => {
     await page.keyboard.press("Enter");
     await expect(dialog).toBeVisible();
     const close = dialog.getByRole("button", { name: "Close source details" });
-    await expect(close).toBeInViewport();
+    // Capture BEFORE Playwright tries to scroll into view. Record the popper
+    // wrapper as well: Content can be visible while the positioned Close is not.
+    const geometry = await dialog.evaluate((content) => {
+      const rect = (element: Element | null) => {
+        if (!element) return null;
+        const { x, y, width, height, top, right, bottom, left } = element.getBoundingClientRect();
+        return { x, y, width, height, top, right, bottom, left };
+      };
+      const trigger = document.querySelector('button[aria-label^="Show source:"]');
+      const closeButton = content.querySelector('button[aria-label="Close source details"]');
+      const wrapper = content.closest('[data-radix-popper-content-wrapper]');
+      const style = (element: Element | null) => {
+        if (!element) return null;
+        const computed = getComputedStyle(element);
+        return { position: computed.position, transform: computed.transform,
+          overflow: computed.overflow, maxHeight: computed.maxHeight };
+      };
+      return {
+        viewport: { width: innerWidth, height: innerHeight,
+          visualWidth: visualViewport?.width ?? null,
+          visualHeight: visualViewport?.height ?? null },
+        scroll: { x: scrollX, y: scrollY },
+        activeElement: document.activeElement?.getAttribute("aria-label") ??
+          document.activeElement?.tagName ?? null,
+        trigger: rect(trigger), content: rect(content), close: rect(closeButton),
+        wrapper: rect(wrapper),
+        contentStyle: style(content), wrapperStyle: style(wrapper),
+        placement: content.getAttribute("data-side"),
+      };
+    });
+    console.log("P4 citation second-open geometry:", JSON.stringify(geometry));
+    await expect(close, JSON.stringify(geometry, null, 2)).toBeInViewport();
     await close.click();
     await expect(dialog).toHaveCount(0);
     await expect(trigger).toBeFocused();
