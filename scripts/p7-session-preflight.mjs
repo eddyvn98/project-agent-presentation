@@ -24,6 +24,8 @@ export function isolatedQaOrigin(baseURL, mutation = false, approvedOrigin) {
 export async function verifySyntheticNextAuthState(origin, filename, expected, requester) {
   if (!filename || !existsSync(resolve(filename)))
     throw new Error("Synthetic QA Playwright storage state file is missing");
+  if (resolve(filename).split(/[\\\\/]/).includes("public"))
+    throw new Error("Never load QA authentication state from a public directory");
   const client = await requester.newContext({
     baseURL: origin, storageState: resolve(filename),
   });
@@ -43,6 +45,10 @@ export async function p7SessionPreflight(env = process.env, requester, mutation 
   if (!env.P7_HOST_BASE_URL) throw new Error("P7_HOST_BASE_URL is required");
   const origin = isolatedQaOrigin(env.P7_HOST_BASE_URL, mutation,
     env.P7_QA_MUTATION_ALLOWED_ORIGIN);
+  if (mutation && (env.P7_ALLOW_QA_STOP !== "1" ||
+      env.P7_SYNTHETIC_BROWSER_TASK !== "1" ||
+      !env.P7_PROJECT_ID || !env.P7_RUNNING_BROWSER_TASK_ID))
+    throw new Error("Closeout needs P7_ALLOW_QA_STOP=1 and an isolated synthetic browser fixture");
   const owner = await verifySyntheticNextAuthState(origin, env.P7_OWNER_STORAGE_STATE,
     env.P7_OWNER_EMAIL, requester);
   const other = await verifySyntheticNextAuthState(origin, env.P7_OTHER_STORAGE_STATE,
