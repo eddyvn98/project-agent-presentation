@@ -26,7 +26,7 @@ export async function verifySyntheticNextAuthState(origin, filename, expected, r
   if (!filename || !existsSync(resolve(filename)))
     throw new Error("Synthetic QA Playwright storage state file is missing");
   const client = await requester.newContext({
-    baseURL: origin, storageState: resolve(filename), serviceWorkers: "block",
+    baseURL: origin, storageState: resolve(filename),
   });
   try {
     const response = await client.get("/api/auth/session", {
