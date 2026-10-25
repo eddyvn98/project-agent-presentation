@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/services/mongodb/client", () => ({ getMongoAiDb: vi.fn() }));
 import { getMongoAiDb } from "@/services/mongodb/client";
-import { markP7BrowserRunningIfCurrent, verifyP7TaskStoreMapping } from "../../lib/project-agent/p7-qa-conditional-update";
+import { markP7BrowserRunningIfCurrent, verifyP7TaskStoreMapping, PROJECT_AGENT_TASK_COLLECTION } from "../../lib/project-agent/p7-qa-conditional-update";
 import type { P7RecoverTask } from "../../lib/project-agent/p7-qa-recovery";
 
 const task: P7RecoverTask = {
@@ -16,12 +16,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getMongoAiDb).mockResolvedValue({
     collection: (name: string) => {
-      expect(name).toBe("projectAgentTasks");
+      expect(name).toBe("project_agent_tasks");
       return { updateOne, findOne };
     },
   } as never);
 });
 describe("P7 synthetic Mongo conditional status write", () => {
+  it("uses the authoritative host task collection, not the old camel-case spelling", () => {
+    expect(PROJECT_AGENT_TASK_COLLECTION).toBe("project_agent_tasks");
+  });
   it("matches only this synthetic task, owner, Project, state and version", async () => {
     updateOne.mockResolvedValue({ matchedCount: 1 });
     expect(await markP7BrowserRunningIfCurrent(task, "boot-new")).toBe(true);
