@@ -35,7 +35,7 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
   if (!session) return { error: "Agent has not opened a browser session yet" };
   if (action.op === "release") {
     challenges.delete(taskId);
-    try { await withBrowserOp(session, async () => {}, false); } catch { /* handback should not strand Agent */ }
+    try { await withBrowserOp(session, async () => {}, false, "human"); } catch { /* handback should not strand Agent */ }
     await changeG2HumanControl(session, "human", "agent");
     session.refs.clear(); session.snapshotUrl = ""; session.lastSnapshot = "";
     releaseBrowserControl(taskId);
@@ -46,7 +46,7 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
     if (!browserWatchStatus(taskId)?.watching) setBrowserWatch(taskId, true);
     await changeG2HumanControl(session, "agent", "human");
     requestBrowserTakeover(taskId);
-    try { await withBrowserOp(session, async () => {}, false); }
+    try { await withBrowserOp(session, async () => {}, false, "human"); }
     catch { await changeG2HumanControl(session, "human", "agent").catch(() => {}); releaseBrowserControl(taskId); return { error: "The browser is busy or unavailable; takeover was cancelled" }; }
     await captureBrowserWatch(taskId, session.page, "human_takeover");
     return { ok: true, paused: true };
@@ -95,7 +95,7 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
       } else if (action.op === "key") {
         await page.keyboard.press(action.key);
       }
-    }, false);
+    }, false, "human");
     await captureBrowserWatch(taskId, session.page, "human_" + action.op, marker);
     return { ok: true, paused: true };
   } catch (cause) {
