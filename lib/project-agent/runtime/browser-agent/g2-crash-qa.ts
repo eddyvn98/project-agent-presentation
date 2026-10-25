@@ -103,8 +103,10 @@ export async function g2CrashQaOperation(op: Operation, taskId: string,
     return { staleRejected: true, count: Number(after) };
   }
   if (op === "qa_g2_cleanup") {
-    if (activeBrowserSession(taskId))
-      throw new Error("Close synthetic Chromium before G2 ledger cleanup");
+    if (activeBrowserSession(taskId) ||
+        (["agent", "human"].includes(row.state) &&
+         (row.workerId === PROJECT_AGENT_BOOT_ID || raw.confirmKilled !== true)))
+      throw new Error("Close or confirm killed synthetic owner before G2 ledger cleanup");
     const receiptCount = await actions.deleteMany({ runId: qaRun(), taskId, owner });
     const removed = await lease.deleteOne(filter);
     return { cleaned: true, receiptsDeleted: receiptCount.deletedCount,
