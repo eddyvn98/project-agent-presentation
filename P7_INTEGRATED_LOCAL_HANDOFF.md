@@ -248,6 +248,45 @@ replace host-side Mongo compare-and-swap for concurrent Stop versus status
 writes, nor does it validate real Entra SSO. Do not claim production approval
 on synthetic QA alone.
 
+## P7 synthetic cleanup and conditional Stop fence (follow-up)
+
+When recovery loses the Stop/delete/status race after Chromium preparation, the
+route must not leave a Watch frame or Chromium context alive. Recovery now
+uses `finally` to discard the prepared session via `closeBrowserSession`,
+`setBrowserWatch(false)` and `clearBrowserControl` on all unsuccessful
+post-prepare paths, including missing JPEG, task changed, Mongo failure and
+CAS mismatch. It deliberately **does not discard a human-owned takeover**.
+Same-process recoveries are single-flight per task; a concurrent recovery
+returns 409 rather than tearing down the first request's browser.
+
+The final running-status write is a **conditional Mongo update**, not a
+read-then-unconditional-write. It requires matching task ID, Project, owner,
+exact synthetic browser prompt, previous status and timestamp, and
+`cancelled != true`. Thus Stop winning first prevents the recovery write;
+Stop winning second leaves the stopped state authoritative.
+
+**Host integration check:** `markP7BrowserRunningIfCurrent` uses Mongo
+collection `projectAgentTasks` with string `_id`. The neutral repository
+does not contain the host-owned `projectAgentTasks.repo.ts` implementation.
+Local QA must verify the host task repository uses this exact collection/key.
+If not, the conditional update fails closed; align with the host's actual
+Mongo collection rather than relaxing the guard or falling back to an
+unconditional update. No production data should be modified for that check.
+
+Focused tests:
+
+```bash
+npx vitest run --config vitest.agent.config.ts \
+  tests/agent/p7-qa-recovery-race.test.ts \
+  tests/agent/p7-qa-conditional-update.test.ts
+npx tsc --noEmit
+node tests/check-lines.mjs
+```
+
+Re-run the synthetic Stop-during-prepare, takeover-during-prepare,
+crash/recover and Watch JPEG scenarios on the isolated QA host. Prior host
+31/31 results do **not** certify this new commit.
+
 ## Known limitations
 
 The development-only fixture tests Chromium/watch/handback mechanics; it does not demonstrate an AI model autonomously selecting a browser tool on a real public site. Ordinary Dify workflow and production Entra sign-in require separate integration verification. All new tests must be run in the actual Next.js QA host, not just the neutral demo. Source-level edits made through GitHub alone do not prove host PASS. Respect the 300-line file policy and never include credentials in logs or reports.
