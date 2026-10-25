@@ -53,7 +53,7 @@ describe("P7.6.3 local security review regression", () => {
     expect(p7QaAllowed({ ...devQa, owner: "employee@example.com" })).toBe(false);
   });
   it("audit logs contain only a digest of sensitive action labels", async () => {
-    const insertOne = vi.fn(async () => ({}));
+    const insertOne = vi.fn(async (_doc: Record<string, unknown>) => ({}));
     vi.mocked(getMongoAiDb).mockResolvedValue({ collection: () => ({
       createIndex: async () => "ok", insertOne,
     }) } as never);
