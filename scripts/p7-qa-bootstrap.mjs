@@ -61,7 +61,8 @@ try {
     const escape = value => "'" + String(value).replaceAll("'", "'\\''") + "'";
     const values = { P7_PROJECT_ID: project.id, P7_RUNNING_BROWSER_TASK_ID: browser.taskId,
       P7_EXISTING_FILE_TASK_ID: pdf.taskId, P7_EXISTING_FILE_ID: pdf.fileId,
-      P7_ALLOW_BROWSER_WATCH: "1", P7_ALLOW_BROWSER_CONTROL: "1", P7_FILE_IS_PDF: "1",
+      P7_ALLOW_BROWSER_WATCH: "1", P7_ALLOW_BROWSER_CONTROL: "1",
+      P7_SYNTHETIC_BROWSER_TASK: "1", P7_FILE_IS_PDF: "1",
       P7_FIXTURE_BUTTON_X: String(browser.clickPoint?.x ?? ""),
       P7_FIXTURE_BUTTON_Y: String(browser.clickPoint?.y ?? "") };
     const envPath = resolve(dirname(manifestPath), "p7-vars.sh");
