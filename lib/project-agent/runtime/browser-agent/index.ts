@@ -147,6 +147,7 @@ async function stagedUpload(input: RuntimeInput, action: BrowserAction, session:
 export async function runBrowserAction(input: RuntimeInput, action: BrowserAction, step: number): Promise<{ text: string; image?: DifyChatFile; failed?: boolean }> {
 	if (process.env.PROJECT_AGENT_BROWSER_AGENT !== "1") return { text: "Browser agent is disabled. Set PROJECT_AGENT_BROWSER_AGENT=1 to enable it.", failed: true };
 	const id = input.taskId ?? input.chatId;
+  if (action.op === "close") clearBrowserStall(id);
 	if (action.op === "close") { finishBrowserWatch(input.taskId ?? id); const session = await getBrowserSession(id, input.signal, input.ownerEmail); await session.close(); return { text: "Browser session closed." }; }
 	let session: BrowserSession;
 	try { session = await getBrowserSession(id, input.signal, input.ownerEmail); session.chatId = input.chatId; } catch (cause) { return { text: cause instanceof Error ? cause.message : "Could not start browser", failed: true }; }
