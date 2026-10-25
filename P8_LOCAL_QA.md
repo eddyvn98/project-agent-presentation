@@ -89,6 +89,18 @@ Collect anonymized screenshots of UI only if opted in. Avoid exporting
 real tokens or browser storage state. After test, delete only QA data
 listed in the synthetic manifest; leave any dirty development checkout alone.
 
+## 4A. Active Chromium session closeout (same Next control route)
+
+The first Next 14 host QA had a synthetic fixture without a shared active
+session and correctly received `409: Agent has not opened a browser session
+yet`. The isolated, owner-only P8 session fixture now opens Chromium
+*inside the browser control route*, shares process-local state across
+bundled route modules and exercises real takeover/handback.
+Use [P8 active-session closeout](P8_ACTIVE_SESSION_CLOSEOUT.md).
+Never run it on port 3004, a non-synthetic Project or a real user account.
+The command is `npm run test:host:p8:closeout`, protected by a dedicated
+session preflight. This is not proof of multi-process browser ownership.
+
 ## 5. Exit condition
 
 **P8 local functional acceptance** requires source tests + Chromium benchmark
