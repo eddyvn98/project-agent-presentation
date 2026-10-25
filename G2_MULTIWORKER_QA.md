@@ -113,6 +113,29 @@ environments. Do not assume the old P8 process-local session registry
 is globally shared: the new DB record coordinates *ownership only*,
 not pixel frames, user cookies, Playwright references or live tabs.
 
+## New host-level crash/recovery acceptance (NOT RUN)
+
+The missing host failure injection is now implemented separately as
+`npm run test:host:g2:crash` (interactive Node orchestrator).
+It uses TWO marked independent QA Next checkouts and `.next` dirs,
+records owned launcher/runtime process PIDs, performs a verified
+synthetic click, SIGKILLs Next owner A, then uses a protected
+owner-only QA route on B to expire/quarantine **that exact** task's
+lease. Before and after review, B must deny automatic claim; after
+a real post-crash operator TTY acknowledgement and review ticket, B
+opens a fresh Chromium session in the next epoch.
+
+A QA-only Mongo ledger records synthetic verified-click receipts:
+one after A's click, still one after quarantine and B's fresh setup,
+two only after a deliberate B click. Refs now use disjoint
+lease-epoch numbering, and the stale A ref is passed through the
+real browser runtime and rejected without changing DOM.
+`test:g2:crash:unit` covers distinct marked checkouts and refs.
+No Dify/Entra provider, external website, CI or production behavior
+is involved. This source is **UNTESTED on actual two-Next host**.
+See [G2_CRASH_RECOVERY_QA.md](G2_CRASH_RECOVERY_QA.md)
+for full opt-in variables, operator approval and bounded cleanup.
+
 ## Isolated Mongo/Node proof
 
 Requires existing disposable Mongo **only** at `127.0.0.1:27019`
