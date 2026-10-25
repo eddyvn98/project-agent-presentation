@@ -63,7 +63,8 @@ export async function recordBrowserSecurityAudit(input: {
       decision: input.decision, labelDigest, at: new Date(),
     });
   } catch (cause) {
-    if (process.env.PROJECT_AGENT_STRICT_BROWSER_AUDIT === "1") throw cause;
+    if (process.env.NODE_ENV === "production" ||
+        process.env.PROJECT_AGENT_STRICT_BROWSER_AUDIT === "1") throw cause;
   }
 }
 
