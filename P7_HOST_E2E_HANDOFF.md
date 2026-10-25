@@ -65,10 +65,11 @@ export P7_FILE_IS_PDF=1
 
 # Optional manual browser owner handoff; only on a running isolated QA browser task
 export P7_RUNNING_BROWSER_TASK_ID=pat_qa_browser_task_id
+export P7_ALLOW_BROWSER_WATCH=1
 export P7_ALLOW_BROWSER_CONTROL=1
 ```
 
-The takeover test watches a dedicated session, pauses the agent, verifies state, and **always**
+Browser Watch JPEG validation requires its own explicit opt-in; form masking must still be checked visually\non the synthetic page. The takeover test watches a dedicated session, pauses the agent, verifies state, and **always**
 attempts to release/unwatch in `finally`. It never clicks a page, submits a form or enters secrets.
 Do not run with real employee accounts or customer data.
 
