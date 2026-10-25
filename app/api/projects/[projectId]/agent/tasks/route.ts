@@ -1,4 +1,6 @@
 import { validateProjectAgentRequest } from "@/lib/project-agent/request-validation";
+import { requestTaskKey, fingerprintTaskBody } from "@/lib/project-agent/request-idempotency";
+import { deterministicAgentTaskId } from "@/lib/project-agent/task-idempotency";
 import { NextRequest, NextResponse } from "next/server";
 import type { CreateProjectAgentTaskInput } from "@/lib/project-agent/types";
 import { createProjectAgentTask, listProjectAgentTaskPage, readProjectAgentTask } from "@/lib/project-agent/task-store";
@@ -62,6 +64,22 @@ export async function POST(
   };
   const invalid = validateProjectAgentRequest(body);
   if (invalid) return NextResponse.json({ error: invalid.error }, { status: invalid.status });
+  let requestKey: string | undefined;
+  try { requestKey = requestTaskKey(params.projectId, req.headers.get("idempotency-key")); }
+  catch { return NextResponse.json({ error: "Invalid Idempotency-Key" }, { status: 400 }); }
+  let fingerprint: string | undefined;
+  try { fingerprint = requestKey ? fingerprintTaskBody(params.projectId,
+    body as Record<string, unknown>) : undefined; }
+  catch { return NextResponse.json({ error: "Task fingerprint payload too large" }, { status: 413 }); }
+  const existing = requestKey ? await readProjectAgentTask(
+    deterministicAgentTaskId(auth.callerEmail!, requestKey)) : null;
+  if (existing) {
+    if (existing.projectId !== params.projectId ||
+      existing.ownerEmail.trim().toLowerCase() !== auth.callerEmail!.trim().toLowerCase() ||
+      existing.requestFingerprint !== fingerprint)
+      return NextResponse.json({ error: "Idempotency request conflicts with a prior task" }, { status: 409 });
+    return NextResponse.json({ task: toPublicProjectAgentTask(existing) }, { status: 202 });
+  }
   prompt = (body.prompt as string).trim();
   userPrompt = typeof body.userPrompt === "string" ? body.userPrompt.trim() : undefined;
   conversationId = typeof body.conversationId === "string" ? body.conversationId : undefined;
@@ -95,6 +113,7 @@ export async function POST(
     projectId: params.projectId,
     ownerEmail: auth.callerEmail!,
     projectOwnerEmail: auth.ownerEmail!,
+    ...(requestKey ? { idempotencyKey: requestKey, requestFingerprint: fingerprint } : {}),
     ...(userPrompt ? { userPrompt } : {}),
     prompt,
     conversationId,
