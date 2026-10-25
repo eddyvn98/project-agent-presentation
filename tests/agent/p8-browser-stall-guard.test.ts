@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { browserRetryStalled, recordBrowserDomFailure,
   clearBrowserStall, P8_STALL_GUIDANCE } from "../../lib/project-agent/runtime/browser-agent/stall-guard";
+import { requestBrowserTakeover, releaseBrowserControl, clearBrowserControl } from "../../lib/project-agent/runtime/browser-agent/control";
 
 const task = "pat_8a8b8c8d8e8f", url = "https://example.test/article?token=not-for-logs";
 const before = "heading: Details; ref=e3 role=button label=Open";
-afterEach(() => { clearBrowserStall(task); vi.useRealTimers(); });
+afterEach(() => { clearBrowserControl(task); clearBrowserStall(task); vi.useRealTimers(); });
 
 describe("P8 opt-in browser DOM action stall detector", () => {
   it("allows a first failure and recommends assistance after two identical failures", () => {
@@ -37,6 +38,14 @@ describe("P8 opt-in browser DOM action stall detector", () => {
     recordBrowserDomFailure(task, "click", "e3", url, before);
     recordBrowserDomFailure(task, "click", "e3", url, before);
     clearBrowserStall(task);
+    expect(browserRetryStalled(task, "click", "e3", url, before)).toBe(false);
+  });
+  it("human takeover and handback permit a fresh attempt on the same page", () => {
+    recordBrowserDomFailure(task, "click", "e3", url, before);
+    recordBrowserDomFailure(task, "click", "e3", url, before);
+    expect(browserRetryStalled(task, "click", "e3", url, before)).toBe(true);
+    requestBrowserTakeover(task);
+    releaseBrowserControl(task);
     expect(browserRetryStalled(task, "click", "e3", url, before)).toBe(false);
   });
   it("forgets stale failures after five minutes", () => {
