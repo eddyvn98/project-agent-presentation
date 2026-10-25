@@ -6,7 +6,7 @@
 **G1 SINGLE-WORKER + LOOPBACK MOCK MODEL + SYNTHETIC DOM: ACCEPTED
 (operator-reported PASS).**
 **REAL DIFY/MODEL SEMANTIC GOAL ACCEPTANCE: OPEN.**
-**G2 MULTI-WORKER BROWSER RECOVERY: OPEN — SOURCE/QA HARNESS IMPLEMENTED, HOST E2E NOT RUN.**
+**G2 MULTI-WORKER BROWSER RECOVERY: OPEN — OWNERSHIP/STOP HOST QA PASS, CRASH/REVIEWED RECOVERY E2E PENDING.**
 **G3 SECURITY/AUTHORIZED INTEGRATION: OPEN.**
 **G4 PRODUCTION RELEASE: NOT APPROVED.**
 
@@ -118,7 +118,8 @@ outputs, SHA and redacted fixture receipts with the local QA handoff.
 | G1 premature model-final rejection / trusted receipt gate | CLOSED, operator-reported |
 | Real provider / ordinary Dify goal completion and tool continuation | OPEN, requires separate authorization |
 | G2 browser ownership CAS source and deterministic Node tests | IMPLEMENTED, unit 4/4 PASS |
-| G2 real Mongo/two processes and Next+Chromium crash recovery | OPEN, host E2E NOT RUN |
+| G2 real Mongo/two-process ownership and Next+Chromium takeover/Stop | Operator-reported 5/5 and 1/1 PASS |
+| G2 Next-host crash/quarantine/reviewed browser restart | OPEN, E2E NOT RUN |
 | Real Entra, real Dify, security audit, staging and production rollout | OPEN, separately authorized |
 
 ## Next gates, in order
@@ -142,42 +143,59 @@ A local mock cannot establish success with a real model or ordinary Dify;
 that belongs to authorized integration/security acceptance (G3).
 No additional external Dify/Entra/model calls are authorized here.
 
-### G2 — Mongo-fenced browser ownership: IMPLEMENTED / ACCEPTANCE OPEN
+### G2 — Two-process ownership/takeover/Stop: PASS; recovery OPEN
 
-Root cause: P7 task queue leases protect work dispatch, but P8 Chromium,
-Watch and human-control state live in each worker's RAM. A process-local
-`globalThis` bridge cannot transfer a Chromium tab to another OS process.
+Local operator reports running the original G2 source from Presentation
+`ba89dfdd6d36226f1553c3a3091879d830195069` in a separate
+AI-WEB-CHAT QA worktree based on host HEAD `1e2f5c4a`
+(Next.js **14.2.16**). Do not treat the base host SHA as a new
+integration-commit SHA. Host results have not been independently rerun
+in this Presentation source checkout.
 
-Source development adds an opt-in, **nonproduction/synthetic only**
-`projectAgentBrowserOwnership` Mongo CAS ledger. The runtime binds the
-browser to an exact worker/token/epoch and verifies ownership before
-agent or manual operations; human takeover/handback increment a shared
-revision. Remote Stop revokes ownership. Expired/crashed ownership is
-quarantined, not reclaimed automatically; reviewed recovery requires a
-fresh browser and a newer epoch, **not** old-tab serialization/replay.
-The former RAM-only takeover expiry is disabled in G2 mode (fail closed).
+- **G2 deterministic unit: 4/4 PASS.**
+- **Two real Node workers + authenticated isolated Mongo: 5/5 PASS**:
+  atomic lease race, human takeover, worker crash/quarantine/explicit
+  reviewed restart, post-effect no-replay and Stop fencing.
+- **Two independent Next.js processes + Chromium: `test:host:g2`
+  1/1 PASS** with isolated Mongo/Postgres and synthetic owner/nonmember:
+  worker B denied duplicate browser ownership; nonmember denied Watch;
+  worker A performed Agent click, takeover/manual action/handback;
+  remote Stop from B fenced further A actions; cleanup returned HTTP 200.
+- Host regression after the local correction: P7 **40/40**, P8
+  **40/40**, P8 QA **8/8**, G1 **8/8** PASS; TypeScript and
+  `git diff --check` PASS. Ported files <=299 lines (max **276**).
+  These figures are separate reported suites; do not infer CI PASS.
+- Local host cleanup reported: synthetic Project/tasks, both Mongo run
+  databases, PostgreSQL run DB, QA authentication states/environment
+  files, and both Next servers removed or stopped; ports 3005/3006
+  released. No real Dify/Entra or outside browser action was used.
 
-New executable QA evidence:
-- **Node contract tests 4/4 PASS, 0 FAIL, 0 SKIP**, executed in this
-  environment from byte-identical GitHub blobs
-  (`tests/node/g2-browser-lease.test.mjs`,
-  `g2-lease-core.mjs`).
-- **Two real Node processes + Mongo:** `test:g2:multiworker:db`
-  authored, **NOT RUN** (Mongo QA and host-installed driver unavailable
-  here). Five cases: atomic ownership, human revision, Stop, crash/review,
-  and crash after a recorded effect with no automatic replay.
-- **Two genuine Next.js processes + Chromium:** `test:host:g2`
-  authored, **NOT RUN** (host NextAuth/DB/browser unavailable here).
-  It covers owner contention, in-owner handback and remote Stop,
-  but NOT a Next-process SIGKILL/restart.
-- P7/P8/G1 focused suites and integrated host TypeScript: **NOT RUN**
-  in this source-authoring environment; require local QA results.
+**Host root-cause correction now ported upstream:** `withBrowserOp`
+previously used `countAgentAction=false` as a proxy for human ownership.
+P7 synthetic page setup is deliberately uncounted **Agent** work, so
+the inferred human lease incorrectly denied and closed its Chromium
+session. `session.ts` now accepts independent `ownershipMode`
+(default `agent`); human takeover/manual/personal-auth callers pass
+`human` explicitly. The source adds focused regression tests; this
+follow-up source commit has **not** rerun the full host suite.
 
-See [G2 multi-worker handoff](G2_MULTIWORKER_QA.md). **G2 remains
-OPEN** pending actual two-worker DB/Next runs, crash/lease expiry
-quarantine, deliberate owner-reviewed fresh restart, old action fencing
-and no duplicate side-effect receipts. This is neither transparent browser
-migration nor a production exactly-once guarantee.
+**Host origin/build caution:** Next 14 may canonicalize
+`req.nextUrl.origin` to `http://localhost:<port>` even when the
+server binds `127.0.0.1`. G2 preflight and API test now allow a
+consistent **same-hostname** loopback pair (`localhost` preferred)
+on ports 3005/3006 with exact `P8_QA_ALLOWED_ORIGIN`; never relax
+Origin checks to arbitrary cross-origin requests. Each independent
+Next dev server must use a separate checkout/build directory;
+sharing `.next` creates build artifacts/race interference.
+
+**G2 REMAINS OPEN:** no Next-host worker SIGKILL/restart with
+browser lease expiry -> quarantine -> explicit reviewed **fresh
+session** recovery has passed E2E. Five Mongo/Node tests prove the
+ledger behavior, not Chromium restoration. Multi-worker task queue
+recovery, old-reference invalidation across host restart,
+exactly-once side effects and production readiness also remain
+unproven. See [G2 host QA handoff](G2_MULTIWORKER_QA.md).
+G3 and G4 remain open.
 
 ### G3 — Security and authorized integration
 
