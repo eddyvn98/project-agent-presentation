@@ -11,8 +11,14 @@ owner 200 / nonmember 404, typecheck PASS, as reported by the local operator.
 Host branch `feat/project-agent-local-business`: P8 code `4aec99a4`,
 status/index `ca65a8e104664536216183d8bfd102f730ea9376`.
 Reported host focused 115 PASS / 1 SKIP; P8 guard/session 8/8 PASS;
-L1 and L2 each 1/1 PASS. See [P8 status](P8_STATUS.md) for scope and
-independent-verification limitations.
+L1 and L2 each 1/1 PASS. Host evidence precision correction: `3351ae4c`.
+**G1 synthetic task-goal E2E is also ACCEPTED for one Next 14.2.16 worker,
+loopback mock SSE and synthetic Chromium DOM only** (operator-reported):
+host code `580ab334`, status/index `1e2f5c4a`.
+G1 host `test:host:g1` **2/2 PASS** (positive and premature-final
+negative); G1 unit **8/8**, P8 unit **40/40**, P8 guard/session **8/8**,
+TypeScript and diff checks PASS, all files <=299 lines.
+See [P8 status](P8_STATUS.md) for evidence limitations and G2–G4 gates.
 The baseline DOM-first browser, visual fallback, Browser Watch,
 takeover/handback, approvals, per-task leases, runtime StallGuard,
 ActionReplayGuard and token/cost accounting already existed before P8.
@@ -36,6 +42,7 @@ It is a methodology/pattern reference, not a Playwright replacement.
 | Privacy | No raw DOM, form values, full URL or secrets in P8 telemetry; SHA-256 fingerprints live only in memory for the stall detector |
 | Run receipt | At run finalization emit `p8_loop_metrics` with numeric counts into existing task logs; 30-day account observability aggregates actions, progress and interventions |
 | Quality benchmark | Existing 40 isolated synthetic Chromium fixtures have independent DOM assertions; P8 scorecard only accepts complete 40/40 verified cases with bounded retries |
+| G1 app-owned goal receipt (synthetic QA only) | Real single-worker model SSE continuation drives Chromium; independent checker requires the fixture DOM target and P8 evidence before terminal `done`; final answer contains an app-authored receipt. Outside exact QA identity/flags, this goal checker is disabled |
 
 Limits: an observed DOM/value change is **not** proof the user's overall
 task or external transaction succeeded. Do not let a model declare its own
@@ -73,6 +80,29 @@ with exact Origin, synthetic owner/Project and explicit flags.
 The fixture/session bridge stays within one OS process; cross-process
 browser session persistence remains a separate release gate.
 
+## G1 single-worker synthetic goal acceptance — CLOSED (operator-reported)
+
+On isolated AI-WEB-CHAT Next.js 14.2.16, the local SSE mock
+(`127.0.0.1:3998`) executed three positive turns
+(`snapshot -> click -> final`) through the real worker/browser runtime,
+then one negative premature-final turn. **Four POSTs in total.**
+Real Chromium DOM and P8 verification independently accepted the positive
+goal; the task ended `done` with a trusted receipt (`p8Verified=2`).
+The premature-final model claim ended `failed` with no trusted receipt.
+The host closeout is **2/2 PASS**; all synthetic QA resources were removed.
+
+**Host test adaptation:** the public task API deliberately omits
+`task.log`. The integrated host test removed the source-only assertion
+on this field and instead checked the trusted receipt's numeric
+`p8Verified > 0`. The runtime checker and terminal guard were unchanged.
+The original Presentation E2E source test still needs parity adjustment
+before being reused unchanged. These are **operator-reported** results.
+
+This does not authorize or prove real Dify/Entra, genuine internet tasks,
+multi-worker takeover recovery, machine-wide network egress audit,
+production security or release readiness. Continue G2–G4; see
+[P8 status](P8_STATUS.md) and [G1 runbook](G1_LOCAL_RUNTIME_QA.md).
+
 ## Local acceptance gates
 
 1. Focused P8 Vitest tests PASS for checker, owner isolation, budget,
@@ -87,7 +117,7 @@ browser session persistence remains a separate release gate.
    Next version, browser version, PASS/FAIL/SKIP, retry count and elapsed time.
    The report must distinguish *observed progress* from *goal completion*.
 
-## Release gates remaining after synthetic host acceptance
+## Release gates remaining after P8 + bounded G1 synthetic acceptance
 
 - State is **process-local RAM** (30-minute TTL, 16 events/task, 64 tasks).
   Summary metrics persist through the existing task log, but live budgets,
