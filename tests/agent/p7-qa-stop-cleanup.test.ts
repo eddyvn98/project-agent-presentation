@@ -36,7 +36,8 @@ describe("P7 synthetic Stop disposes an orphan browser", () => {
     expect(await stopProjectAgentTaskNow(synthetic)).toBe("requested");
     expect(updateProjectAgentTask).toHaveBeenCalledWith(synthetic.id,
       expect.objectContaining({ status: "failed", cancelled: true }));
-    expect(cleanupP7DiscardedBrowser).toHaveBeenCalledExactlyOnceWith(synthetic.id);
+    expect(cleanupP7DiscardedBrowser).toHaveBeenCalledTimes(1);
+    expect(cleanupP7DiscardedBrowser).toHaveBeenCalledWith(synthetic.id);
   });
   it("does not touch employee browser sessions", async () => {
     const employee = { ...synthetic, prompt: "Read a public webpage" };
