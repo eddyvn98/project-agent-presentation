@@ -25,12 +25,15 @@ async function observeViewport(page: BrowserSession["page"]): Promise<VisualView
 export async function observeVisualFrame(input: RuntimeInput, session: BrowserSession) {
   invalidateVisualFrame(session);
   const page = session.page;
+  const beforeViewport = await observeViewport(page);
   const mask = sensitiveScreenshotMask(page);
   const bytes = await page.screenshot({
     type: "jpeg", quality: 65, animations: "disabled",
     mask: [mask], maskColor: "#64748b", timeout: 4_000,
   });
   const viewport = await observeViewport(page);
+  if (!sameVisualViewport(beforeViewport, viewport))
+    throw new Error("Browser viewport changed during screenshot; observe again.");
   const id = (counters.get(session) ?? 0) + 1;
   counters.set(session, id);
   frames.set(session, { id, page, url: page.url(), viewport, at: Date.now() });
