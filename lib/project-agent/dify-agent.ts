@@ -14,7 +14,7 @@ import { loadProjectAgentTaskContext } from "./task-context"; import type { Proj
 import { resolveDifyConversationId } from "./conversation";
 import { autoCompactIfNeeded } from "./auto-compact"; import { readProjectAgentTask, updateProjectAgentTask, recordGuardedTerminalTask } from "./task-store";
 import { routeModelSelector } from "./runtime/usage-pricing"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
-import { commitTaskTerminalIfActive } from "./task-terminal-guard"; import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
+import { commitTaskTerminalIfActive, markTaskRunningIfQueued } from "./task-terminal-guard"; import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
 const MAX_VISUAL_REVIEW_PASSES = 4;
 export function projectAgentDifyUser(ownerEmail: string, projectId: string): string {
 	return `project_${createHash("sha256").update(`${ownerEmail.trim().toLowerCase()}:${projectId}`).digest("hex").slice(0, 24)}`;
@@ -71,7 +71,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		const projectAccess = await projectCap.getProjectAccess(task.projectId, task.ownerEmail);
 		if (!projectAccess) throw new Error("Project access was removed before the task could run");
 		const projectOwnerEmail = projectAccess.ownerEmail;
-		await updateProjectAgentTask(task.id, { status: "running", bootId: PROJECT_AGENT_BOOT_ID, startedAt: new Date().toISOString(), logLine: "app_stage :: loading_context" });
+		if (!await markTaskRunningIfQueued(task, PROJECT_AGENT_BOOT_ID)) { const latest = await readProjectAgentTask(task.id); if (!latest) throw new Error("Task disappeared during guarded startup"); return latest; }
 		const [knowledge, projectChats, projectAgentHistory, personalChats] = await Promise.all([
 			getProjectAgentKnowledgeText(task.projectId, projectOwnerEmail, task.prompt, runtime),
 			loadProjectChatContext(task.projectId, task.ownerEmail, task.userPrompt ?? task.prompt),
