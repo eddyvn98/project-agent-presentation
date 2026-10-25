@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/services/mongodb/client", () => ({ getMongoAiDb: vi.fn() }));
 import { getMongoAiDb } from "@/services/mongodb/client";
 import { runWithLeaseFence } from "../../lib/project-agent/lease-fence";
-import { commitTaskTerminalIfActive, stopTaskIfActive,
+import { commitTaskTerminalIfActive, stopTaskIfActive, markTaskRunningIfQueued,
   PROJECT_AGENT_TASKS_COLLECTION } from "../../lib/project-agent/task-terminal-guard";
 
 const identity = { id: "pat_123456789abc", ownerEmail: "owner@project-agent.test",
@@ -37,6 +37,18 @@ beforeEach(() => {
   } } as never);
 });
 describe("P7.6.2 terminal write vs Stop Mongo CAS", () => {
+  it("Stop wins while queued: stale worker cannot resurrect running state", async () => {
+    task.status = "queued";
+    expect(await stopTaskIfActive(identity)).toBe(true);
+    expect(await markTaskRunningIfQueued(identity, "boot-old")).toBe(false);
+    expect(task).toMatchObject({ status: "failed", cancelled: true });
+  });
+  it("first legitimate queued worker can claim running before finishing", async () => {
+    task.status = "queued";
+    expect(await markTaskRunningIfQueued(identity, "boot-current")).toBe(true);
+    expect(await markTaskRunningIfQueued(identity, "boot-second")).toBe(false);
+    expect(task).toMatchObject({ status: "running", bootId: "boot-current" });
+  });
   it("Stop wins first: old worker cannot write done or overwrite cancellation", async () => {
     expect(await stopTaskIfActive(identity)).toBe(true);
     expect(await commitTaskTerminalIfActive(identity, "done",
