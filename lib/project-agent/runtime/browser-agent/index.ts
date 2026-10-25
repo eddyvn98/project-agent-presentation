@@ -10,6 +10,7 @@ import { isCaptchaPage, isSensitiveField, resolveSafeRedirect, IRREVERSIBLE_PATT
 import { requireAgentApproval } from "../../agent-approvals";
 import { checkAgentBrowserPolicy } from "./policy-hook"; import { sensitiveScreenshotMask } from "./privacy";
 import { checkSavedBrowserHealth } from "./browser-session-health";
+import { g2InitialRef } from "./g2-refs.mjs";
 import { workspaceDir } from "../sandbox";
 import type { RuntimeInput, RuntimeStep } from "../run-agent";
 import type { BrowserAction } from "./action-parser";
@@ -48,7 +49,7 @@ async function snapshot(session: BrowserSession): Promise<string> {
 	const url = session.page.url();
 	const title = await session.page.title().catch(() => "");
 	if (session.snapshotUrl !== url) { session.refs.clear(); session.snapshotUrl = url; }
-	const elements = await session.page.evaluate(() => {
+	const elements = await session.page.evaluate((baseRef) => {
 		const selector = 'a,button,input,textarea,select,[role],h1,h2,h3,p,li';
 		const visible = (element: Element) => { const style = getComputedStyle(element); return Boolean(element.getClientRects().length && style.visibility !== "hidden" && style.display !== "none"); };
 		const labelFor = (element: Element) => {
@@ -56,7 +57,7 @@ async function snapshot(session: BrowserSession): Promise<string> {
 			const label = input.labels?.[0]?.innerText;
 			return (element.getAttribute("aria-label") || label || input.placeholder || element.getAttribute("title") || element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 180);
 		};
-		let nextRef = [...document.querySelectorAll("[data-agent-web-ref]")].reduce((next, element) => Math.max(next, Number(element.getAttribute("data-agent-web-ref")?.slice(1)) + 1), 1);
+		let nextRef = [...document.querySelectorAll("[data-agent-web-ref]")].reduce((next, element) => Math.max(next, Number(element.getAttribute("data-agent-web-ref")?.slice(1)) + 1), baseRef);
 		return [...document.querySelectorAll(selector)].filter(visible).slice(0, 250).map((element) => {
 			const ref = element.getAttribute("data-agent-web-ref") || `e${nextRef++}`;
 			element.setAttribute("data-agent-web-ref", ref);
@@ -64,7 +65,7 @@ async function snapshot(session: BrowserSession): Promise<string> {
 			const role = element.getAttribute("role") || ({ a: "link", button: "button", input: (element as HTMLInputElement).type === "search" ? "searchbox" : "textbox", textarea: "textbox", select: "combobox", h1: "heading", h2: "heading", h3: "heading" } as Record<string, string>)[tag] || tag;
 			return { ref, role, label: labelFor(element) };
 		});
-	});
+	}, g2InitialRef(session.g2RefEpoch));
 	const lines = elements.filter(({ label }) => Boolean(label)).map(({ ref, role, label }) => {
 		session.refs.set(ref, `[data-agent-web-ref="${ref}"]`);
 		return `[ref=${ref}] ${role} "${label}"`;
