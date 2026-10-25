@@ -9,7 +9,7 @@ describe("P7 synthetic security boundaries", () => {
   it("requires explicit flags, synthetic owner/Project and exact local Origin", () => {
     expect(p7QaAllowed(safe)).toBe(true);
     for (const patch of [
-      { nodeEnv: "production" }, { fixture: "0" }, { browser: "0" }, { runtime: "classic" },
+      { nodeEnv: "production" }, { nodeEnv: undefined }, { fixture: "0" }, { browser: "0" }, { runtime: "classic" },
       { owner: "employee@company.test" }, { projectName: "Real project" },
       { requestOrigin: "http://127.0.0.1:3003" }, { origin: "https://attacker.invalid" },
       { expectedProjectId: "proj_other" },
@@ -24,8 +24,10 @@ describe("P7 synthetic security boundaries", () => {
     expect(p7QaAllowed({ ...safe, origin: p7QaRequestOrigin("GET", "https://evil.invalid", uri) })).toBe(false);
   });
   it("will not delete unrelated or foreign tasks", () => {
-    expect(p7SyntheticTask({ prompt: "[P7_SYNTHETIC_QA] browser fixture", ownerEmail: safe.owner,
+    expect(p7SyntheticTask({ prompt: "[P7_SYNTHETIC_QA] browser fixture - local synthetic data only", ownerEmail: safe.owner,
       projectId: safe.projectId }, safe.projectId, safe.owner)).toBe(true);
+    expect(p7SyntheticTask({ prompt: "[P7_SYNTHETIC_QA] fake employee request", ownerEmail: safe.owner,
+      projectId: safe.projectId }, safe.projectId, safe.owner)).toBe(false);
     expect(p7SyntheticTask({ prompt: "A real request", ownerEmail: safe.owner,
       projectId: safe.projectId }, safe.projectId, safe.owner)).toBe(false);
   });
