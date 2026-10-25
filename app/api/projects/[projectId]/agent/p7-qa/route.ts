@@ -7,7 +7,7 @@ import { createProjectAgentTask, deleteProjectAgentConversation, readProjectAgen
 import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask, P7_QA_PREFIX } from "@/lib/project-agent/p7-qa-guard";
 import { recoverP7SyntheticBrowser, withP7SyntheticRecoverySlot } from "@/lib/project-agent/p7-qa-recovery";
 import { PROJECT_AGENT_BOOT_ID } from "@/lib/project-agent/boot";
-import { markP7BrowserRunningIfCurrent } from "@/lib/project-agent/p7-qa-conditional-update";
+import { markP7BrowserRunningIfCurrent, verifyP7TaskStoreMapping } from "@/lib/project-agent/p7-qa-conditional-update";
 import { cleanupP7DiscardedBrowser } from "@/lib/project-agent/p7-qa-browser-cleanup";
 import { p7SyntheticPdf } from "@/lib/project-agent/p7-synthetic-pdf";
 import { prepareP7BrowserFixture } from "@/lib/project-agent/runtime/browser-agent/p7-fixture";
@@ -126,6 +126,10 @@ export async function GET(req: NextRequest, { params }: { params: { projectId: s
   const task = /^pat_[a-f0-9]{12}$/.test(id) ? await readProjectAgentTask(id) : null;
   if (!task || !p7SyntheticTask(task, params.projectId, allowed.owner!))
     return reply({ error: "Synthetic task not found" }, 404);
+  if (req.nextUrl.searchParams.get("verifyCas") === "1") {
+    const matched = await verifyP7TaskStoreMapping(task).catch(() => false);
+    return reply({ taskId: task.id, casMappingVerified: matched }, matched ? 200 : 409);
+  }
   const { activeBrowserSession } = await import("@/lib/project-agent/runtime/browser-agent/session");
   const session = activeBrowserSession(id);
   if (!session?.browser.isConnected()) return reply({ taskId: id, connected: false });
