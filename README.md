@@ -2,6 +2,8 @@
 
 Portable React presentation components plus a neutral source snapshot of a full Project Agent integration. This branch adds the host UI, API routes, agent runtime, and focused tests; see [the source map](PROJECT_AGENT_SOURCE_MAP.md). Host authentication, database, storage, Dify, and sandbox services remain integration boundaries. No credentials or customer data belong in this repository. All content in `demo/` and `public/demo/` is synthetic.
 
+**P7 acceptance:** [Isolated QA status and production gates](P7_STATUS.md) · [Closeout QA runbook](P7_CLOSEOUT_QA.md). Synthetic host acceptance has passed with six deliberate API skips; production acceptance is pending.
+
 ## Integration
 
 The optional `ProjectAgentAnswer` entry point supplies Markdown, GFM, inline/display KaTeX and presentation styles:
