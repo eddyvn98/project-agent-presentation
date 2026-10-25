@@ -161,13 +161,15 @@ async function run() {
       oldActionCountBeforeBClick: 1, finalExplicitActions: 2,
       staleRefRejected: true, externalActions: false }, null, 2));
   } finally {
+    // The QA child group is owned by this harness; never delete a live lease.
+    if (hosts[0]) await killCrashHost(hosts[0]).catch(() => {});
     if (ownerB && taskId && bOrigin) {
       try {
         const endpoint = control(taskId);
         await expectReply(await post(ownerB, endpoint, bOrigin,
           { op: "qa_cleanup" }), 200);
         const cleaned = await expectReply(await post(ownerB, endpoint, bOrigin,
-          { op: "qa_g2_cleanup" }), 200);
+          { op: "qa_g2_cleanup", confirmKilled: true }), 200);
         assert.equal(cleaned.cleaned, true);
         await expectReply(await ownerB.delete(fixture(), {
           headers: { Origin: bOrigin }, data: { taskId },
