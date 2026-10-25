@@ -6,7 +6,7 @@
 **G1 SINGLE-WORKER + LOOPBACK MOCK MODEL + SYNTHETIC DOM: ACCEPTED
 (operator-reported PASS).**
 **REAL DIFY/MODEL SEMANTIC GOAL ACCEPTANCE: OPEN.**
-**G2 MULTI-WORKER BROWSER RECOVERY: OPEN — OWNERSHIP/STOP HOST QA PASS, CRASH/REVIEWED RECOVERY E2E PENDING.**
+**G2 MULTI-WORKER BROWSER RECOVERY: OPEN — CRASH E2E HARNESS READY FOR HOST QA, NOT RUN.**
 **G3 SECURITY/AUTHORIZED INTEGRATION: OPEN.**
 **G4 PRODUCTION RELEASE: NOT APPROVED.**
 
@@ -187,6 +187,19 @@ on ports 3005/3006 with exact `P8_QA_ALLOWED_ORIGIN`; never relax
 Origin checks to arbitrary cross-origin requests. Each independent
 Next dev server must use a separate checkout/build directory;
 sharing `.next` creates build artifacts/race interference.
+
+**New crash/recovery harness authored (NOT RUN on host):**
+`npm run test:host:g2:crash` launches two independent marked Next
+checkouts, records Node PIDs, kills owner A's process group after a
+verified synthetic click, checks B's lease quarantine/no-replay,
+demands post-crash operator review and explicit ticket, then opens
+a new Chromium session on B with a higher lease epoch.
+The source now allocates disjoint epoch-scoped DOM refs and records
+only synthetic verified-click receipts in a QA-scoped Mongo ledger;
+old refs must fail through the real browser action path.
+The harness closes only its own processes and marked synthetic
+task/lease/receipt; QA DBs/auth files remain explicitly operator-owned.
+See [G2 crash/recovery runbook](G2_CRASH_RECOVERY_QA.md).
 
 **G2 REMAINS OPEN:** no Next-host worker SIGKILL/restart with
 browser lease expiry -> quarantine -> explicit reviewed **fresh
