@@ -14,8 +14,7 @@ import { loadProjectAgentTaskContext } from "./task-context"; import type { Proj
 import { resolveDifyConversationId } from "./conversation";
 import { autoCompactIfNeeded } from "./auto-compact"; import { readProjectAgentTask, updateProjectAgentTask } from "./task-store";
 import { routeModelSelector } from "./runtime/usage-pricing"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
-import { commitTaskTerminalIfActive } from "./task-terminal-guard";
-import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
+import { commitTaskTerminalIfActive } from "./task-terminal-guard";import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
 const MAX_VISUAL_REVIEW_PASSES = 4;
 export function projectAgentDifyUser(ownerEmail: string, projectId: string): string {
 	return `project_${createHash("sha256").update(`${ownerEmail.trim().toLowerCase()}:${projectId}`).digest("hex").slice(0, 24)}`;
