@@ -4,7 +4,8 @@ import * as projectCap from "@/lib/capabilities/project";
 import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { createProjectAgentTask, deleteProjectAgentConversation, readProjectAgentTask,
   updateProjectAgentTask, writeProjectAgentFile } from "@/lib/project-agent/task-store";
-import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask, P7_QA_PREFIX } from "@/lib/project-agent/p7-qa-guard";
+import { p7QaAllowed, p7QaRequestOrigin, p7SyntheticTask, canRecoverP7BrowserTask, P7_QA_PREFIX } from "@/lib/project-agent/p7-qa-guard";
+import { PROJECT_AGENT_BOOT_ID } from "@/lib/project-agent/boot";
 import { p7SyntheticPdf } from "@/lib/project-agent/p7-synthetic-pdf";
 import { prepareP7BrowserFixture } from "@/lib/project-agent/runtime/browser-agent/p7-fixture";
 import { closeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
@@ -84,8 +85,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { projectId:
   if (!task || !p7SyntheticTask(task, params.projectId, allowed.owner!))
     return reply({ error: "Synthetic task not found" }, 404);
   if (body.kind === "recover") {
-    const result = await prepareP7BrowserFixture(task.id, allowed.owner!);
-    return reply({ taskId: task.id, ...result });
+    if (!canRecoverP7BrowserTask(task))
+      return reply({ error: "Only an unfinished synthetic browser task can be restored" }, 409);
+    try {
+      const result = await prepareP7BrowserFixture(task.id, allowed.owner!);
+      if (!result.hasFrame) throw new Error("Synthetic browser recovery produced no frame");
+      await updateProjectAgentTask(task.id, {
+        status: "running", bootId: PROJECT_AGENT_BOOT_ID,
+        cancelled: false, error: undefined, completedAt: undefined,
+        logLine: "p7_synthetic :: browser fixture restored after host restart",
+      });
+      return reply({ taskId: task.id, ...result });
+    } catch {
+      return reply({ error: "Synthetic browser recovery failed" }, 503);
+    }
   }
   if (body.kind !== "crash" || process.env.PROJECT_AGENT_P7_QA_CRASH !== "1")
     return reply({ error: "QA crash injection is disabled" }, 403);
