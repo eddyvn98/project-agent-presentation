@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { resolve, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { resolve as pathResolve } from "node:path";
 /** Configuration-only audit; no real Azure login is attempted. */
 export function auditP7Sso(config, host, provider = "azure-ad") {
