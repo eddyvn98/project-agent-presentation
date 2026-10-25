@@ -32,9 +32,10 @@ not rerun or independently verified in this Presentation checkout.
   intentionally omits `task.log`, so checking this field through
   the public task API was invalid. The host E2E removed that assertion
   and checked the receipt's positive numeric `p8Verified` instead
-  (observed 2). **No runtime guard changed.** This upstream
-  Presentation test file still contains the old `task.log` assertion
-  and requires the same test-only parity fix before direct reuse.
+  (observed 2). **No runtime guard changed.** The Presentation source
+  test was subsequently corrected to assert the application-authored
+  public `G1_VERIFIED_RECEIPT` with numeric `p8Verified > 0`;
+  the legacy public `task.log` assertion has been removed.
   Neither the corrected E2E nor the public task route proves task-log
   contents or persistence.
 - Cleanup reported complete: isolated QA Project/tasks, Mongo/PostgreSQL
@@ -156,11 +157,10 @@ transport before Playwright mutates anything. The positive model script
 uses exactly three SSE turns (snapshot, click, final); the negative uses
 one forged-final turn. The recorded run confirmed **four localhost model
 POSTs**. **Test source parity note:** the public task API omits
-`task.log`. Before rerunning the original Presentation-host test
-unchanged, remove the public `task.log` assertion and instead assert
-that the application-authored `G1_VERIFIED_RECEIPT` contains numeric
-`p8Verified > 0`. This was fixed in the integrated host test only;
-do not change the runtime guard or expose private logs publicly.
+`task.log`. The Presentation E2E source now asserts that the
+application-authored public `G1_VERIFIED_RECEIPT` contains numeric
+`p8Verified > 0`, matching the previously accepted host correction.
+Do not change runtime guards or expose private logs publicly.
 The test checks terminal task status/receipt through the authenticated
 task route and cleans both tasks.
 Afterward delete **only** the synthetic QA Project/database/auth files
