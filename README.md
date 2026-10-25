@@ -5,7 +5,7 @@ Portable React presentation components plus a neutral source snapshot of a full 
 **P7 acceptance:** [QA status / production gates](P7_STATUS.md) · [Closeout runbook](P7_CLOSEOUT_QA.md) · [P7.6.2 multi-worker QA](P7_6_2_MULTIWORKER_QA.md) · [P7.6.3 security review](P7_6_3_SECURITY_REVIEW.md). P7 local integration closed with operator-reported 67/67 regression PASS; production release gates remain open.
 
 **P8 development:** [Implementation, scope and feature flags](P8_ROADMAP.md) ·
-[isolated QA commands](P8_LOCAL_QA.md). Browser loop checker, hard budget,
+[isolated QA commands](P8_LOCAL_QA.md) · [active Chromium host closeout](P8_ACTIVE_SESSION_CLOSEOUT.md). Browser loop checker, hard budget,
 human escalation/handback timeline, owner-only Watch telemetry and 30-day
 numeric metrics are opt-in; the 40-case Chromium benchmark is opt-in too.
 These source changes require local host QA. No P8 production acceptance is
