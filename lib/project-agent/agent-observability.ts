@@ -13,7 +13,7 @@ export interface AgentObservability {
   durationSeconds: number; avgDurationSeconds: number;
   pendingApprovals: number; activeSchedules: number;
   loopStopped: number; needsReview: number; toolFailures: number;
-  p8Actions: number; p8Verified: number; p8Unverified: number; p8Interventions: number; p8Blocked: number;
+  p8Actions?: number; p8Verified?: number; p8Unverified?: number; p8Interventions?: number; p8Blocked?: number;
   days: AgentMetricDay[]; recent: Array<{ id: string; status: string; createdAt: string;
     durationSeconds: number; tokens: number; error?: string }>;
 }
