@@ -22,9 +22,12 @@ beforeEach(() => {
 describe("P7 rejected Chromium fixture cleanup", () => {
   it("removes Watch frame, releases control and closes the task session", async () => {
     expect(await cleanupP7DiscardedBrowser(taskId)).toBe(true);
-    expect(setBrowserWatch).toHaveBeenCalledTimes(1);\n    expect(setBrowserWatch).toHaveBeenCalledWith(taskId, false);
-    expect(clearBrowserControl).toHaveBeenCalledTimes(1);\n    expect(clearBrowserControl).toHaveBeenCalledWith(taskId);
-    expect(closeBrowserSession).toHaveBeenCalledTimes(1);\n    expect(closeBrowserSession).toHaveBeenCalledWith(taskId);
+    expect(setBrowserWatch).toHaveBeenCalledTimes(1);
+    expect(setBrowserWatch).toHaveBeenCalledWith(taskId, false);
+    expect(clearBrowserControl).toHaveBeenCalledTimes(1);
+    expect(clearBrowserControl).toHaveBeenCalledWith(taskId);
+    expect(closeBrowserSession).toHaveBeenCalledTimes(1);
+    expect(closeBrowserSession).toHaveBeenCalledWith(taskId);
   });
   it("preserves a session while a human owns takeover", async () => {
     vi.mocked(browserControlState).mockReturnValue({ paused: true, revision: 1 });
