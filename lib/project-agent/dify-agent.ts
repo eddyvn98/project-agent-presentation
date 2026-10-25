@@ -13,7 +13,7 @@ import { loadDefaultMemoryContext, loadProjectChatContext } from "./project-chat
 import { loadProjectAgentTaskContext } from "./task-context"; import type { ProjectAgentTask, ProjectAgentTaskSource } from "./types";
 import { resolveDifyConversationId } from "./conversation";
 import { autoCompactIfNeeded } from "./auto-compact"; import { readProjectAgentTask, updateProjectAgentTask, recordGuardedTerminalTask } from "./task-store";
-import { routeModelSelector } from "./runtime/usage-pricing"; import { isG1QaTask, type G1GoalReceipt } from "./runtime/g1-goal-check"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
+import { routeModelSelector } from "./runtime/usage-pricing"; import { isG1QaTask, formatG1Receipt, type G1GoalReceipt } from "./runtime/g1-goal-check"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
 import { commitTaskTerminalIfActive, markTaskRunningIfQueued } from "./task-terminal-guard"; import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
 const MAX_VISUAL_REVIEW_PASSES = 4;
 export function projectAgentDifyUser(ownerEmail: string, projectId: string): string {
@@ -263,7 +263,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		await updateProjectAgentTask(task.id, { logLine: "app_stage :: saving_results" });
 		const finished = await readProjectAgentTask(task.id).catch(() => null);
 		await saveTaskWorkLog(task.projectId, projectOwnerEmail, describeTaskWork(finished ?? task, latestFiles.map((file) => file.name), savedSources)).catch(() => {});
-		if (isG1QaTask(task) && (!g1Receipt || g1Receipt.taskId !== task.id)) throw new Error("G1 checker receipt required before done"); const accepted = await commitTaskTerminalIfActive(task, "done", {
+		if (isG1QaTask(task) && (!g1Receipt || g1Receipt.taskId !== task.id || !latestAnswer.includes(formatG1Receipt(g1Receipt)))) throw new Error("G1 independent checker and final receipt required before done"); const accepted = await commitTaskTerminalIfActive(task, "done", {
 			completedAt: new Date().toISOString(), ...conversationPatch(conversationId),
 			...(message.promptTokens ? { contextTokens: message.promptTokens } : {}),
 			resultText: latestAnswer, ...(runtimeSources.length ? { sources: runtimeSources } : {}),
