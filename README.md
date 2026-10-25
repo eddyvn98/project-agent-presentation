@@ -28,6 +28,13 @@ The WebMCP feature is disabled by default and needs a compatible browser;
 3D embedding requires `enable3DViewer` opt-in and a separately secured
 host viewer route; merely receiving an agent-ui block does not load HTML.
 
+**CloakBrowser review (no engine swap):** [License assessment, Playwright
+compatibility and optional Chromium integrity pin](CLOAKBROWSER_REVIEW.md).
+CloakBrowser's wrapper is MIT but its compiled Chromium has a separate
+proprietary binary license. No stealth dependency, automatic browser
+download, proxy, key or fingerprint spoofing is added. Existing Chromium
+can optionally be SHA-256 pinned with `PROJECT_AGENT_CHROMIUM_SHA256`.
+
 ## Integration
 
 The optional `ProjectAgentAnswer` entry point supplies Markdown, GFM, inline/display KaTeX and presentation styles:
