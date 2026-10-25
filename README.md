@@ -14,11 +14,17 @@ isolation have been reported PASS on integration branch
 `ca65a8e1`). No real-model goal, cross-worker browser recovery or P8
 production acceptance is implied.
 
-**G1 runtime acceptance (OPEN):** [Real worker + loopback SSE model
+**G1 runtime synthetic single-worker acceptance (operator-reported PASS):** [Real worker + loopback SSE model
 fixture, independent Chromium goal checker, terminal receipt and negative
 case](G1_LOCAL_RUNTIME_QA.md). Source tests and opt-in host E2E were added
 but are not yet evidence of a passing local host run. No real provider,
 staging or production gate is closed by this work.
+
+**UI-TARS / SuperSplat opt-in upgrade:** [Browser geometry, read-only native
+WebMCP scene inspection and safe 3D viewer](UI_TARS_SUPERSPLAT_UPGRADE.md).
+No second computer-control runtime or extra model dependency is installed.
+The WebMCP feature is disabled by default and needs a compatible browser;
+3D embedding needs a separately secured host viewer route.
 
 ## Integration
 
