@@ -1,5 +1,6 @@
 import { browserLoopEnabled, noteBrowserLoopHandback, noteBrowserLoopTakeover } from "./loop-state";
 import { clearBrowserStall } from "./stall-guard";
+import { g2OwnershipEnabled } from "./g2-ownership";
 /** Host-process user takeover gate. Only the initiating task owner can change it via the authenticated route. */
 type Control = { paused: boolean; revision: number; touched: number; manualCount: number; listeners: Set<() => void> };
 const controlGlobal = globalThis as typeof globalThis & { __projectAgentBrowserControls?: Map<string, Control> };
@@ -9,7 +10,7 @@ const EXPIRY_MS = 4 * 60_000;
 function get(id: string): Control {
   let entry = active.get(id);
   if (!entry) { entry = { paused: false, revision: 0, touched: Date.now(), manualCount: 0, listeners: new Set() }; active.set(id, entry); }
-  if (entry.paused && Date.now() - entry.touched >= EXPIRY_MS) releaseBrowserControl(id);
+  if (entry.paused && Date.now() - entry.touched >= EXPIRY_MS && !g2OwnershipEnabled()) releaseBrowserControl(id);
   return entry;
 }
 export function browserControlState(id: string) {
@@ -45,7 +46,10 @@ export async function waitForBrowserHandoff(id: string, signal?: AbortSignal): P
   const state = get(id);
   while (state.paused) {
     if (signal?.aborted) throw signal.reason ?? new Error("Task was cancelled");
-    if (Date.now() - state.touched >= EXPIRY_MS) { releaseBrowserControl(id); break; }
+    if (Date.now() - state.touched >= EXPIRY_MS) {
+      if (g2OwnershipEnabled()) throw new Error("G2 browser handback requires explicit owner action");
+      releaseBrowserControl(id); break;
+    }
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => { cleanup(); resolve(); }, 1_000);
       const abort = () => { cleanup(); reject(signal?.reason ?? new Error("Task was cancelled")); };
