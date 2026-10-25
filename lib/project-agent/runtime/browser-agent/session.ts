@@ -1,5 +1,6 @@
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import { BrowserSlotPool } from "./slot-pool";
+import { bindG2BrowserOwnership, assertG2BrowserOwnership } from "./g2-ownership";
 import { launchChromium } from "../browser-launcher";
 import { guardedRequest } from "../guarded-fetch";
 import { assertPublicWebSocketUrl, bindAbort } from "./safety";
@@ -128,7 +129,12 @@ export async function getBrowserSession(id: string, signal?: AbortSignal, owner?
 	if (existing) { if (existing.page.isClosed() || !existing.browser.isConnected()) { await existing.close(); return getBrowserSession(id, signal, owner); } if (owner && existing.owner && existing.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); if (owner && !existing.owner) existing.owner = owner.trim().toLowerCase(); existing.lastUsed = Date.now(); return existing; }
 	const pending = pendingSessions.get(id);
 	if (pending) { const result = await pending; if (owner && result.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); return result; }
-	const creating = createBrowserSession(id, signal, owner);
+	const creating = (async () => {
+    const session = await createBrowserSession(id, signal, owner);
+    try { await bindG2BrowserOwnership(id, session, owner); }
+    catch (error) { await session.close().catch(() => {}); throw error; }
+    return session;
+  })();
 	pendingSessions.set(id, creating);
 	try { return await creating; } finally { pendingSessions.delete(id); }
 }
@@ -188,6 +194,8 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
 	const current = new Promise<void>((resolve) => { unlock = resolve; });
 	operationLocks.set(session, preceding.then(() => current));
 	await preceding;
+  try { await assertG2BrowserOwnership(session, countAgentAction ? "agent" : "human"); }
+  catch (error) { unlock(); throw error; }
 	if (session.page.isClosed() || !session.browser.isConnected()) { unlock(); throw new Error("Browser session is closed"); }
 	if (countAgentAction) session.operationCount += 1;
 	if (countAgentAction && session.operationCount > 60) { unlock(); throw new Error("Browser action limit (60) reached for this task"); }
