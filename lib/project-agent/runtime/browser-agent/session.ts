@@ -10,7 +10,6 @@ import { publicBrowserWatchLocation } from "./watch";
 import { safeBrowserConsoleEntry } from "./privacy";
 import { connectSteelSession, type SteelConnection } from "./steel-session";
 import { withProjectControlOp } from "./project-control-db";
-
 const MAX_CONTEXTS = 3;
 const OP_TIMEOUT_MS = 35_000;
 const IDLE_CLOSE_MS = 5 * 60_000;
@@ -105,6 +104,14 @@ async function getSharedBrowser(): Promise<Browser> {
 }
 export async function getBrowserSession(id: string, signal?: AbortSignal, owner?: string): Promise<BrowserSession> {
 	const existing = sessions.get(id) ?? qaActive(id);
+  if (existing?.persistent && owner) {
+    const liveRecord = await projectRecordByKey(id, owner);
+    if (!liveRecord || liveRecord.steelId !== existing.steelId) {
+      await existing.close();
+      if (!liveRecord) throw new Error("Shared browser was closed or expired");
+      return getBrowserSession(id, signal, owner);
+    }
+  }
 	if (existing) { if (existing.page.isClosed() || !existing.browser.isConnected()) { await existing.close(); return getBrowserSession(id, signal, owner); } if (owner && existing.owner && existing.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); if (owner && !existing.owner) existing.owner = owner.trim().toLowerCase(); existing.lastUsed = Date.now(); return existing; }
 	const pending = pendingSessions.get(id);
 	if (pending) { const result = await pending; if (owner && result.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); return result; }
@@ -178,13 +185,13 @@ export function closeAllBrowserSessions(): Promise<void> {
 }
 const operationLocks = browserGlobal.__projectAgentBrowserOperationLocks ??= new WeakMap<BrowserSession, Promise<void>>();
 export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promise<T>,
-  countAgentAction = true, ownershipMode: "agent" | "human" | "system" = "agent"): Promise<T> {
+  countAgentAction = true, ownershipMode: "agent" | "human" | "system" = "agent",
+  agentTaskId?: string): Promise<T> {
 	const preceding = operationLocks.get(session) ?? Promise.resolve();
 	let unlock!: () => void;
 	const current = new Promise<void>((resolve) => { unlock = resolve; });
 	operationLocks.set(session, preceding.then(() => current));
 	await preceding;
-
 	if (session.page.isClosed() || !session.browser.isConnected()) { unlock(); throw new Error("Browser session is closed"); }
 	if (countAgentAction) session.operationCount += 1;
 	if (countAgentAction && session.operationCount > 60) { unlock(); throw new Error("Browser action limit (60) reached for this task"); }
@@ -194,6 +201,8 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
       await changeG2HumanControl(session, "agent", "human");
       humanLeaseChanged = true;
     }
+    if (session.persistent && ownershipMode === "agent" && !agentTaskId)
+      throw new Error("Agent task identity is required for shared browser actions");
     await assertG2BrowserOwnership(session, ownershipMode === "human" ? "human" : "agent");
   } catch (error) {
     if (humanLeaseChanged) await changeG2HumanControl(session, "human", "agent").catch(() => session.close());
@@ -203,7 +212,9 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
 		const protectedOp = () => session.persistent && session.scopeId ?
-      withProjectControlOp(session.scopeId, ownershipMode, session.activeAgentTaskId, async () => fn()) : fn();
+      withProjectControlOp(session.scopeId, ownershipMode,
+        ownershipMode === "agent" ? agentTaskId : undefined, async () => fn(),
+        () => { void session.close().catch(() => {}); }) : fn();
     return await Promise.race([protectedOp(), new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error(`Browser operation timed out after ${OP_TIMEOUT_MS / 1000} seconds`)), OP_TIMEOUT_MS);
     })]);
@@ -240,7 +251,7 @@ export async function restorePersonalBrowserSession(session: BrowserSession, url
     serviceWorkers: "block", storageState: record.state,
   });
   try {
-    await routeGuard(next, () => session);
+    await installBrowserRouteGuard(next, () => session);
     const page = await next.newPage();
     const previous = session.context;
     session.context = next; session.page = page;

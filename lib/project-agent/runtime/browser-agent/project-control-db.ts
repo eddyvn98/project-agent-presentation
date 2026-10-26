@@ -79,6 +79,14 @@ export async function claimProjectAgent(scope: string, taskId: string): Promise<
   if (result.matchedCount !== 1)
     throw new Error("Project browser is controlled by the user or another Agent task");
 }
+/** Extend only the same live task's lease, including during a human takeover. */
+export async function renewProjectAgent(scope: string, taskId: string): Promise<boolean> {
+  const now = Date.now();
+  const result = await (await collection()).updateOne({
+    _id: scope, agentTaskId: taskId, agentUntil: { $gt: now },
+  }, { $set: { agentUntil: now + 90_000 } });
+  return result.matchedCount === 1;
+}
 export async function releaseProjectAgent(scope: string, taskId: string): Promise<void> {
   await (await collection()).updateOne({ _id: scope, agentTaskId: taskId },
     { $unset: { agentTaskId: "", agentUntil: "" }, $inc: { revision: 1 } });
@@ -89,7 +97,7 @@ export async function clearProjectControl(scope: string): Promise<void> {
 /** Distributed fencing: one Playwright operation at a time across Next workers. */
 export async function withProjectControlOp<T>(scope: string,
   mode: "agent" | "human" | "system", taskId: string | undefined,
-  fn: (revision: number) => Promise<T>): Promise<T> {
+  fn: (revision: number) => Promise<T>, onLost?: () => void): Promise<T> {
   const coll = await ensure(scope);
   const now = Date.now(), token = randomUUID();
   const authority = mode === "agent" ?
@@ -104,10 +112,30 @@ export async function withProjectControlOp<T>(scope: string,
   { returnDocument: "after" });
   if (!unwrap(row) || unwrap(row)?.opToken !== token)
     throw new Error("Browser control changed or another action is running");
-  try { return await fn(unwrap(row)!.revision); }
-  finally {
-    await coll.updateOne({ _id: scope, opToken: token },
+  let lost = false, refreshing = false;
+  const refresh = async () => {
+    if (refreshing || lost) return;
+    refreshing = true;
+    try {
+      const result = await coll.updateOne({ _id: scope, opToken: token },
+        { $set: { opUntil: Date.now() + 42_000 } });
+      if (result.matchedCount !== 1) throw new Error("Operation lease fenced");
+    } catch {
+      lost = true;
+      onLost?.(); // Disconnect the action's CDP connection if Mongo fencing fails.
+    } finally { refreshing = false; }
+  };
+  const timer = setInterval(() => { void refresh(); }, 8_000);
+  timer.unref?.();
+  try {
+    const value = await fn(unwrap(row)!.revision);
+    if (lost) throw new Error("Browser operation lease was lost");
+    return value;
+  } finally {
+    clearInterval(timer);
+    const released = await coll.updateOne({ _id: scope, opToken: token },
       { $unset: { opToken: "", opUntil: "" } });
+    if (released.matchedCount !== 1) onLost?.();
   }
 }
 /** Stop-aware handback wait; Mongo status crosses process boundaries. */

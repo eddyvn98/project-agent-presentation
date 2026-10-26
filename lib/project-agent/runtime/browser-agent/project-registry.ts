@@ -37,7 +37,7 @@ export async function findProjectRecord(scope: string, projectId: string, owner:
 }
 /** Mongo CAS avoids spawning a different Chromium session in concurrent Next workers. */
 export async function ensureProjectRecord(scope: string, projectId: string,
-  owner: string, signal?: AbortSignal): Promise<ProjectBrowserRecord> {
+  owner: string, signal?: AbortSignal, allowReopen = false): Promise<ProjectBrowserRecord> {
   const coll = await initial(scope, projectId, owner);
   const identity = { _id: scope, projectId, owner: normalize(owner) };
   const started = Date.now();
@@ -45,6 +45,8 @@ export async function ensureProjectRecord(scope: string, projectId: string,
     if (signal?.aborted) throw signal.reason ?? new Error("Task stopped");
     const row = await coll.findOne(identity);
     if (!row) throw new Error("Project browser record was not initialized");
+    if (row.state === "closed" && !allowReopen)
+      throw new Error("User closed the Project browser. Reopen it from the right panel.");
     if (row.state === "active" && row.expiresAt && row.expiresAt > Date.now() + 1000)
       return row;
     const now = Date.now();
@@ -88,7 +90,7 @@ export async function updateProjectActiveTab(scope: string, steelId: string, ind
   if (!Number.isSafeInteger(index) || index < 0 || index > 7)
     throw new Error("Invalid browser tab");
   const result = await (await collection()).updateOne({
-    _id: scope, steelId, state: "active",
+    _id: scope, steelId, state: "active", expiresAt: { $gt: Date.now() },
   }, { $set: { activeTabIndex: index, lastUsedAt: Date.now() } });
   if (result.matchedCount !== 1) throw new Error("Shared browser session is stale");
 }

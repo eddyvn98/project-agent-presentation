@@ -73,3 +73,18 @@ The selected iframe viewer uses Steel's `interactive=false` while the Agent cont
 8. Assess website WebSocket support: the existing safety router currently closes remote WebSockets, so some live apps can fail.
 
 **Not production ready until the viewer gateway and real-host tests pass.** The browser's lifecycle and distributed locking are implemented in the repo, but the protected WebRTC gateway is deployment infrastructure and is not included.
+
+## Review-2 focused repair (October 2026)
+
+- Replaced the dangling `routeGuard()` reference in the restored-personal-session path with `installBrowserRouteGuard()`.
+- Viewer URL normalization now accepts same-origin relative paths and rejects unexpected external origins.
+- Agent action execution carries an immutable caller `taskId` into the distributed operation gate, instead of trusting a mutable session field.
+- Browser tasks refresh ownership every 20 seconds during long model turns; Mongo operation locks refresh every eight seconds, disconnecting CDP on loss.
+- An explicit user close persists the `closed` record. Agent actions cannot silently reopen it; the right-panel Start action is explicitly authorized to reopen.
+- Stale worker connections are disconnected when their Steel ID no longer matches the active Mongo registry record.
+- Resizing the viewer cannot change the real viewport while an Agent still controls the browser; take over first.
+- Added focused Mongo lock regression tests in `tests/agent/project-browser-control-db.test.ts` (not executed here).
+
+### Not yet production-verified
+
+The authenticated WebRTC viewer gateway is still **not implemented** in the repository; never enable a public player endpoint without an authorization-enforcing gateway. Agent actions run through guarded HTTP/CDP; direct remote viewer traffic is a separate security boundary. Multi-worker Steel browser E2E, TypeScript on the real Next host, and actual replay/cancellation races still require QA before release. Do not claim E2E pass from this commit.

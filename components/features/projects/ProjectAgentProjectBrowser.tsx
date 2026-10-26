@@ -22,8 +22,13 @@ const labels = {
     error: "Không thể mở trình duyệt" },
 };
 const empty: Browser = { connected: false };
-function viewerUrl(raw: string, interactive: boolean): string {
-  const url = new URL(raw);
+function viewerUrl(raw: string, interactive: boolean): string | null {
+  if (typeof window === "undefined") return null;
+  let url: URL;
+  try { url = new URL(raw, window.location.origin); } catch { return null; }
+  const local = ["localhost", "127.0.0.1"].includes(window.location.hostname) &&
+    ["localhost", "127.0.0.1"].includes(url.hostname);
+  if (!["http:", "https:"].includes(url.protocol) || (url.origin !== window.location.origin && !local)) return null;
   url.searchParams.set("interactive", String(interactive));
   url.searchParams.set("hideOverlay", "true");
   url.searchParams.set("hideInteractionDialog", "true");
@@ -113,7 +118,7 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
     return () => window.clearInterval(interval);
   }, [open, status.control?.paused, perform]);
   useEffect(() => {
-    if (!open || !status.connected || mobile || !canvas.current) return;
+    if (!open || !status.connected || !status.control?.paused || mobile || !canvas.current) return;
     const observer = new ResizeObserver(entries => {
       const rect = entries[0]?.contentRect;
       if (!rect) return;
@@ -126,7 +131,7 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
     });
     observer.observe(canvas.current);
     return () => { observer.disconnect(); if (resized.current !== null) window.clearTimeout(resized.current); };
-  }, [open, mobile, status.connected, perform]);
+  }, [open, mobile, status.connected, status.control?.paused, perform]);
   const resize = (clientX: number) => {
     setWidth(Math.max(360, Math.min(window.innerWidth * 0.8, window.innerWidth - clientX)));
   };
@@ -138,6 +143,7 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
   };
   const style = width ? { "--browser-preview-width": width + "px" } as CSSProperties : undefined;
   const paused = Boolean(status.control?.paused);
+  const playerUrl = status.viewerUrl ? viewerUrl(status.viewerUrl, paused) : null;
   return <>
     <button type="button" title={ui.open} aria-label={ui.open}
       onClick={() => void show()} className="rounded-full p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -181,9 +187,9 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
             aria-label={ui.tab} title={ui.tab} className="rounded p-1.5 disabled:opacity-40"><Plus className="h-4 w-4" /></button>
         </nav>
         <div ref={canvas} className="relative min-h-0 flex-1 overflow-hidden bg-white dark:bg-slate-950">
-          {status.connected && status.viewerUrl ?
+          {status.connected && playerUrl ?
             <iframe title="Shared live browser" referrerPolicy="no-referrer"
-              src={viewerUrl(status.viewerUrl, paused)}
+              src={playerUrl}
               allow="autoplay; clipboard-read; clipboard-write"
               style={{ pointerEvents: paused ? "auto" : "none" }}
               className="h-full w-full border-0" /> :

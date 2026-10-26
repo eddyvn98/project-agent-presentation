@@ -271,7 +271,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			if (challenge) { await session.close(); return { text: challenge, failed: true }; }
 			const currentSnapshot = await snapshot(session);
 			return { text: extra ? `${extra}\n\n${currentSnapshot}` : currentSnapshot };
-		}));
+		}, true, "agent", input.taskId));
 		if (supersededByUser) return result;
 		const authIssue = await checkSavedBrowserHealth(session);
     if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op, marker);

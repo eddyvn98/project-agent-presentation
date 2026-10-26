@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Invalid tab" }, { status: 400, headers: HEADERS });
   try {
     const session = data.op === "start" ?
-      await openProjectBrowser(params.projectId, checked.owner!) :
+      await openProjectBrowser(params.projectId, checked.owner!, undefined, true) :
       await findProjectBrowser(params.projectId, checked.owner!);
     if (!session) return NextResponse.json({ error: "Open a browser session first" },
       { status: 409, headers: HEADERS });

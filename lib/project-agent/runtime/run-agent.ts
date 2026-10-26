@@ -30,7 +30,7 @@ import { runPlanAction } from "./plan-action";
 import { runWait } from "./wait-action";
 import { prefetchReference } from "./reference-prefetch";
 import { proposeTaskReference } from "./reference-candidates";
-import { runBrowserAction } from "./browser-agent"; import { finishProjectAgent } from "./browser-agent/project-sessions";
+import { keepProjectAgentLease } from "./browser-agent/agent-heartbeat"; import { runBrowserAction } from "./browser-agent"; import { finishProjectAgent } from "./browser-agent/project-sessions";
 import { closeBrowserSession } from "./browser-agent/session"; import { clearBrowserControl, browserControlState } from "./browser-agent/control"; import { finalizeP8BrowserLoop } from "./browser-agent/loop-finalize"; import { resumedBrowserContext, browserPlanOutdated } from "./browser-agent/handback";
 import { transcribeTables } from "./table-transcribe";
 import type { ProjectAgentTaskSource } from "../types";
@@ -110,7 +110,7 @@ export async function runRuntimeAgent(input: RuntimeInput): Promise<DifyAgentMes
 	input.trace ??= [];
 	input.contextStats ??= { captures: 0, storedBytes: 0, returnedBytes: 0 };
 	const metrics: RunMetrics = { failed: 0, modelMs: 0, actionMs: 0, referenceMs: 0, rounds: 0, promptTokens: 0, stepTokens: [], stepOut: [], compactions: 0, invalid: 0, actions: new Map() };
-	try { return await loop(input, metrics); } finally {
+  const stopBrowserLease = keepProjectAgentLease(input); try { return await loop(input, metrics); } finally { stopBrowserLease();
 		if (!input.depth) {
 			input.onStep?.({ tool: "trajectory", detail: trajectoryLine(analyzeTrajectory(input.trace!)) });
 			if (input.taskId) await writeTrace(input.taskId, input.trace!);

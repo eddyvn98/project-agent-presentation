@@ -50,7 +50,8 @@ async function syncProjectTab(session: BrowserSession) {
   }
 }
 /** Idempotent across Next workers: Mongo CAS creates one Steel session per owner/project. */
-export async function openProjectBrowser(projectId: string, owner: string, signal?: AbortSignal) {
+export async function openProjectBrowser(projectId: string, owner: string, signal?: AbortSignal,
+  allowReopen = false) {
   if (process.env.PROJECT_AGENT_STEEL_BROWSER !== "1")
     throw new Error("Shared browser feature is disabled");
   const key = projectBrowserKey(projectId, owner);
@@ -59,7 +60,10 @@ export async function openProjectBrowser(projectId: string, owner: string, signa
   const current = pending.get(key);
   if (current) return current;
   const work = (async () => {
-    await ensureProjectRecord(key, projectId, owner, signal);
+    await ensureProjectRecord(key, projectId, owner, signal, allowReopen);
+    const previous = activeProjectBrowser(projectId, owner);
+    const record = await projectRecordByKey(key, owner);
+    if (previous && record?.steelId !== previous.steelId) await previous.close();
     const session = await getBrowserSession(key, undefined, owner);
     session.persistent = true;
     return session;
@@ -135,7 +139,7 @@ export async function projectBrowserOperation(session: BrowserSession,
     await takeProjectControl(id); noteUserAction(session); return;
   }
   const control = await readProjectControl(id);
-  if (!control.paused && input.op !== "viewport")
+  if (!control.paused)
     throw new Error("Take control before changing the browser");
   await withBrowserOp(session, async () => {
     const pages = session.context.pages().filter(page => !page.isClosed());
@@ -178,5 +182,5 @@ export async function projectBrowserOperation(session: BrowserSession,
     }
     session.refs.clear(); session.snapshotUrl = ""; session.lastSnapshot = "";
     noteUserAction(session);
-  }, false, input.op === "viewport" && !control.paused ? "system" : "human");
+  }, false, "human");
 }
