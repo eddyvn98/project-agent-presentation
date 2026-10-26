@@ -30,7 +30,7 @@ import { runPlanAction } from "./plan-action";
 import { runWait } from "./wait-action";
 import { prefetchReference } from "./reference-prefetch";
 import { proposeTaskReference } from "./reference-candidates";
-import { runBrowserAction } from "./browser-agent";
+import { runBrowserAction } from "./browser-agent"; import { activeProjectBrowser } from "./browser-agent/project-sessions";
 import { closeBrowserSession } from "./browser-agent/session"; import { clearBrowserControl, browserControlState } from "./browser-agent/control"; import { finalizeP8BrowserLoop } from "./browser-agent/loop-finalize"; import { resumedBrowserContext, browserPlanOutdated } from "./browser-agent/handback";
 import { transcribeTables } from "./table-transcribe";
 import type { ProjectAgentTaskSource } from "../types";
@@ -134,7 +134,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 		query = `${query}\n\n${reference.text}`;
 	}
 	const workspaceContext = await initialWorkspacePrompt(input);
-	if (workspaceContext) query = `${query}\n\n${workspaceContext}`;
+	if (workspaceContext) query = `${query}\n\n${workspaceContext}`; const shared = input.projectId && input.ownerEmail ? activeProjectBrowser(input.projectId, input.ownerEmail) : null; if (shared) query += "\n\nA shared browser is open. Inspect its current tab via browser snapshot before acting; do not create a new browser.";
 	let images: DifyChatFile[] = [];
 	if (!conversationId && !input.depth) {
 		const photos = await inputPhotoSheets(input.chatId, input.user).catch(() => null);

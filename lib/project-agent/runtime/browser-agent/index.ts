@@ -18,13 +18,11 @@ import { getBrowserSession, scheduleIdleClose, withBrowserOp, restorePersonalBro
 import { captureBrowserWatch, finishBrowserWatch, type BrowserClickMarker } from "./watch";
 import { invalidateVisualFrame, observeVisualFrame, visualClick, visualType } from "./visual";
 import { browserRetryStalled, recordBrowserDomFailure, clearBrowserStall, P8_STALL_GUIDANCE } from "./stall-guard"; import { runP8BrowserLoopStep } from "./loop-step";
-import { waitForPageOrIntervention } from "./browser-wait";
-
+import { waitForPageOrIntervention } from "./browser-wait"; import { agentBrowserSession, activeProjectBrowser } from "./project-sessions";
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 function snapshotRefLine(snapshot: string, ref: string): string {
 	return snapshot.split("\n").find((line) => line.includes(`[ref=${ref}]`)) ?? "";
 }
-
 function locatorForRef(session: BrowserSession, ref: string) {
 	const selector = session.refs.get(ref);
 	if (!selector) throw new Error("That ref is not in the latest browser snapshot. Take a snapshot and use a current ref.");
@@ -150,9 +148,12 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 	if (process.env.PROJECT_AGENT_BROWSER_AGENT !== "1") return { text: "Browser agent is disabled. Set PROJECT_AGENT_BROWSER_AGENT=1 to enable it.", failed: true };
 	const id = input.taskId ?? input.chatId;
   if (action.op === "close") clearBrowserStall(id);
+  if (action.op === "close" && input.projectId && input.ownerEmail && activeProjectBrowser(input.projectId, input.ownerEmail))
+    return { text: "Detached from the shared Project browser. The user's tabs remain open." };
 	if (action.op === "close") { finishBrowserWatch(input.taskId ?? id); const session = await getBrowserSession(id, input.signal, input.ownerEmail); await session.close(); return { text: "Browser session closed." }; }
 	let session: BrowserSession;
-	try { session = await getBrowserSession(id, input.signal, input.ownerEmail); session.chatId = input.chatId; } catch (cause) { return { text: cause instanceof Error ? cause.message : "Could not start browser", failed: true }; }
+	let sessionKey = id;
+  try { const attached = await agentBrowserSession(input, id); session = attached.session; sessionKey = attached.id; } catch (cause) { return { text: cause instanceof Error ? cause.message : "Could not start browser", failed: true }; }
 	const refDetail = action.ref ? snapshotRefLine(session.lastSnapshot, action.ref).replace(/\[ref=[^\]]+\]/, "").trim() : "";
 	const stepId = action.op === "screenshot" ? `render-${step}` : `browser-${step}`;
 	input.onStep?.({ tool: `browser_${action.op} #${stepId}`, detail: action.note || action.url || refDetail || action.ref || "" } satisfies RuntimeStep);
@@ -220,17 +221,17 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 					extra = session.context.pages().slice(0, 4).map((tab, i) => "tab " + i + (tab === session.page ? " (active)" : "") + ": " + tab.url()).join("\n");
 					break;
 				case "new_tab": {
-					if (session.context.pages().length >= 4) return { text: "The browser supports at most four tabs.", failed: true };
+					if (session.context.pages().length >= 8) return { text: "The browser supports at most eight tabs.", failed: true };
 					const tab = await session.context.newPage();
 					try { if (action.url) { await assertPublicHttpUrl(action.url); await tab.goto(action.url, { waitUntil: "domcontentloaded", timeout: 20_000 }); } }
 					catch (cause) { await tab.close(); throw cause; }
-					session.page = tab; session.refs.clear(); session.snapshotUrl = "";
+					session.page = tab; await tab.bringToFront(); session.refs.clear(); session.snapshotUrl = "";
 					extra = "Opened a new browser tab."; break;
 				}
 				case "switch_tab": {
 					const tab = session.context.pages()[action.tabIndex!];
 					if (!tab) return { text: "Tab not found; request tabs to inspect open tabs.", failed: true };
-					session.page = tab; session.refs.clear(); session.snapshotUrl = "";
+					session.page = tab; await tab.bringToFront(); session.refs.clear(); session.snapshotUrl = "";
 					extra = "Switched to tab " + action.tabIndex + "."; break;
 				}
 				case "close_tab": {
@@ -239,7 +240,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 					const tab = all[action.tabIndex!];
 					if (!tab) return { text: "Tab not found.", failed: true };
 					await tab.close();
-					if (session.page === tab) session.page = session.context.pages()[0];
+					if (session.page === tab) { session.page = session.context.pages()[0]; await session.page.bringToFront(); }
 					session.refs.clear(); session.snapshotUrl = "";
 					extra = "Closed tab " + action.tabIndex + "."; break;
 				}
@@ -276,7 +277,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 		if (supersededByUser) return result;
 		const authIssue = await checkSavedBrowserHealth(session);
     if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op, marker);
-    scheduleIdleClose(session, id);
+    scheduleIdleClose(session, sessionKey);
     if (!("failed" in result && result.failed) && action.op !== "snapshot") clearBrowserStall(id);
     return authIssue ? { text: authIssue, failed: true } : result;
 	} catch (cause) {
