@@ -21,12 +21,14 @@ PROJECT_AGENT_BROWSER_AGENT=1
 PROJECT_AGENT_STEEL_BROWSER=1
 PROJECT_AGENT_STEEL_API_URL=https://api.steel.dev
 PROJECT_AGENT_STEEL_API_KEY=your-server-only-key
+# 15 minutes by default; increase only if your Steel plan supports it
+PROJECT_AGENT_STEEL_SESSION_TIMEOUT_MS=900000
 # ONLY after deploying an access-controlled viewer proxy:
 PROJECT_AGENT_STEEL_TRUSTED_VIEWER=1
 PROJECT_AGENT_STEEL_VIEWER_ORIGIN=https://viewer.example.com
 ```
 
-The browser feature is **off by default**. No Steel credentials belong in client bundles.
+The browser feature is **off by default**. No Steel credentials belong in client bundles. The trusted viewer proxy must preserve the Steel player path `/v1/sessions/:id/player` and enforce authorization before forwarding requests.
 
 **Critical security warning:** Steel `debugUrl` is a bearer capability that can grant visual access and remote input. An origin allowlist alone DOES NOT authenticate that capability. Do not set `PROJECT_AGENT_STEEL_TRUSTED_VIEWER=1` unless the viewer origin is behind a production-grade authenticated reverse proxy enforcing the same owner/project access checks, preventing URL leaks, disabling unauthorized access and preserving `no-store`. The API deliberately suppresses the viewer unless this flag and origin check pass. Returning a viewer URL to the authenticated Project owner is not equivalent to securing the remote endpoint.
 

@@ -54,6 +54,7 @@ export async function agentBrowserSession(input: {
     if (session.activeAgentTaskId !== input.taskId) {
       session.activeAgentTaskId = input.taskId;
       session.operationCount = 0;
+      session.refs.clear(); session.snapshotUrl = ""; session.lastSnapshot = "";
     }
   } else session.chatId = input.chatId;
   return { id, session, shared: Boolean(shared) };

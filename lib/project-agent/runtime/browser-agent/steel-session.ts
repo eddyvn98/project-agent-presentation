@@ -44,11 +44,14 @@ export async function connectSteelSession(): Promise<SteelConnection> {
   if (process.env.PROJECT_AGENT_STEEL_BROWSER !== "1")
     throw new Error("Project browser requires PROJECT_AGENT_STEEL_BROWSER=1");
   const base = apiBase();
+  const hardTimeout = Number(process.env.PROJECT_AGENT_STEEL_SESSION_TIMEOUT_MS);
+  const timeout = Number.isSafeInteger(hardTimeout) && hardTimeout >= 60_000 &&
+    hardTimeout <= 86_400_000 ? hardTimeout : 900_000;
   const response = await fetch(new URL("sessions", base), {
     method: "POST", headers: headers(), cache: "no-store",
     signal: AbortSignal.timeout(20_000),
     body: JSON.stringify({ dimensions: { width: 1280, height: 800 },
-      timeout: 60 * 60_000, inactivityTimeout: 30 * 60_000,
+      timeout, inactivityTimeout: Math.min(30 * 60_000, timeout - 1000),
       debugConfig: { interactive: true } }),
   });
   if (!response.ok) throw new Error("Steel session creation failed (HTTP " + response.status + ")");
