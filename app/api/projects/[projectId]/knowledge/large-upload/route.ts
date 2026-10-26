@@ -1,3 +1,4 @@
+import { reconcileAutoSkillSources } from "@/lib/project-agent/auto-skills/worker";
 import { NextRequest, NextResponse } from "next/server";
 import * as cap from "@/lib/capabilities/project";
 import type { KnowledgeFile } from "@/stores/useProjectStore";
@@ -55,6 +56,7 @@ export async function PUT(req: NextRequest, { params }: { params: { projectId: s
 			await cap.deleteKnowledgeOriginal(file.id, auth.ownerEmail!);
 			return NextResponse.json({ error: result.error }, { status: 500 });
 		}
+		await reconcileAutoSkillSources(params.projectId, auth.ownerEmail!).catch(() => {});
 		return NextResponse.json({ complete: true, project: projectAccessView(result.data!, auth.access!) }, { status: 201 });
 	} catch (error) {
 		return NextResponse.json({ error: error instanceof Error ? error.message : "Could not store upload chunk" }, { status: 400 });

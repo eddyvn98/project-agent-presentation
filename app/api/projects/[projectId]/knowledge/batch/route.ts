@@ -1,3 +1,4 @@
+import { reconcileAutoSkillSources } from "@/lib/project-agent/auto-skills/worker";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import * as cap from "@/lib/capabilities/project";
@@ -78,6 +79,7 @@ export async function POST(
 
   // Re-index vector store asynchronously (don't block response)
   indexProjectKnowledge(projectId, ownerEmail).catch(() => {});
+  await reconcileAutoSkillSources(projectId, ownerEmail).catch(() => {});
 
   return NextResponse.json(
 	    { project: projectAccessView(batchResult.data!, auth.access!), errors },

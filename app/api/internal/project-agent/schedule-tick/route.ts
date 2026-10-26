@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
+import { tickAutoSkillJobs } from "@/lib/project-agent/auto-skills/worker";
 import { migrateLegacyTaskQueue } from "@/lib/project-agent/durable-queue-migration";
 import { migrateLegacyScheduleFiles } from "@/lib/project-agent/scheduled-migration";
 import { dispatchDueSchedules } from "@/lib/project-agent/scheduled-worker";
@@ -28,9 +29,10 @@ export async function POST(req: NextRequest) {
       ? await migrateProactiveInsightHistory() : undefined;
     const result = await dispatchDueSchedules();
     const queue = await tickDurableTasks();
+    const autoSkills = await tickAutoSkillJobs().catch(() => ({ attempted: 0, ready: 0 }));
     const workflows = await tickWorkflowRuns();
     const proactive = await discoverProactiveOpportunities().catch(() => null);
     return NextResponse.json({ dispatched: result.filter(r => r.status === "dispatched").length,
-      attempted: result.length, queue, workflows, proactive, ...(migration ? { migration } : {}), ...(queueMigration ? { queueMigration } : {}), ...(signalMigration ? { signalMigration } : {}) });
+      attempted: result.length, queue, autoSkills, workflows, proactive, ...(migration ? { migration } : {}), ...(queueMigration ? { queueMigration } : {}), ...(signalMigration ? { signalMigration } : {}) });
   } catch { return NextResponse.json({ error: "Scheduler unavailable" }, { status: 503 }); }
 }

@@ -1,3 +1,4 @@
+import { reconcileAutoSkillSources } from "@/lib/project-agent/auto-skills/worker";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import * as cap from "@/lib/capabilities/project";
@@ -71,6 +72,7 @@ export async function POST(
       const result = await cap.addKnowledgeFile(projectId, auth.ownerEmail!, kf, sections ?? text, buffer);
       if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
       indexProjectKnowledge(projectId, auth.ownerEmail!).catch(() => {});
+      await reconcileAutoSkillSources(projectId, auth.ownerEmail!).catch(() => {});
       return NextResponse.json({ project: projectAccessView(result.data!, auth.access!) }, { status: 201 });
     }
   } catch (err: unknown) {
@@ -97,6 +99,7 @@ export async function DELETE(
 
   // Rebuild vector index after file removal (async)
   indexProjectKnowledge(projectId, auth.ownerEmail!).catch(() => {});
+  await reconcileAutoSkillSources(projectId, auth.ownerEmail!).catch(() => {});
 
   return NextResponse.json({ project: projectAccessView(result.data!, auth.access!) });
 }

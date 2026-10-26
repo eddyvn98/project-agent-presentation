@@ -1,4 +1,6 @@
 import { createHash } from "crypto";
+import { reconcileAutoSkillSources } from "./auto-skills/worker";
+import { loadAutoSkillSet } from "./auto-skills/context";
 import * as projectCap from "@/lib/capabilities/project";
 import { cacheDifyGeneratedFiles, findDifyGeneratedFileLinks, hasUnreachableDifySandboxFileLink } from "./files";
 import { uploadProjectAgentTaskInputFiles, uploadProjectKnowledgeFiles, type DifyChatFile } from "./dify-input-files";
@@ -104,6 +106,15 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		};
 		const classicTurn = (request: DifyCalculatorCall) => callDifyWithCalculator({ ...request, originalRequest: task.userPrompt ?? task.prompt, calculatorEnabled: !projectAccess.project.disabledToolGroups?.includes("code"), onBridgeEvent: (tool, detail) => updateProjectAgentTask(task.id, { logLine: `using tool ${tool} :: ${detail.replace(/\s+/g, " ").slice(0, 200)}` }) });
 		const skillSet = await loadProjectSkillSet(projectAccess.project.skillIds, projectAccess.ownerEmail, task.userPrompt ?? task.prompt);
+    if (process.env.PROJECT_AGENT_AUTO_SKILLS === "1") {
+      await reconcileAutoSkillSources(task.projectId, projectOwnerEmail).catch(() => {});
+      const auto = await loadAutoSkillSet(task.projectId, projectOwnerEmail, task.userPrompt ?? task.prompt).catch(() => null);
+      if (auto) {
+        const priorRead = skillSet.read;
+        skillSet.context += auto.context ? "\n\n" + auto.context : "";
+        skillSet.read = (request) => request.skillId.startsWith("auto_") ? auto.read(request) : priorRead(request);
+      }
+    }
     const personalMemory = await personalMemoryPrompt(task.ownerEmail); if (personalMemory) skillSet.context += "\n\n" + personalMemory;
     const crossProjectSkills = await personalSkillsPrompt(task.ownerEmail); if (crossProjectSkills) skillSet.context += "\n\n" + crossProjectSkills;
 		let savedSources: AgentWebSource[] = [];
