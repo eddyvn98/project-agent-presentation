@@ -30,7 +30,7 @@ import { runPlanAction } from "./plan-action";
 import { runWait } from "./wait-action";
 import { prefetchReference } from "./reference-prefetch";
 import { proposeTaskReference } from "./reference-candidates";
-import { runBrowserAction } from "./browser-agent"; import { activeProjectBrowser } from "./browser-agent/project-sessions";
+import { runBrowserAction } from "./browser-agent"; import { finishProjectAgent } from "./browser-agent/project-sessions";
 import { closeBrowserSession } from "./browser-agent/session"; import { clearBrowserControl, browserControlState } from "./browser-agent/control"; import { finalizeP8BrowserLoop } from "./browser-agent/loop-finalize"; import { resumedBrowserContext, browserPlanOutdated } from "./browser-agent/handback";
 import { transcribeTables } from "./table-transcribe";
 import type { ProjectAgentTaskSource } from "../types";
@@ -114,7 +114,7 @@ export async function runRuntimeAgent(input: RuntimeInput): Promise<DifyAgentMes
 		if (!input.depth) {
 			input.onStep?.({ tool: "trajectory", detail: trajectoryLine(analyzeTrajectory(input.trace!)) });
 			if (input.taskId) await writeTrace(input.taskId, input.trace!);
-			if (input.taskId) clearBrowserControl(input.taskId); if (input.projectId && input.ownerEmail) { const shared = activeProjectBrowser(input.projectId, input.ownerEmail); if (shared?.activeAgentTaskId === input.taskId) shared.activeAgentTaskId = undefined; } await closeBrowserSession(input.taskId ?? input.chatId).catch(() => {}); await finalizeP8BrowserLoop(input.taskId, input.onStep);
+			if (input.taskId) clearBrowserControl(input.taskId); if (input.projectId && input.ownerEmail) await finishProjectAgent(input.projectId, input.ownerEmail, input.taskId).catch(() => {}); await closeBrowserSession(input.taskId ?? input.chatId).catch(() => {}); await finalizeP8BrowserLoop(input.taskId, input.onStep);
 		}
 		const seconds = (ms: number) => Math.round(ms / 1000);
 		input.onStep?.({ tool: "metrics", detail: `total_s=${seconds(Date.now() - started)} model_s=${seconds(metrics.modelMs)} action_s=${seconds(metrics.actionMs)} reference_ms=${metrics.referenceMs} steps=${metrics.rounds} prompt_tokens=${metrics.promptTokens} step_tokens=${metrics.stepTokens.slice(0, 30).join("/")} out_max=${Math.max(0, ...metrics.stepOut)} out_total=${metrics.stepOut.reduce((a, b) => a + b, 0)} step_out=${metrics.stepOut.slice(0, 30).join("/")} compactions=${metrics.compactions} invalid=${metrics.invalid} failed=${metrics.failed} context_captures=${input.contextStats?.captures ?? 0} context_kept_bytes=${input.contextStats?.storedBytes ?? 0} context_returned_bytes=${input.contextStats?.returnedBytes ?? 0} model=${input.modelSelector || "default"} cost_usd=${estimatedModelCost(input.modelSelector || "default", metrics.promptTokens, metrics.stepOut.reduce((n,v)=>n+v,0))?.toFixed(6) ?? "unknown"} tools=${[...metrics.actions].map(([name, count]) => `${name}:${count}`).join(",") || "none"}${input.subUsage ? ` sub_runs=${input.subUsage.runs} sub_steps=${input.subUsage.steps} sub_tokens=${input.subUsage.tokens} sub_models=${[...input.subUsage.models].join(",")}` : ""}` });
@@ -134,7 +134,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 		query = `${query}\n\n${reference.text}`;
 	}
 	const workspaceContext = await initialWorkspacePrompt(input);
-	if (workspaceContext) query = `${query}\n\n${workspaceContext}`; const shared = input.projectId && input.ownerEmail ? activeProjectBrowser(input.projectId, input.ownerEmail) : null; if (shared) query += "\n\nA shared browser is open. Inspect its current tab via browser snapshot before acting; do not create a new browser.";
+	if (workspaceContext) query = `${query}\n\n${workspaceContext}`; if (input.projectId && input.ownerEmail && process.env.PROJECT_AGENT_STEEL_BROWSER === "1") query += "\n\nUse the Project shared browser for browser actions; the Agent can open it if necessary. Start by taking a fresh snapshot of the user tab.";
 	let images: DifyChatFile[] = [];
 	if (!conversationId && !input.depth) {
 		const photos = await inputPhotoSheets(input.chatId, input.user).catch(() => null);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
-import { activeProjectBrowser, openProjectBrowser, stopProjectBrowser,
+import { findProjectBrowser, openProjectBrowser, stopProjectBrowser,
   projectBrowserOperation, projectBrowserStatus } from "@/lib/project-agent/runtime/browser-agent/project-sessions";
 
 export const runtime = "nodejs";
@@ -28,8 +28,8 @@ function sameOrigin(req: NextRequest) {
 export async function GET(req: NextRequest, { params }: Params) {
   const checked = await authorize(req, params.projectId);
   if (checked.response) return checked.response;
-  const session = activeProjectBrowser(params.projectId, checked.owner!);
-  return NextResponse.json(session ? projectBrowserStatus(session) : { connected: false },
+  const session = await findProjectBrowser(params.projectId, checked.owner!);
+  return NextResponse.json(session ? await projectBrowserStatus(session) : { connected: false },
     { headers: HEADERS });
 }
 export async function POST(req: NextRequest, { params }: Params) {
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   try {
     const session = data.op === "start" ?
       await openProjectBrowser(params.projectId, checked.owner!) :
-      activeProjectBrowser(params.projectId, checked.owner!);
+      await findProjectBrowser(params.projectId, checked.owner!);
     if (!session) return NextResponse.json({ error: "Open a browser session first" },
       { status: 409, headers: HEADERS });
     if (data.op !== "start")
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         width: typeof data.width === "number" ? data.width : undefined,
         height: typeof data.height === "number" ? data.height : undefined,
       });
-    return NextResponse.json(projectBrowserStatus(session), { headers: HEADERS });
+    return NextResponse.json(await projectBrowserStatus(session), { headers: HEADERS });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message.slice(0, 180) :
       "Browser operation failed" }, { status: 409, headers: HEADERS });

@@ -1,63 +1,75 @@
-# Shared Project Browser — Steel integration (feature gated)
+# Shared Project Browser — Steel integration (review fixes)
 
-This branch introduces a **Project-owned browser** alongside the older task-owned Browser Watch.
+The shared Project Browser is **feature gated** and is separate from the legacy per-task Browser Watch.
 
-## Intent
-- Open the browser from Project Agent chat **before** sending a prompt.
-- Attach Agent Playwright/CDP to that **same** Chromium session; do not clone tabs or cookies.
-- Keep the browser alive after Agent completion. Stop closes only the Agent task.
-- Up to eight tabs within a session; user selection is reflected in the active Agent page.
-- Desktop default (1280x800), mobile preset (390x844), and responsive viewport changes.
-- Browser canvas is the Steel website viewer; app controls are outside the canvas.
-- Take control / hand back to the Agent: the browser operation lock serializes tasks, and the Agent waits before its next action. A time-limited takeover expires after five minutes without a human heartbeat.
+## Fixed in this revision
+
+- Project browser records now live in MongoDB, keyed by Project + normalized owner.
+- Mongo compare-and-swap prevents competing Next workers from creating separate Steel sessions.
+- Each Next worker attaches its own CDP connection to the **same remote Steel session ID**, rather than relying on process-global Playwright objects.
+- User-first and Agent-first workflows now use the same browser when `PROJECT_AGENT_STEEL_BROWSER=1`.
+- A distributed control row prevents two Agent tasks and human/Agent actions from executing concurrently. Takeover waits for an active operation to finish; handback does not close the browser.
+- The selected tab is stored with the session so newly attached workers recover the same active tab.
+- Agent completion releases only the Agent's task lease; it does **not** terminate the Steel session.
+- Remote Steel release is issued on explicit user close. A worker disconnect only closes its CDP connection.
+- Existing guarded HTTP request and website policy protections remain enabled.
+- Viewer remains disabled by default because the Steel debug player URL is an unauthenticated bearer capability.
 
 ## Configuration
 
-Server-side environment variables:
+Set on your server (not in client-side env):
 
 ```dotenv
 PROJECT_AGENT_RUNTIME=sandbox
 PROJECT_AGENT_BROWSER_AGENT=1
 PROJECT_AGENT_STEEL_BROWSER=1
 PROJECT_AGENT_STEEL_API_URL=https://api.steel.dev
-PROJECT_AGENT_STEEL_API_KEY=your-server-only-key
-# 15 minutes by default; increase only if your Steel plan supports it
+PROJECT_AGENT_STEEL_API_KEY=YOUR_SERVER_SIDE_KEY
 PROJECT_AGENT_STEEL_SESSION_TIMEOUT_MS=900000
-# ONLY after deploying an access-controlled viewer proxy:
-PROJECT_AGENT_STEEL_TRUSTED_VIEWER=1
-PROJECT_AGENT_STEEL_VIEWER_ORIGIN=https://viewer.example.com
 ```
 
-The browser feature is **off by default**. No Steel credentials belong in client bundles. The trusted viewer proxy must preserve the Steel player path `/v1/sessions/:id/player` and enforce authorization before forwarding requests.
+The Steel Cloud hard session timeout depends on the account plan. No local timer can override Steel's hard expiry.
 
-**Critical security warning:** Steel `debugUrl` is a bearer capability that can grant visual access and remote input. An origin allowlist alone DOES NOT authenticate that capability. Do not set `PROJECT_AGENT_STEEL_TRUSTED_VIEWER=1` unless the viewer origin is behind a production-grade authenticated reverse proxy enforcing the same owner/project access checks, preventing URL leaks, disabling unauthorized access and preserving `no-store`. The API deliberately suppresses the viewer unless this flag and origin check pass. Returning a viewer URL to the authenticated Project owner is not equivalent to securing the remote endpoint.
+### Local development only
 
-The app still performs its existing guarded HTTP routing and site policy checks when Playwright attaches. Steel must run on a trusted service; do not connect untrusted CDP servers. The code does **not** enable CAPTCHA bypass, proxy identity spoofing, or extension-based access.
+You can opt into the directly embedded local Steel player for isolated development:
 
-## Remaining deployment acceptance gates
+```dotenv
+PROJECT_AGENT_STEEL_API_URL=http://127.0.0.1:3000
+PROJECT_AGENT_STEEL_LOCAL_VIEWER=1
+```
 
-1. Validate the deployed Steel provider version and `websocketUrl` / `debugUrl` response contract.
-2. Deploy a private viewer proxy and validate iframe framing, WebRTC connection, click/keyboard takeover, and viewport-resize mapping with a real browser.
-3. Test owner vs nonmember and cross-project isolation, including URL leakage, forged Origin, Stop, reconnect and process restart.
-4. Test real multiworker routing: the current live Playwright session registry is **process-local**. Production requires routing browser API/Agent workers to the owning Browser Session Service; Mongo lease does not share an in-memory Playwright object.
-5. Verify multi-session behavior of the deployed Steel edition. Some self-host builds use a singleton browser process.
-6. Confirm end-of-task persistence, tab switching, session expiration, SSO behavior and cleanup after Steel or host crashes.
-7. Verify the Steel hard session `timeout` allowance; creating a 60-minute session does not guarantee it is available on every service plan.
+The local-player exception is disabled in production. Never expose this development Steel endpoint to an untrusted network.
 
-This is an **integration implementation, not a production sign-off**. Do not activate the viewer in a public deployment before the above gates.
+### Production viewer — requires a gateway
 
-## UI and API
+```dotenv
+PROJECT_AGENT_STEEL_PRIVATE_VIEWER=1
+PROJECT_AGENT_STEEL_VIEWER_PREFIX=/private-steel-viewer
+```
 
-The header Globe control opens the Project-owned right panel. It calls:
-- `GET /api/projects/:projectId/agent/browser` — owner-scoped session status.
-- `POST .../browser` — `start`, `takeover`, `release`, `heartbeat`, `navigate`, `new_tab`, `switch_tab`, `close_tab`, `viewport`.
-- `DELETE .../browser` — explicitly release the Steel browser.
+**Do not set these until an independent reverse proxy is installed and verified.** The path is an integration hook, not an implemented Next.js route. Your gateway must authenticate the same user, check Project membership and Steel session ownership, forward the WebRTC player and signaling transport, reject attempts to change `interactive=false` without takeover, and keep the Steel service inaccessible from untrusted clients. The Steel player is **not self-authenticating**. A UI-only `pointer-events: none` gate is NOT a security boundary.
 
-Control POST/DELETE calls require a same-origin Origin header. Sessions are per Project + authenticated caller email. Existing task-only browser routes remain available as fallback when Steel is disabled.
+The selected iframe viewer uses Steel's `interactive=false` while the Agent controls it and `interactive=true` after takeover. This is UI defense-in-depth only; a production deployment still needs transport-level authorization and fencing.
 
-## Known limitations
-- Browser tasks retain the existing 25-minute Agent run deadline and action safeguards; those are independent of the shared browser session.
-- Steel enforces its own hard lifetime and may terminate the session while the UI is open.
-- The viewport is shared for all tabs in one browser window.
-- Sensitive logins require dedicated validation; this integration intentionally does not copy the personal Vault's storage state into a new Steel profile.
-- The UI suppresses iframe pointer events when Agent has control, but a protected viewer proxy is still necessary to prevent anyone with the raw debug URL from controlling the session.
+## Architecture
+
+- `project-registry.ts`: Mongo-backed session ID, creation CAS, expiry and selected tab.
+- `project-control-db.ts`: distributed task ownership, exclusive operation lock and human handback.
+- `project-sessions.ts`: attach/detach, tab control and API lifecycle.
+- `steel-session.ts`: Steel REST session creation/release, remote CDP attach.
+- `session.ts`: Playwright runtime with existing security guard and a shared-session operation gate.
+- `ProjectAgentProjectBrowser.tsx`: right panel, responsive viewport, tabs and takeover controls.
+
+## Acceptance tests that still require the actual host
+
+1. Run TypeScript and focused unit tests in the host checkout, then browser E2E signed in as owner and nonmember.
+2. Verify Steel Cloud or self-host version supports `GET /v1/sessions/:id` returning the needed CDP details, and remote CDP reconnect.
+3. Open browser manually; navigate and authenticate; command Agent; see same live tab; manually take over; hand back; stop the Agent without losing the page.
+4. Repeat with two Next workers using one MongoDB and one Steel service. Test two simultaneous open calls and overlapping Agent actions.
+5. Test browser restart, Steel session hard timeout, reconnect and cleanup.
+6. Test custom viewer gateway auth for player HTML, WebRTC signaling and all input paths. Never publish a naked Steel `debugUrl`.
+7. Check fullscreen/browser-chrome requirements versus Steel's fixed fullscreen dimensions and inspect mobile identity behavior.
+8. Assess website WebSocket support: the existing safety router currently closes remote WebSockets, so some live apps can fail.
+
+**Not production ready until the viewer gateway and real-host tests pass.** The browser's lifecycle and distributed locking are implemented in the repo, but the protected WebRTC gateway is deployment infrastructure and is not included.

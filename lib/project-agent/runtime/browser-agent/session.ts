@@ -2,14 +2,15 @@ import type { Browser, BrowserContext, Page } from "playwright-core";
 import { BrowserSlotPool } from "./slot-pool";
 import { bindG2BrowserOwnership, assertG2BrowserOwnership, changeG2HumanControl } from "./g2-ownership";
 import { launchChromium } from "../browser-launcher";
-import { guardedRequest } from "../guarded-fetch";
-import { assertPublicWebSocketUrl, bindAbort } from "./safety";
+import { installBrowserRouteGuard } from "./session-routing";
+import { bindAbort } from "./safety";
 import { readPersonalBrowserGrant, vaultHost } from "./personal-vault";
-import { checkBrowserSitePolicy } from "../../browser-security-policy";
+import { projectRecordByKey } from "./project-registry";
 import { publicBrowserWatchLocation } from "./watch";
 import { safeBrowserConsoleEntry } from "./privacy";
-import { connectSteelSession } from "./steel-session";
-import { projectBrowserControl } from "./project-control";
+import { connectSteelSession, type SteelConnection } from "./steel-session";
+import { withProjectControlOp } from "./project-control-db";
+
 const MAX_CONTEXTS = 3;
 const OP_TIMEOUT_MS = 35_000;
 const IDLE_CLOSE_MS = 5 * 60_000;
@@ -62,7 +63,7 @@ export interface BrowserSession {
 	g2RefEpoch?: number;
 	owner?: string;
 	chatId?: string;
-  scopeId?: string; viewerUrl?: string | null; persistent?: boolean; activeAgentTaskId?: string; steel?: boolean;
+  scopeId?: string; steelId?: string; viewerUrl?: string | null; persistent?: boolean; activeAgentTaskId?: string; steel?: boolean;
 	authHost?: string;
 	authMode?: "read" | "interact";
 	authVersion?: string;
@@ -102,32 +103,6 @@ async function getSharedBrowser(): Promise<Browser> {
   if (!sharedBrowser) sharedBrowser = launchChromium().catch((error) => { sharedBrowser = null; throw error; });
   return sharedBrowser;
 }
-async function routeGuard(context: BrowserContext, current: () => BrowserSession | undefined): Promise<void> {
-	await context.routeWebSocket(/.*/, async (socket) => {
-		try { await assertPublicWebSocketUrl(socket.url()); } catch { /* blocked below */ }
-		await socket.close();
-	});
-	await context.route("**/*", async (route) => {
-		try {
-			const req = route.request();
-      const active = current();
-      if (active?.owner && (req.isNavigationRequest() || !["GET","HEAD","OPTIONS"].includes(req.method().toUpperCase())))
-        await checkBrowserSitePolicy(active.owner, req.url(), req.isNavigationRequest() ? "open" : "submit");
-      if (active?.authMode === "read" && !["GET","HEAD","OPTIONS"].includes(req.method().toUpperCase())) {
-        await route.abort("blockedbyclient").catch(() => {});
-        return;
-      }
-			const { host: _host, "content-length": _length, ...headers } = await req.allHeaders();
-			const response = await guardedRequest(req.url(), {
-				method: req.method(), headers, body: req.postDataBuffer() ?? undefined,
-				timeoutMs: OP_TIMEOUT_MS, maxBytes: 25 * 1024 * 1024,
-			});
-			// A cut-off body would hand the page (or a download) a corrupted file; fail the request instead.
-			if (response.truncated) { await route.abort("failed").catch(() => {}); return; }
-			await route.fulfill({ status: response.status, headers: response.headers, body: response.body });
-		} catch { await route.abort("blockedbyclient").catch(() => {}); }
-	});
-}
 export async function getBrowserSession(id: string, signal?: AbortSignal, owner?: string): Promise<BrowserSession> {
 	const existing = sessions.get(id) ?? qaActive(id);
 	if (existing) { if (existing.page.isClosed() || !existing.browser.isConnected()) { await existing.close(); return getBrowserSession(id, signal, owner); } if (owner && existing.owner && existing.owner !== owner.trim().toLowerCase()) throw new Error("Browser owner mismatch"); if (owner && !existing.owner) existing.owner = owner.trim().toLowerCase(); existing.lastUsed = Date.now(); return existing; }
@@ -146,22 +121,33 @@ async function createBrowserSession(id: string, signal?: AbortSignal, owner?: st
 	let session: BrowserSession | undefined;
 	const releaseSlot = await slots.acquire(signal);
 	let context: BrowserContext | undefined;
+  let steelConnection: SteelConnection | null = null;
 	try {
 		if (signal?.aborted) throw new Error("Browser task was stopped");
-        const steel = id.startsWith("pb_") ? await connectSteelSession() : null;
+        const record = id.startsWith("pb_") && owner ?
+          await projectRecordByKey(id, owner) : null;
+        if (id.startsWith("pb_") && !record?.steelId)
+          throw new Error("Shared browser must be created through the project API");
+        const steel = record?.steelId ?
+          await connectSteelSession(record.steelId) : null;
+        steelConnection = steel;
         const browser = steel?.browser ?? await getSharedBrowser();
-        context = steel?.context ?? await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true, serviceWorkers: "block" });
-        try { await routeGuard(context, () => session); }
-        catch (error) { await steel?.release(); throw error; }
-        const page = steel?.page ?? await context.newPage();
+        context = steel?.context ?? await browser.newContext({
+          viewport: { width: 1280, height: 800 }, acceptDownloads: true, serviceWorkers: "block",
+        });
+        try { await installBrowserRouteGuard(context, () => session); }
+        catch (error) { await steel?.disconnect(); throw error; }
+        const page = steel && record ?
+          (context.pages()[record.activeTabIndex ?? 0] ?? steel.page) :
+          await context.newPage();
 		let closed = false;
 		session = {
-			browser, context, page, scopeId: id, steel: Boolean(steel), viewerUrl: steel?.viewerUrl, persistent: Boolean(steel), owner: owner?.trim().toLowerCase(), refs: new Map(), snapshotUrl: "", lastSnapshot: "", lastUsed: Date.now(), operationCount: 0, console: [], network: [],
+			browser, context, page, scopeId: id, steelId: steel?.id, steel: Boolean(steel), viewerUrl: steel?.viewerUrl, persistent: Boolean(steel), owner: owner?.trim().toLowerCase(), refs: new Map(), snapshotUrl: "", lastSnapshot: "", lastUsed: Date.now(), operationCount: 0, console: [], network: [],
 			close: async () => {
 				if (closed) return;
 				closed = true;
 				if (sessions.get(id) === session) sessions.delete(id);
-				if (steel) await steel.release(); else await session!.context.close().catch(() => {});
+				if (steel) await steel.disconnect(); else await session!.context.close().catch(() => {});
 				releaseSlot();
 				if (!steel && slots.active === 0) {
 					browserIdleTimer = setTimeout(() => { if (slots.active !== 0 || pendingSessions.size > 0) return; const current = sharedBrowser; sharedBrowser = null; void current?.then((instance) => instance.close()).catch(() => {}); }, 30_000);
@@ -174,7 +160,8 @@ async function createBrowserSession(id: string, signal?: AbortSignal, owner?: st
 		if (!steel) bindAbort(signal, () => { void session?.close(); });
 		return session;
 	} catch (cause) {
-		await context?.close().catch(() => {});
+		if (steelConnection) await steelConnection.disconnect().catch(() => {});
+    else await context?.close().catch(() => {});
 		releaseSlot();
 		throw cause;
 	}
@@ -191,25 +178,23 @@ export function closeAllBrowserSessions(): Promise<void> {
 }
 const operationLocks = browserGlobal.__projectAgentBrowserOperationLocks ??= new WeakMap<BrowserSession, Promise<void>>();
 export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promise<T>,
-  countAgentAction = true, ownershipMode: "agent" | "human" = "agent"): Promise<T> {
+  countAgentAction = true, ownershipMode: "agent" | "human" | "system" = "agent"): Promise<T> {
 	const preceding = operationLocks.get(session) ?? Promise.resolve();
 	let unlock!: () => void;
 	const current = new Promise<void>((resolve) => { unlock = resolve; });
 	operationLocks.set(session, preceding.then(() => current));
 	await preceding;
-  if (ownershipMode === "agent" && session.persistent && projectBrowserControl(session.scopeId ?? "").paused) {
-    unlock(); throw new Error("User controls this browser; wait for handback before using stale page refs");
-  }
+
 	if (session.page.isClosed() || !session.browser.isConnected()) { unlock(); throw new Error("Browser session is closed"); }
 	if (countAgentAction) session.operationCount += 1;
 	if (countAgentAction && session.operationCount > 60) { unlock(); throw new Error("Browser action limit (60) reached for this task"); }
 	let humanLeaseChanged = false;
 	try {
-    if (ownershipMode === "human") {
+    if (ownershipMode === "human" && !session.persistent) {
       await changeG2HumanControl(session, "agent", "human");
       humanLeaseChanged = true;
     }
-    await assertG2BrowserOwnership(session, ownershipMode);
+    await assertG2BrowserOwnership(session, ownershipMode === "human" ? "human" : "agent");
   } catch (error) {
     if (humanLeaseChanged) await changeG2HumanControl(session, "human", "agent").catch(() => session.close());
     unlock(); throw error;
@@ -217,7 +202,11 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
 	session.lastUsed = Date.now();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
-		return await Promise.race([fn(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`Browser operation timed out after ${OP_TIMEOUT_MS / 1000} seconds`)), OP_TIMEOUT_MS); })]);
+		const protectedOp = () => session.persistent && session.scopeId ?
+      withProjectControlOp(session.scopeId, ownershipMode, session.activeAgentTaskId, async () => fn()) : fn();
+    return await Promise.race([protectedOp(), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`Browser operation timed out after ${OP_TIMEOUT_MS / 1000} seconds`)), OP_TIMEOUT_MS);
+    })]);
 	} catch (error) {
     if (error instanceof Error && error.message === `Browser operation timed out after ${OP_TIMEOUT_MS / 1000} seconds`)
       await session.close().catch(() => {});

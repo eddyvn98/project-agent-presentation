@@ -1,92 +1,123 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 
-/** Explicit Steel integration. Browser and debug URLs must never be logged. */
+export interface SteelDescriptor { id: string; timeout: number; }
 export interface SteelConnection {
-  browser: Browser; context: BrowserContext; page: Page;
-  viewerUrl: string | null; release(): Promise<void>;
+  id: string; browser: Browser; context: BrowserContext; page: Page;
+  viewerUrl: string | null; disconnect(): Promise<void>;
 }
 function apiBase(): URL {
   const raw = process.env.PROJECT_AGENT_STEEL_API_URL?.trim();
-  if (!raw) throw new Error("Set PROJECT_AGENT_STEEL_API_URL before opening a shared browser");
+  if (!raw) throw new Error("PROJECT_AGENT_STEEL_API_URL is required");
   const url = new URL(raw);
-  if (url.username || url.password || url.search || url.hash || !["http:", "https:"].includes(url.protocol))
-    throw new Error("Invalid Steel API URL");
-  if (url.protocol === "http:" && !["127.0.0.1", "localhost", "::1"].includes(url.hostname))
-    throw new Error("Steel API must use HTTPS outside loopback");
+  if (url.username || url.password || url.search || url.hash ||
+      !["http:", "https:"].includes(url.protocol)) throw new Error("Invalid Steel API URL");
+  if (url.protocol === "http:" && !["localhost", "127.0.0.1", "::1"].includes(url.hostname))
+    throw new Error("Steel HTTP API is allowed only on loopback");
   url.pathname = url.pathname.replace(/\/+$/, "").replace(/\/v1$/, "") + "/v1/";
   return url;
 }
-function headers(): Record<string, string> {
+function headers() {
   return { "Content-Type": "application/json",
-    ...(process.env.PROJECT_AGENT_STEEL_API_KEY ? { "steel-api-key": process.env.PROJECT_AGENT_STEEL_API_KEY } : {}) };
+    ...(process.env.PROJECT_AGENT_STEEL_API_KEY ?
+      { "steel-api-key": process.env.PROJECT_AGENT_STEEL_API_KEY } : {}) };
 }
-async function releaseSteel(base: URL, id: string): Promise<void> {
-  await fetch(new URL("sessions/" + encodeURIComponent(id) + "/release", base), {
-    method: "POST", headers: headers(), signal: AbortSignal.timeout(15_000),
-    cache: "no-store",
-  }).catch(() => undefined);
+function assertSessionId(value: unknown): string {
+  if (typeof value !== "string" || !/^[a-zA-Z0-9-]{8,80}$/.test(value))
+    throw new Error("Invalid Steel session identifier");
+  return value;
 }
-function trustedViewer(raw: string | undefined, sessionId: string): string | null {
-  if (!raw || process.env.PROJECT_AGENT_STEEL_TRUSTED_VIEWER !== "1") return null;
+function sessionTimeout(): number {
+  const raw = Number(process.env.PROJECT_AGENT_STEEL_SESSION_TIMEOUT_MS ?? 900_000);
+  if (!Number.isSafeInteger(raw) || raw < 60_000 || raw > 86_400_000)
+    throw new Error("Invalid Steel session timeout");
+  return raw;
+}
+export async function createSteelRemote(): Promise<SteelDescriptor> {
+  if (process.env.PROJECT_AGENT_STEEL_BROWSER !== "1")
+    throw new Error("Shared Steel browser is disabled");
+  const timeout = sessionTimeout();
+  const response = await fetch(new URL("sessions", apiBase()), {
+    method: "POST", cache: "no-store", headers: headers(),
+    signal: AbortSignal.timeout(25_000),
+    body: JSON.stringify({ timeout, inactivityTimeout: Math.min(30 * 60_000, timeout - 1000),
+      dimensions: { width: 1280, height: 800 },
+      headless: false, debugConfig: { interactive: true } }),
+  });
+  if (!response.ok) throw new Error("Steel create failed: HTTP " + response.status);
+  const body = await response.json() as { id?: string };
+  return { id: assertSessionId(body.id), timeout };
+}
+export async function releaseSteelRemote(id: string): Promise<void> {
+  const response = await fetch(new URL("sessions/" + assertSessionId(id) + "/release", apiBase()), {
+    method: "POST", cache: "no-store", headers: headers(),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok && response.status !== 404 && response.status !== 410)
+    throw new Error("Steel release failed: HTTP " + response.status);
+}
+function allowedCdpEndpoint(raw: string): URL {
+  const url = new URL(raw);
+  if (url.username || url.password || !["ws:", "wss:"].includes(url.protocol))
+    throw new Error("Invalid Steel CDP endpoint");
+  if (url.protocol === "ws:" && !["localhost", "127.0.0.1", "::1"].includes(url.hostname))
+    throw new Error("Plaintext Steel CDP endpoint denied");
+  const base = apiBase();
+  const trusted = process.env.PROJECT_AGENT_STEEL_CDP_HOST?.trim();
+  const cloud = "connect.steel.dev";
+  if (url.hostname !== base.hostname && url.hostname !== cloud && url.hostname !== trusted)
+    throw new Error("Unexpected Steel CDP host");
+  return url;
+}
+function securedViewer(steelId: string, raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
   try {
-    const source = new URL(raw);
-    const proxy = new URL(process.env.PROJECT_AGENT_STEEL_VIEWER_ORIGIN || "");
-    if (source.origin !== apiBase().origin) return null;
-    if (!source.pathname.endsWith("/sessions/" + sessionId + "/player")) return null;
-    if (proxy.username || proxy.password || proxy.search || proxy.hash || proxy.pathname !== "/") return null;
-    if (proxy.protocol !== "https:" && !(proxy.protocol === "http:" &&
-      ["127.0.0.1", "localhost", "::1"].includes(proxy.hostname))) return null;
-    return new URL(source.pathname + source.search, proxy).toString();
+    const parsed = new URL(raw);
+    if (parsed.origin !== apiBase().origin ||
+        !parsed.pathname.endsWith("/sessions/" + steelId + "/player")) return null;
+    const local = ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+    if (process.env.NODE_ENV !== "production" && local &&
+        process.env.PROJECT_AGENT_STEEL_LOCAL_VIEWER === "1")
+      return parsed.toString(); // Explicit private development-only opt-in.
+    if (process.env.PROJECT_AGENT_STEEL_PRIVATE_VIEWER !== "1") return null;
+    const prefix = process.env.PROJECT_AGENT_STEEL_VIEWER_PREFIX?.trim();
+    if (!prefix || !prefix.startsWith("/") || prefix.startsWith("//") || /[?#]/.test(prefix))
+      return null;
+    // Production requires a separately deployed auth-enforcing WebRTC reverse proxy.
+    return (prefix.endsWith("/") ? prefix.slice(0, -1) : prefix) + "/v1/sessions/" +
+      encodeURIComponent(steelId) + "/player";
   } catch { return null; }
 }
-/** The caller installs the existing guarded-fetch/policy interception on the returned context. */
-export async function connectSteelSession(): Promise<SteelConnection> {
-  if (process.env.PROJECT_AGENT_STEEL_BROWSER !== "1")
-    throw new Error("Project browser requires PROJECT_AGENT_STEEL_BROWSER=1");
-  const base = apiBase();
-  const hardTimeout = Number(process.env.PROJECT_AGENT_STEEL_SESSION_TIMEOUT_MS);
-  const timeout = Number.isSafeInteger(hardTimeout) && hardTimeout >= 60_000 &&
-    hardTimeout <= 86_400_000 ? hardTimeout : 900_000;
-  const response = await fetch(new URL("sessions", base), {
-    method: "POST", headers: headers(), cache: "no-store",
-    signal: AbortSignal.timeout(20_000),
-    body: JSON.stringify({ dimensions: { width: 1280, height: 800 },
-      timeout, inactivityTimeout: Math.min(30 * 60_000, timeout - 1000),
-      debugConfig: { interactive: true } }),
+/** GET refreshes the short-lived scoped CDP token when attaching from another worker. */
+export async function connectSteelSession(id: string): Promise<SteelConnection> {
+  const steelId = assertSessionId(id);
+  const response = await fetch(new URL("sessions/" + steelId, apiBase()), {
+    headers: headers(), cache: "no-store", signal: AbortSignal.timeout(15_000),
   });
-  if (!response.ok) throw new Error("Steel session creation failed (HTTP " + response.status + ")");
-  const session = await response.json() as {
-    id?: string; websocketUrl?: string; debugUrl?: string; sessionViewerUrl?: string;
-  };
-  if (!session.id || !/^[a-zA-Z0-9-]{8,80}$/.test(session.id))
-    throw new Error("Steel returned an invalid session id");
-  let browser: Browser | undefined;
+  if (!response.ok) throw new Error("Steel session unavailable: HTTP " + response.status);
+  const data = await response.json() as { id?: string; websocketUrl?: string; debugUrl?: string };
+  if (assertSessionId(data.id) !== steelId) throw new Error("Steel session identity mismatch");
+  const supplied = data.websocketUrl || (apiBase().hostname === "api.steel.dev" ?
+    "wss://connect.steel.dev?sessionId=" + encodeURIComponent(steelId) : "");
+  if (!supplied) throw new Error("Steel did not provide a CDP endpoint for this deployment");
+  const cdp = allowedCdpEndpoint(supplied);
+  // Steel Cloud can return a session-scoped CDP token. Preserve that token;
+  // only use the server-side API key if the endpoint has neither credential.
+  if (!cdp.searchParams.has("token") && !cdp.searchParams.has("apiKey") &&
+      process.env.PROJECT_AGENT_STEEL_API_KEY)
+    cdp.searchParams.set("apiKey", process.env.PROJECT_AGENT_STEEL_API_KEY);
+  if (!cdp.searchParams.has("sessionId") && cdp.hostname === "connect.steel.dev")
+    cdp.searchParams.set("sessionId", steelId);
+  const browser = await chromium.connectOverCDP(cdp.toString(), { timeout: 20_000 });
   try {
-    if (!session.websocketUrl) throw new Error("Steel did not provide a CDP websocket URL");
-    const cdp = new URL(session.websocketUrl);
-    if (!["ws:", "wss:"].includes(cdp.protocol)) throw new Error("Invalid Steel CDP URL");
-    if (cdp.protocol === "ws:" && !["localhost", "127.0.0.1", "::1"].includes(cdp.hostname))
-      throw new Error("Steel CDP requires TLS outside loopback");
-    if (process.env.PROJECT_AGENT_STEEL_API_KEY && !cdp.searchParams.has("apiKey"))
-      cdp.searchParams.set("apiKey", process.env.PROJECT_AGENT_STEEL_API_KEY);
-    browser = await chromium.connectOverCDP(cdp.toString(), { timeout: 20_000 });
     const context = browser.contexts()[0];
-    if (!context) throw new Error("Steel did not expose an existing browser context");
+    if (!context) throw new Error("Steel remote browser has no default context");
     const page = context.pages()[0] ?? await context.newPage();
-    const connected = browser;
-    let released = false;
-    return { browser: connected, context, page,
-      viewerUrl: trustedViewer(session.debugUrl, session.id),
-      release: async () => {
-        if (released) return;
-        released = true;
-        await connected.close().catch(() => undefined);
-        await releaseSteel(base, session.id!);
-      },
+    return { id: steelId, browser, context, page,
+      viewerUrl: securedViewer(steelId, data.debugUrl),
+      disconnect: async () => { await browser.close().catch(() => {}); },
     };
   } catch (error) {
-    await browser?.close().catch(() => undefined);
-    await releaseSteel(base, session.id);
+    await browser.close().catch(() => {});
     throw error;
   }
 }

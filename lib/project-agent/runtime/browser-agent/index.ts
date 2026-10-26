@@ -18,7 +18,7 @@ import { getBrowserSession, scheduleIdleClose, withBrowserOp, restorePersonalBro
 import { captureBrowserWatch, finishBrowserWatch, type BrowserClickMarker } from "./watch";
 import { invalidateVisualFrame, observeVisualFrame, visualClick, visualType } from "./visual";
 import { browserRetryStalled, recordBrowserDomFailure, clearBrowserStall, P8_STALL_GUIDANCE } from "./stall-guard"; import { runP8BrowserLoopStep } from "./loop-step";
-import { waitForPageOrIntervention } from "./browser-wait"; import { agentBrowserSession, activeProjectBrowser } from "./project-sessions";
+import { waitForPageOrIntervention } from "./browser-wait"; import { agentBrowserSession } from "./project-sessions"; import { updateProjectActiveTab } from "./project-registry";
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 function snapshotRefLine(snapshot: string, ref: string): string {
 	return snapshot.split("\n").find((line) => line.includes(`[ref=${ref}]`)) ?? "";
@@ -28,7 +28,6 @@ function locatorForRef(session: BrowserSession, ref: string) {
 	if (!selector) throw new Error("That ref is not in the latest browser snapshot. Take a snapshot and use a current ref.");
 	return session.page.locator(selector);
 }
-
 function needsConfirmation(_input: RuntimeInput, _session: BrowserSession, label: string): boolean {
   return IRREVERSIBLE_PATTERN.test(label);
 }
@@ -38,7 +37,6 @@ async function approvalFor(input: RuntimeInput, session: BrowserSession, intent:
   return requireAgentApproval({ owner: input.ownerEmail ?? "", projectId: input.projectId ?? "",
     taskId: input.taskId ?? "", host, intent, scheduled: Boolean(input.scheduledRun) });
 }
-
 async function checkCaptcha(session: BrowserSession): Promise<string | null> {
 	const body = await session.page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
 	return isCaptchaPage(body.slice(0, 20_000)) ? "A CAPTCHA or bot-verification page is blocking this site. Stop here and use another source; I will not solve or evade it." : null;
@@ -148,7 +146,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 	if (process.env.PROJECT_AGENT_BROWSER_AGENT !== "1") return { text: "Browser agent is disabled. Set PROJECT_AGENT_BROWSER_AGENT=1 to enable it.", failed: true };
 	const id = input.taskId ?? input.chatId;
   if (action.op === "close") clearBrowserStall(id);
-  if (action.op === "close" && input.projectId && input.ownerEmail && activeProjectBrowser(input.projectId, input.ownerEmail))
+  if (action.op === "close" && input.projectId && input.ownerEmail && process.env.PROJECT_AGENT_STEEL_BROWSER === "1")
     return { text: "Detached from the shared Project browser. The user's tabs remain open." };
 	if (action.op === "close") { finishBrowserWatch(input.taskId ?? id); const session = await getBrowserSession(id, input.signal, input.ownerEmail); await session.close(); return { text: "Browser session closed." }; }
 	let session: BrowserSession;
@@ -218,7 +216,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 					extra = "Dragged the selected element to its target."; break;
 				}
 				case "tabs":
-					extra = session.context.pages().slice(0, 4).map((tab, i) => "tab " + i + (tab === session.page ? " (active)" : "") + ": " + tab.url()).join("\n");
+					extra = session.context.pages().slice(0, 8).map((tab, i) => "tab " + i + (tab === session.page ? " (active)" : "") + ": " + tab.url()).join("\n");
 					break;
 				case "new_tab": {
 					if (session.context.pages().length >= 8) return { text: "The browser supports at most eight tabs.", failed: true };
@@ -277,7 +275,9 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 		if (supersededByUser) return result;
 		const authIssue = await checkSavedBrowserHealth(session);
     if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op, marker);
-    scheduleIdleClose(session, sessionKey);
+    if (session.persistent && session.steelId) await updateProjectActiveTab(
+      sessionKey, session.steelId, Math.max(0, session.context.pages().indexOf(session.page)));
+    if (!session.persistent) scheduleIdleClose(session, sessionKey);
     if (!("failed" in result && result.failed) && action.op !== "snapshot") clearBrowserStall(id);
     return authIssue ? { text: authIssue, failed: true } : result;
 	} catch (cause) {

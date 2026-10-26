@@ -22,8 +22,9 @@ const labels = {
     error: "Không thể mở trình duyệt" },
 };
 const empty: Browser = { connected: false };
-function viewerUrl(raw: string): string {
+function viewerUrl(raw: string, interactive: boolean): string {
   const url = new URL(raw);
+  url.searchParams.set("interactive", String(interactive));
   url.searchParams.set("hideOverlay", "true");
   url.searchParams.set("hideInteractionDialog", "true");
   return url.toString();
@@ -44,6 +45,7 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
   const [resizing, setResizing] = useState(false);
   const canvas = useRef<HTMLDivElement>(null);
   const resized = useRef<number | null>(null);
+  const dismissed = useRef(false);
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const res = await fetch(base, { cache: "no-store", signal });
     if (!res.ok) throw new Error(ui.error + " (" + res.status + ")");
@@ -66,6 +68,7 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
     finally { setBusy(false); }
   };
   const show = async () => {
+    dismissed.current = false;
     setOpen(true); setBusy(true); setError("");
     try {
       const current = await refresh();
@@ -82,6 +85,18 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   };
+  useEffect(() => {
+    dismissed.current = false;
+    const abort = new AbortController();
+    const interval = window.setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const next = await refresh(abort.signal);
+        if (next.connected && !dismissed.current) setOpen(true);
+      } catch { /* The server can be unavailable while the chat mounts. */ }
+    }, 3000);
+    return () => { abort.abort(); window.clearInterval(interval); };
+  }, [projectId, refresh]);
   useEffect(() => {
     if (!open) return;
     const abort = new AbortController();
@@ -148,7 +163,7 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
               className="min-w-0 flex-1 rounded border px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-900" />
             <button type="submit" disabled={!paused || busy} className="rounded border px-2 text-xs disabled:opacity-40">{ui.go}</button>
           </form>
-          <button type="button" aria-label={ui.close} onClick={() => setOpen(false)}
+          <button type="button" aria-label={ui.close} onClick={() => { dismissed.current = true; setOpen(false); }}
             className="rounded p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
             <X className="h-4 w-4" />
           </button>
@@ -168,7 +183,7 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
         <div ref={canvas} className="relative min-h-0 flex-1 overflow-hidden bg-white dark:bg-slate-950">
           {status.connected && status.viewerUrl ?
             <iframe title="Shared live browser" referrerPolicy="no-referrer"
-              src={viewerUrl(status.viewerUrl)}
+              src={viewerUrl(status.viewerUrl, paused)}
               allow="autoplay; clipboard-read; clipboard-write"
               style={{ pointerEvents: paused ? "auto" : "none" }}
               className="h-full w-full border-0" /> :
