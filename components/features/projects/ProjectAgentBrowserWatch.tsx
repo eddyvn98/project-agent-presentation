@@ -12,13 +12,17 @@ type Preview = {
 };
 type BrowserStatus = { preview: Preview | null };
 type BrowserCommandResult = { ok: boolean; sequence?: number; privateLoginRequired?: boolean };
-export function ProjectAgentBrowserWatch({ projectId, taskId, running, language = "en" }: {
+export function ProjectAgentBrowserWatch({ projectId, taskId, running, language = "en",
+  manualMode = false, visible = true }: {
   projectId: string; taskId: string; running: boolean; language?: ActivityLanguage;
+  manualMode?: boolean; visible?: boolean;
 }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [loginOpen, setLoginOpen] = useState(false);
+  const [streamFailed, setStreamFailed] = useState(false);
+  const [streamEpoch, setStreamEpoch] = useState(0);
   const autoWatchStarted = useRef(false);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const actionQueue = useRef<Promise<BrowserCommandResult>>(Promise.resolve({ ok: true }));
@@ -63,6 +67,14 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     }, 1_600);
     return () => window.clearInterval(timer);
   }, [preview?.watching, refresh]);
+  useEffect(() => {
+    if (!visible || !running || manualMode || !preview?.watching) return;
+    const timer = window.setInterval(() => {
+      setStreamFailed(false);
+      setStreamEpoch(value => value + 1);
+    }, 12_000);
+    return () => window.clearInterval(timer);
+  }, [visible, running, manualMode, preview?.watching]);
   const command = async (action: Record<string, unknown>): Promise<BrowserCommandResult> => {
     setLoading(true); setError("");
     try {
@@ -102,7 +114,7 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     textTimer.current = window.setTimeout(() => { void flushText(); }, 280);
   }
   async function clickPreview(event: MouseEvent<HTMLDivElement>) {
-    if (!running || !preview?.hasImage) return;
+    if (!manualMode || !running || !preview?.hasImage) return;
     surfaceRef.current?.focus();
     const rect = event.currentTarget.getBoundingClientRect();
     await flushText();
@@ -111,7 +123,7 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     if (result?.privateLoginRequired) setLoginOpen(true);
   }
   async function scrollPreview(event: WheelEvent<HTMLDivElement>) {
-    if (!running || !preview?.hasImage) return;
+    if (!manualMode || !running || !preview?.hasImage) return;
     event.preventDefault();
     surfaceRef.current?.focus();
     await flushText();
@@ -130,15 +142,19 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     }
   }
   const image = base + "?image=1&v=" + (preview?.sequence ?? 0);
-  if (!running && !preview?.watching) return null;
+  const streaming = visible && running && preview?.watching && !manualMode && !streamFailed;
+  const live = base + "/live?v=" + streamEpoch;
+  if (!visible || (!running && !preview?.watching)) return null;
   return <>
     <section aria-label={ui.open} className="not-prose relative overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700">
-      {preview?.hasImage ? <div ref={surfaceRef} role="application" tabIndex={0} aria-label="Browser tab"
+      {preview?.hasImage ? <div ref={surfaceRef} role="application" tabIndex={manualMode ? 0 : -1} aria-label="Browser tab"
         aria-busy={loading} onKeyDown={(event) => void keyDown(event)}
         onClick={(event) => void clickPreview(event)} onWheel={(event) => void scrollPreview(event)}
         className="block w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={image} alt="Browser tab" draggable={false} className="block h-auto w-full select-none" />
+        <img src={streaming ? live : image} alt="Browser tab" draggable={false}
+          onError={() => { if (streaming) setStreamFailed(true); }}
+          className="block h-auto w-full select-none" />
       </div> : <div aria-label="Loading browser tab" className="h-64 animate-pulse bg-slate-100 dark:bg-slate-900" />}
       {error && <p role="alert" className="absolute bottom-3 left-3 right-3 rounded-lg bg-red-700/90 px-3 py-2 text-xs text-white">{error}</p>}
     </section>

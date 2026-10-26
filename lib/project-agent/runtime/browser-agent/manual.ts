@@ -1,4 +1,5 @@
 import { activeBrowserSession, withBrowserOp } from "./session";
+import { activeProjectBrowser, projectBrowserOperation } from "./project-sessions";
 import { randomUUID } from "node:crypto";
 import type { Page } from "playwright-core";
 import { beginBrowserIntervention, completeBrowserIntervention, notifyBrowserIntervention, claimHumanBrowserAction } from "./control";
@@ -49,18 +50,27 @@ async function privateLoginHasFocus(page: Page): Promise<boolean> {
     }
   }
 }
-export async function humanBrowserOperation(taskId: string, chatId: string, action: HumanBrowserAction) {
-  const session = activeBrowserSession(chatId);
+export async function humanBrowserOperation(taskId: string, chatId: string, action: HumanBrowserAction,
+  project?: { projectId: string; owner: string }) {
+  const session = activeBrowserSession(chatId) ??
+    (project ? activeProjectBrowser(project.projectId, project.owner) : null);
   if (!session) return { error: "Agent has not opened a browser session yet" };
-  if (action.op === "release") {
+  if (session.persistent && session.activeAgentTaskId !== taskId)
+    return { error: "This task does not own the active shared browser" };
+  if (action.op === "release" || action.op === "takeover") {
     challenges.delete(taskId);
-    return { ok: true, paused: false };
-  }
-  if (action.op === "takeover") {
-    challenges.delete(taskId);
-    if (!browserWatchStatus(taskId)?.watching) setBrowserWatch(taskId, true);
-    notifyBrowserIntervention(taskId);
-    return { ok: true, paused: false };
+    try {
+      if (session.persistent)
+        await projectBrowserOperation(session, { op: action.op === "release" ? "release" : "takeover" });
+      if (action.op === "takeover") {
+        if (!browserWatchStatus(taskId)?.watching) setBrowserWatch(taskId, true);
+        await captureBrowserWatch(taskId, session.page, "human_takeover");
+        notifyBrowserIntervention(taskId);
+      }
+      return { ok: true, paused: action.op === "takeover" && Boolean(session.persistent) };
+    } catch (cause) {
+      return { error: cause instanceof Error ? cause.message.slice(0, 180) : "Browser control failed" };
+    }
   }
   if (!claimHumanBrowserAction(taskId)) return { error: "Manual browser action limit reached; try again in a few minutes." };
   beginBrowserIntervention(taskId);

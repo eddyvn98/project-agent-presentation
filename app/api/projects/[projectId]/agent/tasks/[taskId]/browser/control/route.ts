@@ -111,7 +111,8 @@ export async function POST(req: NextRequest,
   }
   const request = parseHumanBrowserAction(raw);
   if (!request) return NextResponse.json({ error: "Invalid browser control action" }, { status: 400, headers: HEADERS });
-  const result = await humanBrowserOperation(task.id, task.id, request);
+  const result = await humanBrowserOperation(task.id, task.id, request,
+    { projectId: params.projectId, owner: task.ownerEmail });
   if ("error" in result) return NextResponse.json(result, { status: 409, headers: HEADERS });
   return NextResponse.json(result, { headers: HEADERS });
 }

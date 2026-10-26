@@ -3,6 +3,7 @@ import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { readProjectAgentTask } from "@/lib/project-agent/task-store";
 import { browserWatchImage, browserWatchStatus, captureBrowserWatch, setBrowserWatch } from "@/lib/project-agent/runtime/browser-agent/watch";
 import { activeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
+import { activeProjectBrowser } from "@/lib/project-agent/runtime/browser-agent/project-sessions";
 import { browserControlState, releaseBrowserControl } from "@/lib/project-agent/runtime/browser-agent/control";
 import { browserLoopEnabled, browserLoopStatus } from "@/lib/project-agent/runtime/browser-agent/loop-state";
 
@@ -61,8 +62,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   setBrowserWatch(params.taskId, body.watch);
   if (body.watch) {
     // No browser launch: capture only the session which the agent has already created.
-    const existing = activeBrowserSession(checked.task!.id);
-    if (existing) await captureBrowserWatch(params.taskId, existing.page, "watch started");
+    const existing = activeBrowserSession(checked.task!.id) ??
+      activeProjectBrowser(params.projectId, checked.task!.ownerEmail);
+    if (existing && (!existing.persistent || existing.activeAgentTaskId === checked.task!.id))
+      await captureBrowserWatch(params.taskId, existing.page, "watch started");
   }
   return NextResponse.json({ preview: browserWatchStatus(params.taskId) }, { headers: HEADERS });
 }

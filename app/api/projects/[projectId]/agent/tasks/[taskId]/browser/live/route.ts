@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { readProjectAgentTask } from "@/lib/project-agent/task-store";
 import { activeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
+import { activeProjectBrowser } from "@/lib/project-agent/runtime/browser-agent/project-sessions";
 import { browserWatchStatus } from "@/lib/project-agent/runtime/browser-agent/watch";
 import { sensitiveScreenshotMask } from "@/lib/project-agent/runtime/browser-agent/privacy";
 
@@ -18,8 +19,9 @@ export async function GET(req: NextRequest, { params }: {
   if (!task || task.projectId !== params.projectId ||
     task.ownerEmail.toLowerCase() !== access.callerEmail?.toLowerCase())
     return NextResponse.json({ error: "Browser stream not found" }, { status: 404, headers });
-  const browser = activeBrowserSession(task.id);
+  const browser = activeBrowserSession(task.id) ?? activeProjectBrowser(params.projectId, task.ownerEmail);
   if (!browser || browser.owner !== task.ownerEmail.toLowerCase() ||
+    (browser.persistent && browser.activeAgentTaskId !== task.id) ||
     !browserWatchStatus(task.id)?.watching || !["queued","running"].includes(task.status))
     return NextResponse.json({ error: "Browser stream unavailable" }, { status: 409, headers });
   const boundary = "projectagentframe";
