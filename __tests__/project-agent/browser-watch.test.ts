@@ -26,9 +26,11 @@ describe("opt-in private browser viewer", () => {
       type: "jpeg", maskColor: "#64748b", timeout: 4_000,
     }));
     expect(browserWatchStatus(TASK)).toMatchObject({
-      watching: true, sequence: 1, location: "https://shop.example.test/order",
+      watching: true, sequence: 1, location: "https://shop.example.test",
       action: "click", hasImage: true,
+      history: [expect.objectContaining({ location: "https://shop.example.test" })],
     });
+    expect(JSON.stringify(browserWatchStatus(TASK))).not.toContain("/order");
     expect(browserWatchImage(TASK)?.byteLength).toBe(4);
     setBrowserWatch(TASK, false);
     expect(browserWatchImage(TASK)).toBeNull();

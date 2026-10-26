@@ -18,10 +18,10 @@ afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs(); });
 function setup(email: string) {
   mock.access.mockResolvedValue({ callerEmail: email });
   mock.task.mockResolvedValue({ id: "pat_123456789abc", projectId: "project-a", ownerEmail: "owner@example.test", status: "running", conversationId: "thread-a" });
-  mock.operation.mockResolvedValue({ ok: true, paused: true });
+  mock.operation.mockResolvedValue({ ok: true, paused: false });
   vi.stubEnv("PROJECT_AGENT_RUNTIME", "sandbox"); vi.stubEnv("PROJECT_AGENT_BROWSER_AGENT", "1");
 }
-describe("authenticated human browser takeover", () => {
+describe("authenticated shared browser control", () => {
   it("never allows a Project collaborator to operate another owner's browser", async () => {
     setup("other@example.test");
     expect((await POST(req(), params)).status).toBe(404);
@@ -34,7 +34,7 @@ describe("authenticated human browser takeover", () => {
     mock.task.mockResolvedValue({ id: "pat_123456789abc", ownerEmail: "owner@example.test", projectId: "project-a", status: "done" });
     expect((await POST(req(), params)).status).toBe(409);
   });
-  it("applies a valid takeover to the conversation's active Playwright session", async () => {
+  it("applies a valid intervention to the conversation's active Playwright session", async () => {
     setup("owner@example.test");
     expect((await POST(req(), params)).status).toBe(200);
     expect(mock.operation).toHaveBeenCalledWith("pat_123456789abc", "thread-a", { op: "takeover" });

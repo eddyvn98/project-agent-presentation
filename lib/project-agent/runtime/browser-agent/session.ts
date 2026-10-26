@@ -1,6 +1,6 @@
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import { BrowserSlotPool } from "./slot-pool";
-import { bindG2BrowserOwnership, assertG2BrowserOwnership } from "./g2-ownership";
+import { bindG2BrowserOwnership, assertG2BrowserOwnership, changeG2HumanControl } from "./g2-ownership";
 import { launchChromium } from "../browser-launcher";
 import { guardedRequest } from "../guarded-fetch";
 import { assertPublicWebSocketUrl, bindAbort } from "./safety";
@@ -10,11 +10,16 @@ import { publicBrowserWatchLocation } from "./watch";
 import { safeBrowserConsoleEntry } from "./privacy";
 
 const MAX_CONTEXTS = 3;
-const OP_TIMEOUT_MS = 30_000;
+const OP_TIMEOUT_MS = 35_000;
 const IDLE_CLOSE_MS = 5 * 60_000;
-const sessions = new Map<string, BrowserSession>();
+/** Worker and Browser API routes are separate Next bundles; takeover must share their live Playwright session. */
+const browserGlobal = globalThis as typeof globalThis & {
+  __projectAgentBrowserSessions?: Map<string, BrowserSession>;
+  __projectAgentBrowserOperationLocks?: WeakMap<BrowserSession, Promise<void>>;
+};
+const sessions = browserGlobal.__projectAgentBrowserSessions ??= new Map<string, BrowserSession>();
 const pendingSessions = new Map<string, Promise<BrowserSession>>();
-/** Only synthetic P8 QA gets a process-shared session bridge across Next route bundles. */
+/** Synthetic P8 fixtures use a separate process-wide session registry. */
 const qaGlobal = globalThis as typeof globalThis & {
   __projectAgentP8QaSessions?: Map<string, BrowserSession>;
 };
@@ -54,11 +59,11 @@ vaultMonitor.unref?.();
 
 export interface BrowserSession {
 	browser: Browser;
+	g2RefEpoch?: number;
 	owner?: string;
 	chatId?: string;
 	authHost?: string;
 	authMode?: "read" | "interact";
-  g2RefEpoch?: number;
 	authVersion?: string;
   lastAuthSavedAt?: number;
 	context: BrowserContext;
@@ -188,8 +193,7 @@ export function closeAllBrowserSessions(): Promise<void> {
   return Promise.all([...new Set([...sessions.keys(), ...qaSessions.keys()])].map(closeBrowserSession)).then(() => {});
 }
 
-const operationLocks = new WeakMap<BrowserSession, Promise<void>>();
-/** Accounting and ownership are independent: fixture setup may be uncounted Agent work. */
+const operationLocks = browserGlobal.__projectAgentBrowserOperationLocks ??= new WeakMap<BrowserSession, Promise<void>>();
 export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promise<T>,
   countAgentAction = true, ownershipMode: "agent" | "human" = "agent"): Promise<T> {
 	const preceding = operationLocks.get(session) ?? Promise.resolve();
@@ -197,20 +201,36 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
 	const current = new Promise<void>((resolve) => { unlock = resolve; });
 	operationLocks.set(session, preceding.then(() => current));
 	await preceding;
-  try { await assertG2BrowserOwnership(session, ownershipMode); }
-  catch (error) { unlock(); throw error; }
 	if (session.page.isClosed() || !session.browser.isConnected()) { unlock(); throw new Error("Browser session is closed"); }
 	if (countAgentAction) session.operationCount += 1;
 	if (countAgentAction && session.operationCount > 60) { unlock(); throw new Error("Browser action limit (60) reached for this task"); }
+	let humanLeaseChanged = false;
+	try {
+    if (ownershipMode === "human") {
+      await changeG2HumanControl(session, "agent", "human");
+      humanLeaseChanged = true;
+    }
+    await assertG2BrowserOwnership(session, ownershipMode);
+  } catch (error) {
+    if (humanLeaseChanged) await changeG2HumanControl(session, "human", "agent").catch(() => session.close());
+    unlock(); throw error;
+  }
 	session.lastUsed = Date.now();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
-		return await Promise.race([fn(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("Browser operation timed out after 30 seconds")), OP_TIMEOUT_MS); })]);
+		return await Promise.race([fn(), new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`Browser operation timed out after ${OP_TIMEOUT_MS / 1000} seconds`)), OP_TIMEOUT_MS); })]);
 	} catch (error) {
-    if (error instanceof Error && error.message === "Browser operation timed out after 30 seconds")
+    if (error instanceof Error && error.message === `Browser operation timed out after ${OP_TIMEOUT_MS / 1000} seconds`)
       await session.close().catch(() => {});
     throw error;
-  } finally { if (timer) clearTimeout(timer); unlock(); }
+	} finally {
+    if (timer) clearTimeout(timer);
+    if (humanLeaseChanged) {
+      try { await changeG2HumanControl(session, "human", "agent"); }
+      catch (error) { await session.close().catch(() => {}); unlock(); throw error; }
+    }
+    unlock();
+  }
 }
 
 export function scheduleIdleClose(session: BrowserSession, id: string): void {

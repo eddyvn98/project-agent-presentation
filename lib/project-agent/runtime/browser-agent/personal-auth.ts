@@ -1,5 +1,4 @@
 import { activeBrowserSession, withBrowserOp } from "./session";
-import { browserControlState } from "./control";
 import { vaultHost, savePersonalBrowserGrant, revokePersonalBrowserGrant, readPersonalBrowserGrant, type BrowserGrantMode } from "./personal-vault";
 import { closeBrowserSessionsForOwnerHost } from "./session";
 
@@ -8,8 +7,8 @@ const consents = new Map<string, Consent>();
 const TIMEOUT = 10 * 60_000;
 function requireOwner(taskId: string, owner: string) {
   const session = activeBrowserSession(taskId);
-  if (!session || !owner || !browserControlState(taskId).paused)
-    throw new Error("Take exclusive browser control before managing a personal login");
+  if (!session || !owner)
+    throw new Error("An active browser session and owner are required to manage a personal login");
   return session;
 }
 export async function personalLoginStatus(taskId: string, owner: string) {

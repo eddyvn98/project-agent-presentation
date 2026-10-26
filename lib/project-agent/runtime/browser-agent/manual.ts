@@ -1,7 +1,7 @@
 import { activeBrowserSession, withBrowserOp } from "./session";
 import { randomUUID } from "node:crypto";
-import { changeG2HumanControl } from "./g2-ownership";
-import { browserControlState, requestBrowserTakeover, releaseBrowserControl, claimHumanBrowserAction } from "./control";
+import type { Page } from "playwright-core";
+import { beginBrowserIntervention, completeBrowserIntervention, notifyBrowserIntervention, claimHumanBrowserAction } from "./control";
 import { browserWatchStatus, captureBrowserWatch, setBrowserWatch } from "./watch";
 
 export type HumanBrowserAction =
@@ -9,7 +9,7 @@ export type HumanBrowserAction =
   | { op: "click"; x: number; y: number; frame: number; approvalTicket?: string }
   | { op: "scroll"; direction: "up" | "down" }
   | { op: "type"; text: string }
-  | { op: "key"; key: "Tab" | "Escape" | "Backspace" | "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight" };
+  | { op: "key"; key: "Tab" | "Escape" | "Backspace" | "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight" | "Enter" };
 
 interface RiskChallengeState { ticket: string; frame: number; x: number; y: number; expires: number }
 const challenges = new Map<string, RiskChallengeState>();
@@ -24,36 +24,48 @@ export function parseHumanBrowserAction(value: unknown): HumanBrowserAction | nu
       approvalTicket: typeof raw.approvalTicket === "string" && /^[a-f0-9-]{36}$/.test(raw.approvalTicket) ? raw.approvalTicket : undefined };
   if (raw.op === "scroll" && (raw.direction === "up" || raw.direction === "down")) return { op: "scroll", direction: raw.direction };
   if (raw.op === "type" && typeof raw.text === "string" && raw.text.length >= 1 && raw.text.length <= 600 && !/[\x00-\x08\x0b-\x1f]/.test(raw.text)) return { op: "type", text: raw.text };
-  if (raw.op === "key" && ["Tab", "Escape", "Backspace", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(String(raw.key))) return { op: "key", key: raw.key as Extract<HumanBrowserAction, {op:"key"}>["key"] };
+  if (raw.op === "key" && ["Tab", "Escape", "Backspace", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(String(raw.key))) return { op: "key", key: raw.key as Extract<HumanBrowserAction, {op:"key"}>["key"] };
   return null;
 }
 function safeTarget(value: string): boolean {
-  return !/\b(pay|purchase|place order|checkout|buy now|delete|remove account|publish|send message|transfer|withdraw|confirm payment|subscribe|book now)\b|(?:thanh toán|đặt hàng|xóa tài khoản|chuyển tiền|gửi tin nhắn|đăng bài)/iu.test(value);
+  return !/\b(pay|purchase|place order|checkout|buy now|delete|remove account|publish|send message|transfer|withdraw|confirm payment|subscribe|book now)\b|(?:thanh toán|đặt hàng|xóa tài khoản|chuyển tiền|gửi tin nhắn|đăng bài)/iu.test(value); // vi-allow: localized text or locale detection
+}
+async function privateLoginHasFocus(page: Page): Promise<boolean> {
+  const inspect = () => page.evaluate(() => {
+    const el = document.activeElement as HTMLInputElement | null;
+    return Boolean(el && (el.type === "password" || /password|otp|one.time|secret|token/i.test(
+      [el.autocomplete, el.name, el.id].join(" "))));
+  });
+  try { return await inspect(); }
+  catch (cause) {
+    const message = cause instanceof Error ? cause.message : "";
+    if (!/execution context was destroyed|cannot find context with specified id/i.test(message)) throw cause;
+    await page.waitForLoadState("domcontentloaded", { timeout: 5_000 }).catch(() => undefined);
+    try { return await inspect(); }
+    catch (retryCause) {
+      const retryMessage = retryCause instanceof Error ? retryCause.message : "";
+      if (/execution context was destroyed|cannot find context with specified id/i.test(retryMessage)) return false;
+      throw retryCause;
+    }
+  }
 }
 export async function humanBrowserOperation(taskId: string, chatId: string, action: HumanBrowserAction) {
   const session = activeBrowserSession(chatId);
   if (!session) return { error: "Agent has not opened a browser session yet" };
   if (action.op === "release") {
     challenges.delete(taskId);
-    try { await withBrowserOp(session, async () => {}, false, "human"); } catch { /* handback should not strand Agent */ }
-    await changeG2HumanControl(session, "human", "agent");
-    session.refs.clear(); session.snapshotUrl = ""; session.lastSnapshot = "";
-    releaseBrowserControl(taskId);
     return { ok: true, paused: false };
   }
   if (action.op === "takeover") {
     challenges.delete(taskId);
     if (!browserWatchStatus(taskId)?.watching) setBrowserWatch(taskId, true);
-    await changeG2HumanControl(session, "agent", "human");
-    requestBrowserTakeover(taskId);
-    try { await withBrowserOp(session, async () => {}, false, "human"); }
-    catch { await changeG2HumanControl(session, "human", "agent").catch(() => {}); releaseBrowserControl(taskId); return { error: "The browser is busy or unavailable; takeover was cancelled" }; }
-    await captureBrowserWatch(taskId, session.page, "human_takeover");
-    return { ok: true, paused: true };
+    notifyBrowserIntervention(taskId);
+    return { ok: true, paused: false };
   }
-  if (!browserControlState(taskId).paused) return { error: "Take control before interacting with the browser" };
-  if (!claimHumanBrowserAction(taskId)) return { error: "Manual browser action limit reached; hand control back to Agent." };
+  if (!claimHumanBrowserAction(taskId)) return { error: "Manual browser action limit reached; try again in a few minutes." };
+  beginBrowserIntervention(taskId);
   let marker: { x: number; y: number; kind: "human" } | undefined;
+  let privateLoginRequired = false;
   try {
     await withBrowserOp(session, async () => {
       const page = session.page;
@@ -79,6 +91,7 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
           challenges.delete(taskId);
         }
         await page.mouse.click(x, y);
+        privateLoginRequired = await privateLoginHasFocus(page);
         marker = { x: action.x, y: action.y, kind: "human" };
       } else if (action.op === "scroll") {
         await page.mouse.wheel(0, action.direction === "down" ? 540 : -540);
@@ -93,13 +106,26 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
           throw new Error("Select a non-sensitive text input. Password, payment and security-code entry are not supported.");
         await page.keyboard.insertText(action.text);
       } else if (action.op === "key") {
+        if (action.key === "Enter") {
+          const searchField = await page.evaluate(() => {
+            const el = document.activeElement as HTMLInputElement | null;
+            return Boolean(el && (el.type === "search" || el.getAttribute("role") === "searchbox" ||
+              /search/i.test([el.name, el.id, el.getAttribute("aria-label")].join(" "))));
+          });
+          if (!searchField) throw new Error("Enter is allowed only in a search field; use a visible page button to submit other forms.");
+        }
         await page.keyboard.press(action.key);
+        privateLoginRequired = await page.evaluate(() => {
+          const el = document.activeElement as HTMLInputElement | null;
+          return Boolean(el && (el.type === "password" || /password|otp|one.time|secret|token/i.test(
+            [el.autocomplete, el.name, el.id].join(" "))));
+        });
       }
+      await captureBrowserWatch(taskId, page, "human_" + action.op, marker);
     }, false, "human");
-    await captureBrowserWatch(taskId, session.page, "human_" + action.op, marker);
-    return { ok: true, paused: true };
+    return { ok: true, paused: false, ...(privateLoginRequired ? { privateLoginRequired: true } : {}) };
   } catch (cause) {
     if (cause instanceof RiskChallenge) return { error: cause.message, approvalTicket: cause.ticket };
     return { error: cause instanceof Error ? cause.message.slice(0, 180) : "Manual browser action could not finish" };
-  }
+  } finally { completeBrowserIntervention(taskId); }
 }

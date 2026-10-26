@@ -1,16 +1,17 @@
 import type { RuntimeInput } from "../run-agent-types";
 import { runBrowserAction } from "./index";
-import { browserControlState, waitForBrowserHandoff } from "./control";
+import { browserControlState, waitForBrowserHandoff, waitForBrowserInterventionIdle } from "./control";
 
-/** Called before a model turn; returns the latest real page after the human hands control back. */
+/** Called before a model turn; refreshes the shared page after user intervention. */
 export async function resumedBrowserContext(input: RuntimeInput, seen: number, step: number) {
   if (!input.taskId) return { revision: seen, preface: "" };
   const revision = await waitForBrowserHandoff(input.taskId, input.signal);
   if (revision === seen) return { revision, preface: "" };
+  await waitForBrowserInterventionIdle(input.taskId, 700, input.signal);
   const current = await runBrowserAction(input, { action: "browser", op: "snapshot" }, step);
-  const preface = "The user temporarily took control of the browser and handed it back. Discard any stale element references and previous page assumptions. Reinspect the live page before acting.\\n"
+  const preface = "The user interacted with the shared browser. Discard stale element references and previous page assumptions. Reinspect the live page before acting.\\n"
     + current.text.slice(0, 6500) + "\\n\\n";
-  input.onStep?.({ tool: "user_note", detail: "Human browser assistance completed; page snapshot refreshed" });
+  input.onStep?.({ tool: "user_note", detail: "Shared browser updated by user; page snapshot refreshed" });
   return { revision, preface };
 }
 

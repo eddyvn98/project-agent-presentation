@@ -1,5 +1,11 @@
 import type { ActivityLanguage } from "./activity-language";
 type Actions = { take: string; release: string; type: string; send: string; up: string; down: string; help: string; click: string; open: string };
+type LoginActions = { title: string; close: string; privacy: string; website: string; secret: string; enterSecret: string; submit: string; access: string; read: string; interact: string; automation: string; relatedSso: string; save: string };
+const loginWords: Partial<Record<ActivityLanguage, LoginActions>> = {
+  en: { title:"Private website login", close:"Close", privacy:"Login details are sent through a private channel and are not added to chat.", website:"Website", secret:"Password or one-time code", enterSecret:"Enter", submit:"Submit login field", access:"Access", read:"Read only", interact:"Interact", automation:"Allow unattended tasks to reuse this login", relatedSso:"Other SSO domains, if any", save:"Save encrypted login" },
+  vi: { title:"Đăng nhập riêng tư", close:"Đóng", privacy:"Thông tin đăng nhập được gửi qua kênh riêng, không đưa vào nội dung chat.", website:"Trang web", secret:"Mật khẩu hoặc mã dùng một lần", enterSecret:"Nhập", submit:"Gửi trường đăng nhập", access:"Quyền truy cập", read:"Chỉ đọc", interact:"Tương tác", automation:"Cho phép tác vụ tự động dùng lại", relatedSso:"Miền SSO khác, nếu có", save:"Lưu đăng nhập mã hóa" }, // vi-allow: localized browser login UI copy
+};
+export function browserLoginText(language: ActivityLanguage): LoginActions { return loginWords[language] ?? loginWords.en!; }
 const words: Record<ActivityLanguage, Actions> = {
   en: {take:"Take control",release:"Hand back to Agent",type:"Type into selected field",send:"Enter text",up:"Scroll up",down:"Scroll down",help:"Click directly on the screenshot. Text goes only to the selected non-sensitive field.",click:"Manual control active",open:"Open Browser Preview"},
   vi: {take:"Tự thao tác",release:"Giao lại cho Agent",type:"Nhập vào ô đang chọn",send:"Nhập chữ",up:"Cuộn lên",down:"Cuộn xuống",help:"Nhấn trực tiếp trên ảnh web. Chữ chỉ được nhập vào ô không nhạy cảm đã chọn.",click:"Bạn đang điều khiển",open:"Mở Browser Preview"},

@@ -18,22 +18,64 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
 	const rootRef = useRef<HTMLSpanElement>(null);
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const popoverRef = useRef<HTMLDivElement>(null);
+	const openRef = useRef(open);
+	const stopCloseGuard = useRef<(() => void) | null>(null);
 	const popoverId = useId();
 	const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 16 });
 	const faviconUrl = new URL("/favicon.ico", href).toString();
+	const revealTrigger = () => {
+		const trigger = triggerRef.current;
+		if (!trigger) return;
+		const rect = trigger.getBoundingClientRect();
+		if (rect.top < 12 || rect.bottom > window.innerHeight - 12)
+			trigger.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+	};
+	const restoreTrigger = () => {
+		const trigger = triggerRef.current;
+		if (!trigger) return;
+		stopCloseGuard.current?.();
+		trigger.focus({ preventScroll: true });
+		revealTrigger();
+
+		let observer: IntersectionObserver;
+		let active = true;
+		const stop = () => {
+			active = false;
+			observer.disconnect();
+			for (const type of ["wheel", "touchstart", "pointerdown", "keydown"])
+				window.removeEventListener(type, stop, true);
+			trigger.removeEventListener("blur", stop);
+			if (stopCloseGuard.current === stop) stopCloseGuard.current = null;
+		};
+		observer = new IntersectionObserver((entries) => {
+			if (!active) return;
+			if (openRef.current || !trigger.isConnected || document.activeElement !== trigger) stop();
+			else if (entries.some((entry) => !entry.isIntersecting || entry.intersectionRatio < 1)) revealTrigger();
+		}, { threshold: 1, rootMargin: "-12px 0px -12px 0px" });
+		stopCloseGuard.current = stop;
+		trigger.addEventListener("blur", stop, { once: true });
+		for (const type of ["wheel", "touchstart", "pointerdown", "keydown"])
+			window.addEventListener(type, stop, { capture: true, passive: true });
+		observer.observe(trigger);
+	};
+	useEffect(() => () => stopCloseGuard.current?.(), []);
 	const togglePopover = () => {
 		if (!open) {
+			stopCloseGuard.current?.();
 			const rect = triggerRef.current?.getBoundingClientRect();
 			if (rect) setPopoverPosition({
 				top: rect.bottom + 8,
 				left: Math.max(16, Math.min(rect.left, window.innerWidth - 304)),
 			});
 		}
-		setOpen((value) => !value);
+		const nextOpen = !open;
+		openRef.current = nextOpen;
+		setOpen(nextOpen);
 	};
 
 	useEffect(() => {
 		if (!open) return;
+		stopCloseGuard.current?.();
 		const updatePosition = () => {
 			const anchor = triggerRef.current?.getBoundingClientRect();
 			const popover = popoverRef.current;
@@ -52,12 +94,14 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
 		const closeOnOutsidePointer = (event: PointerEvent) => {
 			const target = event.target as Node;
 			if (rootRef.current?.contains(target) || popoverRef.current?.contains(target)) return;
+			openRef.current = false;
 			setOpen(false);
 		};
 		const closeOnEscape = (event: KeyboardEvent) => {
 			if (event.key !== "Escape") return;
+			openRef.current = false;
 			setOpen(false);
-			triggerRef.current?.focus();
+			restoreTrigger();
 		};
 		document.addEventListener("pointerdown", closeOnOutsidePointer);
 		document.addEventListener("keydown", closeOnEscape);

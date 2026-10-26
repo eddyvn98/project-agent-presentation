@@ -18,6 +18,7 @@ import { getBrowserSession, scheduleIdleClose, withBrowserOp, restorePersonalBro
 import { captureBrowserWatch, finishBrowserWatch, type BrowserClickMarker } from "./watch";
 import { invalidateVisualFrame, observeVisualFrame, visualClick, visualType } from "./visual";
 import { browserRetryStalled, recordBrowserDomFailure, clearBrowserStall, P8_STALL_GUIDANCE } from "./stall-guard"; import { runP8BrowserLoopStep } from "./loop-step";
+import { waitForPageOrIntervention } from "./browser-wait";
 
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 function snapshotRefLine(snapshot: string, ref: string): string {
@@ -157,6 +158,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 	input.onStep?.({ tool: `browser_${action.op} #${stepId}`, detail: action.note || action.url || refDetail || action.ref || "" } satisfies RuntimeStep);
 	try {
 		let marker: BrowserClickMarker | undefined;
+		let supersededByUser = false;
 		await assertPersonalBrowserPermission(session, action.op);
     await checkAgentBrowserPolicy(input, session, action.op, action.url);
     if ((process.env.PROJECT_AGENT_P8_STALL_GUARD === "1" || (process.env.PROJECT_AGENT_P8_LOOP === "1" && process.env.PROJECT_AGENT_P8_LOOP_REPORT_ONLY !== "1")) &&
@@ -242,14 +244,9 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 					extra = "Closed tab " + action.tabIndex + "."; break;
 				}
 				case "wait": {
-					const timeout = (action.seconds ?? 10) * 1000;
-					if (action.find) {
-						const found = await session.page.waitForFunction((needle) => document.body.innerText.toLowerCase().includes(needle), action.find.toLowerCase(), { timeout }).then(() => true, () => false);
-						extra = found ? `The text "${action.find}" is on the page now.` : `The text "${action.find}" did not appear within ${timeout / 1000} s. Take a snapshot to see what is there.`;
-					} else {
-						await session.page.waitForLoadState("networkidle", { timeout }).catch(() => undefined);
-						extra = "Waited for the page to settle.";
-					}
+					const wait = await waitForPageOrIntervention(session.page, action, id, input.signal);
+					if (wait.interrupted) { supersededByUser = true; return { text: wait.text, failed: true }; }
+					extra = wait.text;
 					break;
 				}
 				case "scroll": await session.page.evaluate((direction) => window.scrollBy(0, direction === "down" ? innerHeight * 0.8 : -innerHeight * 0.8), action.direction ?? "down"); break;
@@ -276,6 +273,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			const currentSnapshot = await snapshot(session);
 			return { text: extra ? `${extra}\n\n${currentSnapshot}` : currentSnapshot };
 		}));
+		if (supersededByUser) return result;
 		const authIssue = await checkSavedBrowserHealth(session);
     if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op, marker);
     scheduleIdleClose(session, id);

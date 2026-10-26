@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BrowserSession } from "../../lib/project-agent/runtime/browser-agent/session";
-const lease = vi.hoisted(() => ({ assert: vi.fn(async (_session: unknown, _mode: string) => {}) }));
+const lease = vi.hoisted(() => ({
+  assert: vi.fn(async (_session: unknown, _mode: string) => {}),
+  change: vi.fn(async (_session: unknown, _from: string, _to: string) => {}),
+}));
 vi.mock("../../lib/project-agent/runtime/browser-agent/g2-ownership", () => ({
   assertG2BrowserOwnership: lease.assert,
   bindG2BrowserOwnership: vi.fn(),
+  changeG2HumanControl: lease.change,
   g2OwnershipEnabled: () => false,
 }));
 import { withBrowserOp } from "../../lib/project-agent/runtime/browser-agent/session";
@@ -12,8 +16,8 @@ function syntheticSession() {
   return { page: { isClosed: () => false }, browser: { isConnected: () => true },
     operationCount: 0, lastUsed: 0 } as unknown as BrowserSession;
 }
-beforeEach(() => lease.assert.mockClear());
-afterEach(() => lease.assert.mockReset());
+beforeEach(() => { lease.assert.mockClear(); lease.change.mockClear(); });
+afterEach(() => { lease.assert.mockReset(); lease.change.mockReset(); });
 
 describe("G2 browser ownership is independent from operation accounting", () => {
   it("uncounted fixture setup still requires the Agent lease", async () => {
@@ -33,6 +37,9 @@ describe("G2 browser ownership is independent from operation accounting", () => 
     expect(await withBrowserOp(session, async () => "manual", false, "human"))
       .toBe("manual");
     expect(lease.assert).toHaveBeenCalledWith(session, "human");
+    expect(lease.change.mock.calls.map((call) => call.slice(1))).toEqual([
+      ["agent", "human"], ["human", "agent"],
+    ]);
     expect(session.operationCount).toBe(0);
   });
   it("revoked human lease fails closed before any mutation", async () => {
