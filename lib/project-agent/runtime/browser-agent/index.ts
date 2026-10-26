@@ -277,7 +277,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 		const authIssue = await checkSavedBrowserHealth(session);
     if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op, marker);
     scheduleIdleClose(session, id);
-    if (!result.failed && action.op !== "snapshot") clearBrowserStall(id);
+    if (!("failed" in result && result.failed) && action.op !== "snapshot") clearBrowserStall(id);
     return authIssue ? { text: authIssue, failed: true } : result;
 	} catch (cause) {
 		if (cause instanceof Error && /timed out after 30 seconds/.test(cause.message)) await session.close();

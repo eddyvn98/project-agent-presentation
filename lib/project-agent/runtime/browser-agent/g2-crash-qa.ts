@@ -1,4 +1,4 @@
-import { getMongoAiDb } from "@/services/mongodb/client";
+import { getMongoAiDb, type StringDoc } from "@/services/mongodb/client";
 import { PROJECT_AGENT_BOOT_ID } from "../../boot";
 import { activeBrowserSession } from "./session";
 import { browserLoopStatus } from "./loop-state";
@@ -7,6 +7,10 @@ import { quarantineExpiredBrowser, acknowledgeBrowserRecovery } from "./g2-lease
 
 const LEASE = "projectAgentBrowserOwnership";
 const ACTIONS = "projectAgentG2CrashQaActions";
+type BrowserLeaseDoc = StringDoc & { ownerEmail: string; epoch: number; revision: number;
+  workerId: string; leaseToken: string; state: string; leaseUntil: string };
+type CrashActionDoc = StringDoc & { runId: string; taskId: string; owner: string;
+  epoch: number; counter: number; kind: string };
 type Operation = "qa_g2_status" | "qa_g2_expire" | "qa_g2_quarantine" |
   "qa_g2_review" | "qa_g2_stale" | "qa_g2_cleanup";
 const qaRun = () => process.env.G2_QA_RUN_ID ?? "";
@@ -24,7 +28,7 @@ export function g2CrashQaAllowed(taskId: string, owner: string): boolean {
 }
 async function collections() {
   const db = await getMongoAiDb();
-  return { lease: db.collection(LEASE), actions: db.collection(ACTIONS) };
+  return { lease: db.collection<BrowserLeaseDoc>(LEASE), actions: db.collection<CrashActionDoc>(ACTIONS) };
 }
 export async function g2QaClickReceipt(taskId: string, owner: string, count: number) {
   if (!g2CrashQaAllowed(taskId, owner)) return;
