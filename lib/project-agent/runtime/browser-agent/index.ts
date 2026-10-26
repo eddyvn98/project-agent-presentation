@@ -21,7 +21,7 @@ import { browserRetryStalled, recordBrowserDomFailure, clearBrowserStall, P8_STA
 import { waitForPageOrIntervention } from "./browser-wait"; import { agentBrowserSession } from "./project-sessions"; import { updateProjectActiveTab } from "./project-registry";
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 function snapshotRefLine(snapshot: string, ref: string): string {
-	return snapshot.split("\n").find((line) => line.includes(`[ref=${ref}]`)) ?? "";
+	return snapshot.split("\n").find((line) => line.startsWith(`[ref=${ref}] `)) ?? "";
 }
 function locatorForRef(session: BrowserSession, ref: string) {
 	const selector = session.refs.get(ref);

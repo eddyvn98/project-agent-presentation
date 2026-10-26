@@ -10,6 +10,7 @@ import { publicBrowserWatchLocation } from "./watch";
 import { safeBrowserConsoleEntry } from "./privacy";
 import { connectSteelSession, type SteelConnection } from "./steel-session";
 import { withProjectControlOp } from "./project-control-db";
+import { browserControlState } from "./control";
 const MAX_CONTEXTS = 3;
 const OP_TIMEOUT_MS = 35_000;
 const IDLE_CLOSE_MS = 5 * 60_000;
@@ -193,6 +194,8 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
 	operationLocks.set(session, preceding.then(() => current));
 	await preceding;
 	if (session.page.isClosed() || !session.browser.isConnected()) { unlock(); throw new Error("Browser session is closed"); }
+  if (!session.persistent && ownershipMode === "agent" && session.scopeId &&
+      browserControlState(session.scopeId).paused) { unlock(); throw new Error("Browser is controlled by the user; wait for handback"); }
 	if (countAgentAction) session.operationCount += 1;
 	if (countAgentAction && session.operationCount > 60) { unlock(); throw new Error("Browser action limit (60) reached for this task"); }
 	let humanLeaseChanged = false;

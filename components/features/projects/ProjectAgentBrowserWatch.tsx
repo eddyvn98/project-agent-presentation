@@ -72,7 +72,7 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     const timer = window.setInterval(() => {
       setStreamFailed(false);
       setStreamEpoch(value => value + 1);
-    }, 12_000);
+    }, 17_000);
     return () => window.clearInterval(timer);
   }, [visible, running, manualMode, preview?.watching]);
   const command = async (action: Record<string, unknown>): Promise<BrowserCommandResult> => {

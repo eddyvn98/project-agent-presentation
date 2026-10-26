@@ -130,7 +130,8 @@ export async function projectBrowserOperation(session: BrowserSession,
   input: { op: string; url?: string; tabIndex?: number; width?: number; height?: number }) {
   const id = session.scopeId!;
   if (input.op === "heartbeat") {
-    await keepProjectControl(id); noteUserAction(session); return;
+    if (!await keepProjectControl(id)) throw new Error("Browser takeover expired");
+    noteUserAction(session); return;
   }
   if (input.op === "release") {
     await handbackProjectControl(id); noteUserAction(session); return;

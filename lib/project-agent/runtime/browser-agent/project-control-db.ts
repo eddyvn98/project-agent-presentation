@@ -45,10 +45,12 @@ export async function takeProjectControl(scope: string): Promise<void> {
     $inc: { revision: 1 } }, { returnDocument: "after" });
   if (!unwrap(row)) throw new Error("Browser busy; try takeover after the active action ends");
 }
-export async function keepProjectControl(scope: string): Promise<void> {
-  await (await collection()).updateOne({ _id: scope, mode: "human",
-    humanUntil: { $gt: Date.now() } },
-  { $set: { humanUntil: Date.now() + 5 * 60_000 } });
+export async function keepProjectControl(scope: string): Promise<boolean> {
+  const now = Date.now();
+  const result = await (await collection()).updateOne({ _id: scope, mode: "human",
+    humanUntil: { $gt: now } },
+  { $set: { humanUntil: now + 5 * 60_000 } });
+  return result.matchedCount === 1;
 }
 export async function handbackProjectControl(scope: string): Promise<void> {
   const coll = await ensure(scope);

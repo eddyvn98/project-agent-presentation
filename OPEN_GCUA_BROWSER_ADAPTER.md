@@ -26,3 +26,11 @@ Run authenticated two-worker Steel/browser QA, tab/viewport/takeover tests,
 stream fallback, restart recovery and stop tests before production rollout.
 
 No local runtime, TypeScript, Chromium or signed-in E2E QA has been run.
+
+## Review 1 fixes
+- Ref parsing accepts only structured element-line prefixes, never inline site text.
+- Local takeover is exclusive, and shared Steel uses a Mongo lease.
+- Task routes can reconnect to the existing Steel CDP session; no new browser is created.
+- UI polls server control and refreshes manual lease by heartbeat.
+- MJPEG includes basic backpressure and defers reconnect until after bounded stream duration.
+- Multi-worker visual-click frames remain fail-closed until a common frame transport exists.

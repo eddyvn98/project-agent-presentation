@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { readProjectAgentTask } from "@/lib/project-agent/task-store";
-import { activeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
-import { activeProjectBrowser } from "@/lib/project-agent/runtime/browser-agent/project-sessions";
-import { browserWatchStatus } from "@/lib/project-agent/runtime/browser-agent/watch";
+import { resolveTaskBrowser } from "@/lib/project-agent/runtime/browser-agent/task-browser";
+
 import { sensitiveScreenshotMask } from "@/lib/project-agent/runtime/browser-agent/privacy";
 
 export const runtime = "nodejs";
@@ -19,10 +18,9 @@ export async function GET(req: NextRequest, { params }: {
   if (!task || task.projectId !== params.projectId ||
     task.ownerEmail.toLowerCase() !== access.callerEmail?.toLowerCase())
     return NextResponse.json({ error: "Browser stream not found" }, { status: 404, headers });
-  const browser = activeBrowserSession(task.id) ?? activeProjectBrowser(params.projectId, task.ownerEmail);
+  const browser = await resolveTaskBrowser(task.id, params.projectId, task.ownerEmail);
   if (!browser || browser.owner !== task.ownerEmail.toLowerCase() ||
-    (browser.persistent && browser.activeAgentTaskId !== task.id) ||
-    !browserWatchStatus(task.id)?.watching || !["queued","running"].includes(task.status))
+    !["queued","running"].includes(task.status))
     return NextResponse.json({ error: "Browser stream unavailable" }, { status: 409, headers });
   const boundary = "projectagentframe";
   let stopped = false;
@@ -32,7 +30,10 @@ export async function GET(req: NextRequest, { params }: {
         const encoder = new TextEncoder();
         try {
           for (let i = 0; i < 22 && !stopped && !req.signal.aborted; i++) {
-            if (!browserWatchStatus(task.id)?.watching || !browser.page || browser.page.isClosed()) break;
+            if (!browser.page || browser.page.isClosed()) break;
+            if ((controller.desiredSize ?? 1) <= 0) {
+              await new Promise(resolve => setTimeout(resolve, 200)); continue;
+            }
             try {
               const bytes = await browser.page.screenshot({
                 type: "jpeg", quality: 48, animations: "disabled", timeout: 3500,
@@ -48,7 +49,10 @@ export async function GET(req: NextRequest, { params }: {
             await new Promise(resolve => setTimeout(resolve, 650));
           }
         } finally {
-          if (!stopped) { controller.enqueue(encoder.encode("--" + boundary + "--\r\n")); controller.close(); }
+          if (!stopped) {
+            try { controller.enqueue(encoder.encode("--" + boundary + "--\r\n")); controller.close(); }
+            catch { /* Consumer disconnected while frame was being produced. */ }
+          }
         }
       })().catch(() => { try { controller.close(); } catch { /* already aborted */ } });
     },

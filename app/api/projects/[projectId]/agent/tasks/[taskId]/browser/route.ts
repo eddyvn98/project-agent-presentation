@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { readProjectAgentTask } from "@/lib/project-agent/task-store";
 import { browserWatchImage, browserWatchStatus, captureBrowserWatch, setBrowserWatch } from "@/lib/project-agent/runtime/browser-agent/watch";
-import { activeBrowserSession } from "@/lib/project-agent/runtime/browser-agent/session";
-import { activeProjectBrowser } from "@/lib/project-agent/runtime/browser-agent/project-sessions";
-import { browserControlState, releaseBrowserControl } from "@/lib/project-agent/runtime/browser-agent/control";
+import { resolveTaskBrowser, taskBrowserControlStatus } from "@/lib/project-agent/runtime/browser-agent/task-browser";
+import { releaseBrowserControl } from "@/lib/project-agent/runtime/browser-agent/control";
 import { browserLoopEnabled, browserLoopStatus } from "@/lib/project-agent/runtime/browser-agent/loop-state";
 
 export const runtime = "nodejs";
@@ -37,7 +36,8 @@ export async function GET(req: NextRequest, { params }: Params) {
       headers: { ...HEADERS, "Content-Type": "image/jpeg", "Content-Disposition": "inline" },
     });
   }
-  return NextResponse.json({ preview: browserWatchStatus(params.taskId), control: browserControlState(params.taskId),
+  const control = await taskBrowserControlStatus(params.taskId, params.projectId, checked.task!.ownerEmail);
+  return NextResponse.json({ preview: browserWatchStatus(params.taskId), control,
     ...(browserLoopEnabled() ? { loop: browserLoopStatus(params.taskId) } : {}) }, { headers: HEADERS });
 }
 
@@ -62,10 +62,8 @@ export async function POST(req: NextRequest, { params }: Params) {
   setBrowserWatch(params.taskId, body.watch);
   if (body.watch) {
     // No browser launch: capture only the session which the agent has already created.
-    const existing = activeBrowserSession(checked.task!.id) ??
-      activeProjectBrowser(params.projectId, checked.task!.ownerEmail);
-    if (existing && (!existing.persistent || existing.activeAgentTaskId === checked.task!.id))
-      await captureBrowserWatch(params.taskId, existing.page, "watch started");
+    const existing = await resolveTaskBrowser(checked.task!.id, params.projectId, checked.task!.ownerEmail);
+    if (existing) await captureBrowserWatch(params.taskId, existing.page, "watch started");
   }
   return NextResponse.json({ preview: browserWatchStatus(params.taskId) }, { headers: HEADERS });
 }

@@ -32,6 +32,32 @@ export function ProjectAgentBrowserPreview({ projectId, taskId, running, languag
     window.dispatchEvent(new CustomEvent(PREVIEW_OPEN_EVENT, { detail: { taskId } }));
     setOpen(true);
   }
+  useEffect(() => {
+    if (!open || !running) return;
+    const poll = async () => {
+      try {
+        const response = await fetch(root, { cache: "no-store" });
+        if (!response.ok) return;
+        const result = await response.json() as { control?: { paused: boolean } };
+        setManualMode(Boolean(result.control?.paused));
+      } catch { /* Retry on next poll. */ }
+    };
+    void poll();
+    const timer = window.setInterval(() => { void poll(); }, 3_000);
+    return () => window.clearInterval(timer);
+  }, [open, running, root]);
+  useEffect(() => {
+    if (!open || !manualMode || !running) return;
+    const timer = window.setInterval(() => {
+      void fetch(root + "/control", { method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op: "heartbeat" }) })
+        .then(async response => {
+          if (!response.ok) { setManualMode(false); setControlError("Browser control expired"); }
+        }).catch(() => { /* Let the lease expire; poll reconciles. */ });
+    }, 25_000);
+    return () => window.clearInterval(timer);
+  }, [open, manualMode, running, root]);
   async function changeControl() {
     setControlBusy(true); setControlError("");
     try {
