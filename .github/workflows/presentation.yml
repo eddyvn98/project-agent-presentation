@@ -74,6 +74,18 @@ jobs:
           PROJECT_AGENT_BROWSER_AGENT: "1"
           PROJECT_AGENT_P8_REAL_BROWSER_QA: "1"
       - run: npm run test:e2e
+      - name: Install isolated accessibility audit
+        run: npm install --no-save --package-lock=false @axe-core/playwright@4
+      - name: Real-component Agent UX QA (desktop/mobile, light/dark, accessibility)
+        run: npm run test:agent-ui:e2e
+      - name: Preserve Agent UI QA screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-ui-qa-screenshots
+          path: test-results/agent-ui/
+          if-no-files-found: ignore
+          retention-days: 5
       - name: Preserve browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4

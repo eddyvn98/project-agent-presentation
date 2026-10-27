@@ -11,6 +11,7 @@
     "demo": "vite --host 127.0.0.1",
     "build:demo": "vite build",
     "test:e2e": "playwright test",
+    "test:agent-ui:e2e": "playwright test --config playwright.agent-ui.config.ts",
     "check:lines": "node tests/check-lines.mjs",
     "test:agent": "vitest run --config vitest.agent.config.ts",
     "check:agent-routes": "node scripts/check-agent-routes.mjs",
