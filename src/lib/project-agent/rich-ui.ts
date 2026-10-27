@@ -74,6 +74,7 @@ function parseScene(value: unknown): RichScene | undefined {
 }
 
 export function parseRichUiBlock(source: string): RichUiBlock | null {
+	if (source.length > 40000) return null;
 	let raw: Record<string, unknown>;
 	try { raw = record(JSON.parse(source)); } catch { return null; }
 	switch (raw.type) {
@@ -88,6 +89,13 @@ export function parseRichUiBlock(source: string): RichUiBlock | null {
             const categories = raw.categories.map((item) => text(item, 40));
             const series = raw.series.map(record).map((item) => ({ name: text(item.name, 40) || "Series", values: Array.isArray(item.values) ? item.values.map(decimal) : [] }));
             if (!categories.length || categories.some((item) => !item) || !series.length || series.some((item) => item.values.length !== categories.length || item.values.some((value) => value === null))) return null;
+            // Recharts uses the label as the data key: duplicates overwrite observations.
+            const keys = series.map((item) => item.name.toLocaleLowerCase());
+            if (new Set(keys).size !== keys.length) return null;
+            // The renderer draws only the first pie series. Reject rather than silently drop data.
+            if (kind === "pie" && (series.length !== 1 ||
+                series[0].values.some((value) => value !== null && value < 0) ||
+                series[0].values.every((value) => value === 0))) return null;
             const validSeries = series.map((item) => ({ ...item, values: item.values as number[] }));
 			return { type: "chart", kind, title: text(raw.title, 120) || undefined, caption: text(raw.caption, 240) || undefined, unit: text(raw.unit, 20) || undefined, categories, series: validSeries };
 		}

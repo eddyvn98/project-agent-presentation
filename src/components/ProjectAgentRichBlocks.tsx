@@ -67,9 +67,9 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 				if (share && navigator.clipboard?.write && typeof ClipboardItem !== "undefined") {
 					await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
 				} else {
-					const link = document.createElement("a"); link.href = URL.createObjectURL(png); link.download = `${(block.title || "chart").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "chart"}.png`; link.click(); URL.revokeObjectURL(link.href);
+					const link = document.createElement("a"); const downloadUrl = URL.createObjectURL(png); link.href = downloadUrl; link.download = `${(block.title || "chart").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "chart"}.png`; link.click(); window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 15000);
 				}
-				setShareError(share ? "Chart image copied." : "");
+				setShareError(share ? (navigator.clipboard?.write && typeof ClipboardItem !== "undefined" ? "Chart image copied." : "Sharing is unavailable; chart image downloaded instead.") : "");
 			} finally { URL.revokeObjectURL(source); }
 		} catch { setShareError(share ? "Could not copy chart image." : "Could not download chart image."); }
 	}
@@ -81,11 +81,12 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 				<button type="button" onClick={() => setShowTable((value) => !value)} aria-pressed={showTable} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Table2 className="h-3.5 w-3.5" />{showTable ? "Chart" : "Table"}</button>
 			</div>
 			{shareError && <p role="status" className="mb-2 text-right text-xs text-slate-500">{shareError}</p>}
-			{showTable ? <div className="max-h-64 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700"><table className="min-w-full text-left text-xs"><thead className="bg-slate-50 dark:bg-slate-800"><tr><th className="px-3 py-2">Category</th>{block.series.map((series) => <th key={series.name} className="px-3 py-2">{series.name}{unit}</th>)}</tr></thead><tbody>{block.categories.map((category, index) => <tr key={`${category}-${index}`} className="border-t border-slate-100 dark:border-slate-800"><th className="px-3 py-2 font-medium">{category}</th>{block.series.map((series) => <td key={series.name} className="px-3 py-2 tabular-nums">{(series.values[index]).toLocaleString()}{unit}</td>)}</tr>)}</tbody></table></div> : <div ref={chartRef} className="h-64 w-full" role="img" aria-label={block.title ?? "Chart"}>
+			{showTable ? <div className="max-h-64 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700"><table className="min-w-full text-left text-xs"><caption className="sr-only">{block.title || "Chart data"}: exact values by category and series</caption><thead className="bg-slate-50 dark:bg-slate-800"><tr><th scope="col" className="px-3 py-2">Category</th>{block.series.map((series) => <th key={series.name} scope="col" className="px-3 py-2">{series.name}{unit}</th>)}</tr></thead><tbody>{block.categories.map((category, index) => <tr key={`${category}-${index}`} className="border-t border-slate-100 dark:border-slate-800"><th scope="row" className="px-3 py-2 font-medium">{category}</th>{block.series.map((series) => <td key={series.name} className="px-3 py-2 tabular-nums">{(series.values[index]).toLocaleString()}{unit}</td>)}</tr>)}</tbody></table></div> : <div className="w-full overflow-x-auto rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50" role="region" aria-label={`Scrollable chart: ${block.title || "Chart"}`} tabIndex={0}>
+                <div ref={chartRef} className="h-72 w-full" style={{ minWidth: block.categories.length > 6 ? Math.min(960, block.categories.length * 88) : undefined }} role="img" aria-label={block.title ?? "Chart"}>
 				<ResponsiveContainer width="100%" height="100%">
 					{block.kind === "pie" ? (
 						<PieChart>
-							<Pie data={data} dataKey={block.series[0].name} nameKey="name" outerRadius="80%" label>
+							<Pie data={data} dataKey={block.series[0].name} nameKey="name" outerRadius="78%" label={block.categories.length <= 5 && block.categories.every((name) => name.length <= 12)}>
 								{data.map((_, index) => <Cell key={index} fill={PALETTE[index % PALETTE.length]} />)}
 							</Pie>
 							{tooltip}
@@ -111,7 +112,7 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 						</BarChart>
 					)}
 				</ResponsiveContainer>
-			</div>}
+			</div></div>}
 		</Card>
 	);
 });

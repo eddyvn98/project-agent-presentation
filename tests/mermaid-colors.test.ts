@@ -15,7 +15,7 @@ describe("Mermaid node palette", () => {
     const nodes = Array.from(svg.querySelectorAll("g.node"));
     const fills = nodes.map(n => (n.querySelector("rect,polygon,circle") as SVGElement).style.fill);
     expect(new Set(fills).size).toBeGreaterThanOrEqual(3);
-    expect(fills[1]).toBe("#fef3c7");
+    expect(fills[1]).toBe("rgb(254, 243, 199)");
     for (const node of nodes) {
       const shape = node.querySelector("rect,polygon,circle") as SVGElement;
       expect(shape.style.stroke).toBeTruthy();
@@ -39,6 +39,6 @@ describe("Mermaid node palette", () => {
     const svg = diagram();
     svg.querySelector("rect")?.setAttribute("style", "fill: #123456");
     expect(colorizeMermaidNodes(svg, "flowchart TD\nA-->B")).toBe(3);
-    expect((svg.querySelector("rect") as SVGElement).style.fill).toBe("#123456");
+    expect((svg.querySelector("rect") as SVGElement).style.fill).toBe("rgb(18, 52, 86)");
   });
 });

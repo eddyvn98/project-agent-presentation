@@ -1,3 +1,4 @@
+import { responseShowcase } from "./response-fixtures";
 // All examples, labels and sources in this fixture are synthetic.
 export const explorer = {
   type: "explorer", title: "Eight states in a fictional cycle", intro: "A synthetic interaction test; this is not a scientific model.",
@@ -54,4 +55,4 @@ This [synthetic source](https://example.com/reference) demonstrates a keyboard-a
 
 The explanation remains visible when optional visual data is malformed:
 
-` + '```agent-ui\n{"type":"chart","categories":["A","B"],"series":[{"name":"Demo","values":[1]}]}\n```';
+` + '```agent-ui\n{"type":"chart","categories":["A","B"],"series":[{"name":"Demo","values":[1]}]}\n```' + "\n\n" + responseShowcase;

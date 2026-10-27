@@ -50,7 +50,7 @@ export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSo
 	code: ({ className, children }) => className ? <code className={className}>{children}</code> : <code className="not-prose rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[0.85em] text-slate-800 before:content-none after:content-none dark:bg-slate-800 dark:text-slate-100">{children}</code>,
 	blockquote: ({ children }) => <blockquote className="not-prose my-4 rounded-r-lg border-l-4 border-orange-300 bg-orange-50/50 px-4 py-2 text-slate-700 dark:border-orange-500/60 dark:bg-orange-950/20 dark:text-slate-300 [&>p]:my-1">{children}</blockquote>,
 	span: ({ node: _node, className, children, ...props }) => className?.split(" ").includes("katex-display")
-        ? <span {...props} className={className} role="region" aria-label="Scrollable formula" tabIndex={0}>{children}</span>
+        ? <span {...props} className={`${className} block max-w-full overflow-x-auto`} role="region" aria-label="Scrollable formula" tabIndex={0}>{children}</span>
         : <span {...props} className={className}>{children}</span>,
 	hr: () => <hr className="not-prose my-6 border-slate-200 dark:border-slate-700" />,
 	img: ({ src, alt }) => {
