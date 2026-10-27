@@ -34,7 +34,7 @@ export function ProjectAgentTaskAnswer({ markdown, sources, resolveImage, images
 	const canPresent = presentation && !running && sections.length > 1;
 	const index = Math.min(slide, sections.length - 1);
 	const visible = presenting && canPresent ? sections[index] : normalized;
-	const components = useMemo(() => createProjectAgentMarkdownComponents(sources, resolveImage, images, enable3DViewer), [sources, resolveImage, images, enable3DViewer]);
+	const components = useMemo(() => createProjectAgentMarkdownComponents(sources, resolveImage, images, enable3DViewer, language), [sources, resolveImage, images, enable3DViewer, language]);
 	const move = (next: number) => setSlide(Math.max(0, Math.min(sections.length - 1, next)));
 	const onKeys = (event: KeyboardEvent<HTMLDivElement>) => {
 		if (!presenting || !canPresent || event.altKey || event.ctrlKey || event.metaKey) return;

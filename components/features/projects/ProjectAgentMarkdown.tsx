@@ -22,7 +22,7 @@ function externalHost(href: string | undefined): string | null {
 	try { return new URL(href).hostname.replace(/^www\./, ""); } catch { return null; }
 }
 
-export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSource[] = [], resolveImage?: (src: string) => string | null, images: Record<string, ImagePresentation> = {}, enable3DViewer = false): Components {
+export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSource[] = [], resolveImage?: (src: string) => string | null, images: Record<string, ImagePresentation> = {}, enable3DViewer = false, language = "en"): Components {
 	const sourceTitles = new Map(sources.map((source) => [sourceKey(source.url), source.title]));
 	return {
 	a: ({ href, children, node }) => {
@@ -40,7 +40,7 @@ export function createProjectAgentMarkdownComponents(sources: ProjectAgentTaskSo
 			const props = (code as ReactElement<{ className?: string; children?: unknown }>).props;
 			const classes = typeof props.className === "string" ? props.className.split(/\s+/) : [];
 			const text = typeof props.children === "string" ? props.children : String(props.children ?? "");
-			if (classes.includes("language-ong-ui")) return <ProjectAgentRichBlock source={text} enable3DViewer={enable3DViewer} />;
+			if (classes.includes("language-ong-ui")) return <ProjectAgentRichBlock source={text} enable3DViewer={enable3DViewer} language={language} />;
 			if (classes.includes("language-ong-doc")) return <ProjectAgentDocumentCard source={text} />;
 			if (classes.includes("language-mermaid")) return <ProjectAgentRichBlock source={JSON.stringify({ type: "mermaid", code: text })} />;
 			return <ProjectAgentCodeBlock language={classes.find((name) => name.startsWith("language-"))?.slice(9) ?? ""} code={text} />;

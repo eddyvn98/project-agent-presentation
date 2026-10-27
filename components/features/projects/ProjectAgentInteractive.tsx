@@ -2,13 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { evaluateExpression, type InteractiveModel } from "@/lib/project-agent/interactive-model";
+import { responseLabels } from "../../../shared/project-agent/response-locale";
 
-const formatter = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 });
-const display = (value: number | null, unit?: string) =>
-  value === null ? "Unable to calculate" : `${formatter.format(value)}${unit ? ` ${unit}` : ""}`;
+
 
 /** An interactive chart driven entirely by a bounded expression AST; never executes model code. */
-export function ProjectAgentInteractive({ block }: { block: InteractiveModel }) {
+export function ProjectAgentInteractive({ block, language = "en" }: { block: InteractiveModel; language?: string }) {
+  const labels = responseLabels(language);
+  const formatter = new Intl.NumberFormat(labels.locale, { maximumFractionDigits: 2 });
+  const display = (value: number | null, unit?: string) =>
+    value === null ? labels.calculationUnavailable : `${formatter.format(value)}${unit ? ` ${unit}` : ""}`;
   const [values, setValues] = useState<Record<string, number>>(
     () => Object.fromEntries(block.parameters.map((p) => [p.id, p.initial])),
   );
@@ -58,10 +61,10 @@ export function ProjectAgentInteractive({ block }: { block: InteractiveModel }) 
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{block.plot.label}</p>
         <button type="button" aria-pressed={showTable} onClick={() => setShowTable((old) => !old)}
-          className="rounded border px-3 py-1.5 text-xs text-slate-600 dark:text-slate-200">{showTable ? "Show chart" : "Show data"}</button>
+          className="rounded border px-3 py-1.5 text-xs text-slate-600 dark:text-slate-200">{showTable ? labels.showChart : labels.showData}</button>
       </div>
       {showTable ? <div className="mt-2 max-h-56 overflow-auto rounded border">
-        <table className="w-full text-left text-xs"><thead><tr><th className="p-2">Input</th><th className="p-2">Result</th></tr></thead>
+        <table className="w-full text-left text-xs"><thead><tr><th className="p-2">{labels.input}</th><th className="p-2">{labels.result}</th></tr></thead>
           <tbody>{points.map((p, i) => <tr key={i}><td className="border-t p-2 tabular-nums">{formatter.format(p.x)}</td><td className="border-t p-2 tabular-nums">{display(p.y)}</td></tr>)}</tbody>
         </table>
       </div> : valid.length > 1 ? <svg viewBox="0 0 600 180" className="mt-2 block h-auto w-full rounded-lg bg-slate-50" role="img"
@@ -72,8 +75,8 @@ export function ProjectAgentInteractive({ block }: { block: InteractiveModel }) 
         <text x="42" y="148" fontSize="12" fill="#334155">{formatter.format(yMin)}</text>
         <text x="40" y="174" fontSize="12" fill="#334155">{formatter.format(xMin)}</text>
         <text x="560" y="174" textAnchor="end" fontSize="12" fill="#334155">{formatter.format(xMax)}</text>
-      </svg> : <p role="status" className="mt-2 text-sm text-slate-500">Chart unavailable for these values.</p>}
+      </svg> : <p role="status" className="mt-2 text-sm text-slate-500">{labels.chartUnavailable}</p>}
     </div>}
-    <p className="mt-3 text-xs leading-5 text-slate-500">Illustrative model. Outputs are calculated from the supplied parameters and expressions; verify assumptions before making decisions.</p>
+    <p className="mt-3 text-xs leading-5 text-slate-500">{labels.modelCaution}</p>
   </figure>;
 }

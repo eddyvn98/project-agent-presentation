@@ -11,6 +11,7 @@ import { ProjectAgentQuiz } from "./ProjectAgentQuiz";
 import { ProjectAgentFormBlock } from "./ProjectAgentFormBlock";
 import { ProjectAgentMermaid } from "./ProjectAgentMermaid";
 import { parseRichUiBlock, type RichTone, type RichUiBlock } from "@/lib/project-agent/rich-ui";
+import { responseLabels } from "../../../shared/project-agent/response-locale";
 
 const AXIS_TICK = { fontSize: 11 } as const;
 const PALETTE = ["#4e79a7", "#f28e2b", "#59a14f", "#e15759", "#76b7b2", "#b07aa1", "#edc948", "#9c755f"];
@@ -42,13 +43,14 @@ function Card({ title, caption, children }: { title?: string; caption?: string; 
 }
 
 // Memoized with stable data and props: recharts re-dispatches axis ticks whenever these change identity, which loops on re-render.
-const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBlock, { type: "chart" }> }) {
+const ChartBlock = memo(function ChartBlock({ block, language = "en" }: { block: Extract<RichUiBlock, { type: "chart" }>; language?: string }) {
+	const labels = responseLabels(language);
 	const chartRef = useRef<HTMLDivElement>(null);
 	const [showTable, setShowTable] = useState(false);
 	const [shareError, setShareError] = useState("");
 	const data = useMemo(() => block.categories.map((name, index) => Object.fromEntries([["name", name], ...block.series.map((series) => [series.name, series.values[index]])])), [block]);
 	const unit = block.unit ? ` ${block.unit}` : "";
-	const formatter = useMemo(() => (value: unknown) => `${typeof value === "number" ? value.toLocaleString() : String(value)}${unit}`, [unit]);
+	const formatter = useMemo(() => (value: unknown) => `${typeof value === "number" ? value.toLocaleString(labels.locale) : String(value)}${unit}`, [unit, labels.locale]);
 	const tooltip = <Tooltip formatter={formatter} />;
 	async function exportChart(share: boolean) {
 		const svg = chartRef.current?.querySelector("svg");
@@ -78,12 +80,12 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 	return (
 		<Card title={block.title} caption={block.caption}>
 			<div className="mb-2 flex flex-wrap justify-end gap-1">
-				<button type="button" onClick={() => void exportChart(true)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="Share chart as image"><Share2 className="h-3.5 w-3.5" />Share</button>
-				<button type="button" onClick={() => void exportChart(false)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label="Download chart as image"><Download className="h-3.5 w-3.5" />Download</button>
-				<button type="button" onClick={() => setShowTable((value) => !value)} aria-pressed={showTable} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Table2 className="h-3.5 w-3.5" />{showTable ? "Chart" : "Table"}</button>
+				<button type="button" onClick={() => void exportChart(true)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label={labels.shareImage}><Share2 className="h-3.5 w-3.5" />{labels.share}</button>
+				<button type="button" onClick={() => void exportChart(false)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" aria-label={labels.downloadImage}><Download className="h-3.5 w-3.5" />{labels.download}</button>
+				<button type="button" onClick={() => setShowTable((value) => !value)} aria-pressed={showTable} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"><Table2 className="h-3.5 w-3.5" />{showTable ? labels.chart : labels.table}</button>
 			</div>
 			{shareError && <p role="status" className="mb-2 text-right text-xs text-slate-500">{shareError}</p>}
-			{showTable ? <div className="max-h-64 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700"><table className="min-w-full text-left text-xs"><caption className="sr-only">{block.title || "Chart data"}: exact values by category and series</caption><thead className="bg-slate-50 dark:bg-slate-800"><tr><th scope="col" className="px-3 py-2">Category</th>{block.series.map((series) => <th key={series.name} scope="col" className="px-3 py-2">{series.name}{unit}</th>)}</tr></thead><tbody>{block.categories.map((category, index) => <tr key={`${category}-${index}`} className="border-t border-slate-100 dark:border-slate-800"><th scope="row" className="px-3 py-2 font-medium">{category}</th>{block.series.map((series) => <td key={series.name} className="px-3 py-2 tabular-nums">{(series.values[index]).toLocaleString()}{unit}</td>)}</tr>)}</tbody></table></div> : <div className="w-full overflow-x-auto rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50" role="region" aria-label={`Scrollable chart: ${block.title || "Chart"}`} tabIndex={0}>
+			{showTable ? <div className="max-h-64 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700"><table className="min-w-full text-left text-xs"><caption className="sr-only">{block.title || "Chart data"}: {labels.exactValues}</caption><thead className="bg-slate-50 dark:bg-slate-800"><tr><th scope="col" className="px-3 py-2">{labels.category}</th>{block.series.map((series) => <th key={series.name} scope="col" className="px-3 py-2">{series.name}{unit}</th>)}</tr></thead><tbody>{block.categories.map((category, index) => <tr key={`${category}-${index}`} className="border-t border-slate-100 dark:border-slate-800"><th scope="row" className="px-3 py-2 font-medium">{category}</th>{block.series.map((series) => <td key={series.name} className="px-3 py-2 tabular-nums">{(series.values[index]).toLocaleString(labels.locale)}{unit}</td>)}</tr>)}</tbody></table></div> : <div className="w-full overflow-x-auto rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50" role="region" aria-label={`${labels.scrollableChart}: ${block.title || labels.chart}`} tabIndex={0}>
                 <div ref={chartRef} className="h-72 w-full" style={{ minWidth: block.categories.length > 6 ? Math.min(960, block.categories.length * 88) : undefined }} role="img" aria-label={block.title ?? "Chart"}>
 				<ResponsiveContainer width="100%" height="100%">
 					{block.kind === "pie" ? (
@@ -121,7 +123,7 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 
 const CALLOUT_ICON: Record<RichTone, typeof Info> = { neutral: Info, info: Info, success: CheckCircle2, warning: AlertTriangle, danger: OctagonAlert };
 
-function RichBlock({ source, enable3DViewer = false }: { source: string; enable3DViewer?: boolean }) {
+function RichBlock({ source, enable3DViewer = false, language = "en" }: { source: string; enable3DViewer?: boolean; language?: string }) {
 	const block = useMemo(() => parseRichUiBlock(source), [source]);
 	if (!block) {
 		return <VisualFallback />;
@@ -140,7 +142,7 @@ function RichBlock({ source, enable3DViewer = false }: { source: string; enable3
 				</div>
 			);
 		case "chart":
-			return <ChartBlock block={block} />;
+			return <ChartBlock block={block} language={language} />;
 		case "progress": {
 			const percent = Math.max(0, Math.min(100, (block.value / block.max) * 100));
 			return (
@@ -223,9 +225,9 @@ function RichBlock({ source, enable3DViewer = false }: { source: string; enable3
 		case "form":
 			return <ProjectAgentFormBlock block={block} />;
 		case "interactive":
-			return <ProjectAgentInteractive block={block} />;
+			return <ProjectAgentInteractive block={block} language={language} />;
 		case "quiz":
-			return <ProjectAgentQuiz block={block} />;
+			return <ProjectAgentQuiz block={block} language={language} />;
 		case "followups":
 			return <FollowupsBlock block={block} />;
 		case "mermaid":
@@ -243,6 +245,6 @@ class VisualBoundary extends Component<{ children: ReactNode }, { failed: boolea
   render() { return this.state.failed ? <VisualFallback /> : this.props.children; }
 }
 
-export function ProjectAgentRichBlock({ source, enable3DViewer = false }: { source: string; enable3DViewer?: boolean }) {
-  return <VisualBoundary key={source}><RichBlock source={source} enable3DViewer={enable3DViewer} /></VisualBoundary>;
+export function ProjectAgentRichBlock({ source, enable3DViewer = false, language = "en" }: { source: string; enable3DViewer?: boolean; language?: string }) {
+  return <VisualBoundary key={source}><RichBlock source={source} enable3DViewer={enable3DViewer} language={language} /></VisualBoundary>;
 }

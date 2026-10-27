@@ -11,17 +11,18 @@ import "katex/dist/katex.min.css";
 import "./presentation.css";
 
 /** Optional entry point; existing component maps and file/source adapters remain supported. */
-export function ProjectAgentAnswer({ markdown, sources = [], resolveImage, images = {}, enable3DViewer = false }: {
+export function ProjectAgentAnswer({ markdown, sources = [], resolveImage, images = {}, enable3DViewer = false, language = "en" }: {
   markdown: string;
   sources?: ProjectAgentTaskSource[];
   resolveImage?: (src: string) => string | null;
   images?: Record<string, ImagePresentation>;
   enable3DViewer?: boolean;
+  language?: string;
 }) {
   return <div className="agent-answer">
     <ReactMarkdown skipHtml remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[[rehypeKatex, { throwOnError: false, trust: false, strict: "error", maxExpand: 200, maxSize: 20 }]]}
-      components={createProjectAgentMarkdownComponents(sources, resolveImage, images, enable3DViewer)}>
+      components={createProjectAgentMarkdownComponents(sources, resolveImage, images, enable3DViewer, language)}>
       {normalizeProjectAgentMarkdown(markdown)}
     </ReactMarkdown>
   </div>;
