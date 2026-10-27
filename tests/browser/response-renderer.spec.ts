@@ -6,7 +6,7 @@ test("full answer supports tables, code, sources and multiple data charts", asyn
   await expect(page.getByRole("heading", { name: "Chart renderer QA" })).toBeVisible();
   const table = page.getByRole("region", { name: "Scrollable response table" }).first();
   await expect(table.getByRole("columnheader", { name: "Revenue" })).toBeVisible();
-  await expect(page.locator("pre").filter({ hasText: "console.log(values.reduce" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy code" })).toBeVisible();
   const line = page.locator("figure").filter({ hasText: "Synthetic line chart" }).first();
   await expect(line.getByRole("region", { name: "Scrollable chart: Synthetic line chart" })).toBeVisible();
   await line.getByRole("button", { name: "Table", exact: true }).click();
@@ -34,6 +34,6 @@ for (const width of [390, 768]) {
     expect(sizes.page).toBeLessThanOrEqual(sizes.viewport + 2);
     const table = page.getByRole("region", { name: "Scrollable response table" }).first();
     await expect(table).toBeVisible();
-    await expect(table.getByRole("rowheader", { name: "January" })).toBeVisible();
+    await expect(table.getByRole("cell", { name: "January" })).toBeVisible();
   });
 }

@@ -103,7 +103,7 @@ test("long text diagram keeps its columns and scrolls on mobile instead of wrapp
 
 test("default Mermaid nodes have varied pastel fills and distinct borders", async ({ page }) => {
   const figure = page.locator("figure").filter({ has: page.getByRole("button", { name: "Enlarge Diagram", exact: true }) });
-  const svg = figure.locator('svg').first();
+  const svg = figure.locator("svg").filter({ has: figure.locator("g.node") }).first();
   await expect(svg.locator("g.node")).toHaveCount(4, { timeout: 30000 });
   const colors = await svg.locator("g.node").evaluateAll(nodes => nodes.map(node => {
     const shape = node.querySelector("rect, polygon, path, circle, ellipse");
