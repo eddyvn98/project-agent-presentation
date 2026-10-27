@@ -20,8 +20,7 @@ describe("deterministic browser fault injection", () => {
   it("does not mistake a missing value or navigation race for verified typing", async () => {
     const page = { url: () => before.url,
       locator: () => ({ inputValue: async () => { throw new Error("Execution context was destroyed"); } }) };
-    const session = ({ page, refs: new Map([["e1", "#name"]]), lastSnapshot: before.snapshot })
-      as unknown as BrowserSession;
+    const session = ({ page, refs: new Map([["e1", "#name"]]), lastSnapshot: before.snapshot }) as unknown as BrowserSession;
     expect(await verifyBrowserProgress(session, {
       action: "browser", op: "type", ref: "e1", text: "synthetic",
     }, before)).toEqual({ verified: false, reason: "not_observable" });
