@@ -105,7 +105,7 @@ try {
       { projectId: slot.projectId, chatId: slot.id }, undefined, new Date(finalNow));
     assert.ok(checkpoint.length > 0 && checkpoint.length <= 16);
   }
-  report.orphans = await db.collection(COMPACTION_LEASE_COLLECTION)
+  report.orphans = await clients[0].db(dbName).collection(COMPACTION_LEASE_COLLECTION)
     .countDocuments({ state: "active" });
   assert.equal(report.orphans, 0);
   assert.equal(report.claims, 96 * slots.length);
@@ -114,10 +114,10 @@ try {
 } finally {
   try {
     if (created) {
-      const marker = await db.collection("l10_test_run").findOne({ _id: "marker" });
+      const marker = await clients[0].db(dbName).collection("l10_test_run").findOne({ _id: "marker" });
       if (marker?.runId !== runId || marker.purpose !== "isolated_virtual_soak")
         throw Error("QA marker changed: refusing to drop database");
-      await db.dropDatabase();
+      await clients[0].db(dbName).dropDatabase();
     }
   } finally {
     await Promise.all(clients.filter(Boolean).map(client => client.close()));
