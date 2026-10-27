@@ -7,13 +7,16 @@ const consents = new Map<string, Consent>();
 const TIMEOUT = 10 * 60_000;
 function requireOwner(taskId: string, owner: string) {
   const session = activeBrowserSession(taskId);
-  if (!session || !owner)
-    throw new Error("An active browser session and owner are required to manage a personal login");
+  if (!session || !owner || !session.owner ||
+      session.owner.trim().toLowerCase() !== owner.trim().toLowerCase())
+    throw new Error("An active browser session with matching owner is required to manage a personal login");
   return session;
 }
 export async function personalLoginStatus(taskId: string, owner: string) {
   const session = activeBrowserSession(taskId);
-  const url = session?.page.url() ?? "";
+  if (!owner || !session?.owner || session.owner.trim().toLowerCase() !== owner.trim().toLowerCase())
+    return { host: "", grant: null, preparing: false };
+  const url = session.page.url();
   try {
     const host = vaultHost(url);
     const grant = (await readPersonalBrowserGrant(owner, url))?.grant ?? null;

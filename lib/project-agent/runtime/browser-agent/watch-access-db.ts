@@ -16,9 +16,12 @@ export async function setSharedBrowserWatch(taskId: string, projectId: string,
     await coll.deleteOne({ _id: taskId, owner: identity, projectId });
     return;
   }
-  await coll.updateOne({ _id: taskId }, { $set: {
-    owner: identity, projectId, expiresAt: Date.now() + WINDOW_MS,
-  } }, { upsert: true });
+  // Scope the CAS to the original owner/project. A duplicate task ID from a
+  // different tenant must fail with E11000, never overwrite a live Watch grant.
+  await coll.updateOne({ _id: taskId, owner: identity, projectId }, {
+    $set: { expiresAt: Date.now() + WINDOW_MS },
+    $setOnInsert: { owner: identity, projectId },
+  }, { upsert: true });
 }
 export async function sharedBrowserWatchAllowed(taskId: string, projectId: string,
   owner: string): Promise<boolean> {
