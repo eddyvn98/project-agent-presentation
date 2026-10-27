@@ -64,7 +64,8 @@
     "test:inspiration:agent": "vitest run --config vitest.agent.config.ts tests/agent/browser-visual-viewport.test.ts tests/agent/browser-webmcp-readonly.test.ts",
     "test:inspiration:presentation": "vitest run tests/presentation-scene3d.test.tsx",
     "test:browser:binary-integrity": "vitest run --config vitest.agent.config.ts tests/agent/browser-binary-integrity.test.ts",
-    "test:c7:mongo": "node scripts/g2-multiworker-browser-qa.mjs"
+    "test:c7:mongo": "node scripts/g2-multiworker-browser-qa.mjs",
+    "test:c8c11:unit": "vitest run --config vitest.agent.config.ts tests/agent/c8-admission-soak.test.ts tests/agent/c9-watch-retention-soak.test.ts tests/agent/c10-vault-soak-security.test.ts tests/agent/c11-browser-fault-budget.test.ts"
   },
   "peerDependencies": {
     "next": ">=14",
