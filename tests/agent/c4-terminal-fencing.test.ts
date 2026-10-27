@@ -14,6 +14,7 @@ const task = { id: "pat_123456789abc", ownerEmail: "owner@project-agent.test",
 const updateOne = vi.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }));
 beforeEach(() => {
   vi.resetAllMocks();
+  updateOne.mockResolvedValue({ matchedCount: 1, modifiedCount: 1 });
   vi.mocked(assertActiveTaskLease).mockResolvedValue();
   vi.mocked(getMongoAiDb).mockResolvedValue({ collection: (name: string) => {
     if (name !== PROJECT_AGENT_TASKS_COLLECTION) throw new Error("unexpected collection");
