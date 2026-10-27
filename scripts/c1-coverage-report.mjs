@@ -29,6 +29,10 @@ const output = {
   measurement: "agent V8 branch coverage (CI subset, not production E2E)",
   instrumentedFiles: entries.length, total: summary.total,
   highPriorityUncoveredBranches: gaps,
+  // Keep security/control hotspots visible even when large uncovered modules
+  // dominate the general top-25 list. Percentages are CI unit coverage only.
+  securityControlGaps: ranked.filter(row => /(?:access|vault|personal-auth|watch-access|browser-session-health|task-browser|project-control|project-sessions|control|handback|lease|recover|task-stop|terminal|session-routing|policy-hook)/i.test(row.file))
+    .slice(0, 30),
   fullyUncoveredFiles: entries.filter(row => row.statements > 0 && row.statementPct === 0)
     .map(row => row.file).slice(0, 60),
 };
