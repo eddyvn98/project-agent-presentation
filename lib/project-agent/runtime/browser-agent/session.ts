@@ -187,15 +187,22 @@ export function closeAllBrowserSessions(): Promise<void> {
 const operationLocks = browserGlobal.__projectAgentBrowserOperationLocks ??= new WeakMap<BrowserSession, Promise<void>>();
 export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promise<T>,
   countAgentAction = true, ownershipMode: "agent" | "human" | "system" = "agent",
-  agentTaskId?: string): Promise<T> {
+  agentTaskId?: string, signal?: AbortSignal, authorizationOp?: string): Promise<T> {
+  const queuedRevision = !session.persistent && ownershipMode === "agent" && session.scopeId ?
+    browserControlState(session.scopeId).revision : null;
 	const preceding = operationLocks.get(session) ?? Promise.resolve();
 	let unlock!: () => void;
 	const current = new Promise<void>((resolve) => { unlock = resolve; });
 	operationLocks.set(session, preceding.then(() => current));
 	await preceding;
+  if (signal?.aborted) { unlock(); throw signal.reason ?? new Error("Task stopped"); }
 	if (session.page.isClosed() || !session.browser.isConnected()) { unlock(); throw new Error("Browser session is closed"); }
-  if (!session.persistent && ownershipMode === "agent" && session.scopeId &&
-      browserControlState(session.scopeId).paused) { unlock(); throw new Error("Browser is controlled by the user; wait for handback"); }
+  if (queuedRevision !== null && session.scopeId) {
+    const control = browserControlState(session.scopeId);
+    if (control.paused || control.revision !== queuedRevision) {
+      unlock(); throw new Error("Browser control changed; refresh before retrying");
+    }
+  }
 	if (countAgentAction) session.operationCount += 1;
 	if (countAgentAction && session.operationCount > 60) { unlock(); throw new Error("Browser action limit (60) reached for this task"); }
 	let humanLeaseChanged = false;
@@ -207,6 +214,7 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
     if (session.persistent && ownershipMode === "agent" && !agentTaskId)
       throw new Error("Agent task identity is required for shared browser actions");
     await assertG2BrowserOwnership(session, ownershipMode === "human" ? "human" : "agent");
+    if (signal?.aborted) throw signal.reason ?? new Error("Task stopped");
   } catch (error) {
     if (humanLeaseChanged) await changeG2HumanControl(session, "human", "agent").catch(() => session.close());
     unlock(); throw error;
@@ -214,13 +222,27 @@ export async function withBrowserOp<T>(session: BrowserSession, fn: () => Promis
 	session.lastUsed = Date.now();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
-		const protectedOp = () => session.persistent && session.scopeId ?
-      withProjectControlOp(session.scopeId, ownershipMode,
-        ownershipMode === "agent" ? agentTaskId : undefined, async () => fn(),
-        () => { void session.close().catch(() => {}); }) : fn();
-    return await Promise.race([protectedOp(), new Promise<never>((_, reject) => {
+		const protectedOp = async () => {
+      if (signal?.aborted) throw signal.reason ?? new Error("Task stopped");
+      if (authorizationOp) await assertPersonalBrowserPermission(session, authorizationOp);
+      if (signal?.aborted) throw signal.reason ?? new Error("Task stopped");
+      return session.persistent && session.scopeId ?
+        withProjectControlOp(session.scopeId, ownershipMode,
+          ownershipMode === "agent" ? agentTaskId : undefined, async () => {
+            if (signal?.aborted) throw signal.reason ?? new Error("Task stopped");
+            return fn();
+          }, () => { void session.close().catch(() => {}); }) : fn();
+    };
+    const value = await Promise.race([protectedOp(), new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error(`Browser operation timed out after ${OP_TIMEOUT_MS / 1000} seconds`)), OP_TIMEOUT_MS);
     })]);
+    if (signal?.aborted) throw signal.reason ?? new Error("Task stopped");
+    if (session.page.isClosed() || !session.browser.isConnected())
+      throw new Error("Browser session closed while an action was running");
+    if (queuedRevision !== null && authorizationOp !== "wait" && session.scopeId &&
+        browserControlState(session.scopeId).revision !== queuedRevision)
+      throw new Error("Browser control changed while an action was running");
+    return value;
 	} catch (error) {
     if (error instanceof Error && error.message === `Browser operation timed out after ${OP_TIMEOUT_MS / 1000} seconds`)
       await session.close().catch(() => {});
