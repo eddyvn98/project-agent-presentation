@@ -15,9 +15,11 @@ test("mixed answer renders all four chart types with distinct data colors", asyn
       paths.map(path => path.getAttribute("stroke")).filter(Boolean));
   expect(lineColors).toHaveLength(2);
   expect(new Set(lineColors).size).toBe(2);
-  const pieColors = await figure(page, "Synthetic pie chart")
-    .locator(".recharts-pie-sector path").evaluateAll(paths =>
-      paths.map(path => path.getAttribute("fill")).filter(Boolean));
+  const pieSectors = figure(page, "Synthetic pie chart").locator("path.recharts-sector");
+  await expect(pieSectors).toHaveCount(3);
+  const pieColors = await pieSectors.evaluateAll(paths =>
+    paths.map(path => path.getAttribute("fill") || getComputedStyle(path).fill));
+  expect(pieColors.every(Boolean)).toBe(true);
   expect(new Set(pieColors).size).toBe(3);
   const stacked = figure(page, "Synthetic stacked chart");
   await stacked.getByRole("button", { name: "Table", exact: true }).click();

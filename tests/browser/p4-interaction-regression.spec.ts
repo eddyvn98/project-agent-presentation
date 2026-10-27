@@ -36,7 +36,7 @@ test.describe("P4 Presentation Lab interactive regression", () => {
     const trigger = page.getByRole("button", { name: "Enlarge Diagram", exact: true }).first();
     await expect(trigger).toBeVisible({ timeout: 30000 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const preview = page.getByRole("region", { name: "Diagram, scroll to explore" });
+    const preview = page.getByRole("region", { name: "Diagram, scroll to explore", exact: true });
     const previewBounds = await preview.boundingBox();
     expect(previewBounds).not.toBeNull();
     expect(previewBounds!.width).toBeLessThanOrEqual(390);
