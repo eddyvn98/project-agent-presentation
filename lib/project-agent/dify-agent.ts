@@ -14,6 +14,7 @@ import { stripProjectSourceReadRequests } from "./large-source-reader";
 import { loadDefaultMemoryContext, loadProjectChatContext } from "./project-chat-context";
 import { loadProjectAgentTaskContext } from "./task-context"; import type { ProjectAgentTask, ProjectAgentTaskSource } from "./types";
 import { resolveDifyConversationId } from "./conversation";
+import { coordinateMemorySources } from "./memory-coordination"; import { buildChatRecap } from "./chat-recap";
 import { autoCompactIfNeeded } from "./auto-compact"; import { readProjectAgentTask, updateProjectAgentTask, recordGuardedTerminalTask } from "./task-store";
 import { routeModelSelector } from "./runtime/usage-pricing"; import { isG1QaTask, formatG1Receipt, type G1GoalReceipt } from "./runtime/g1-goal-check"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
 import { commitTaskTerminalIfActive, markTaskRunningIfQueued } from "./task-terminal-guard"; import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
@@ -74,13 +75,15 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		if (!projectAccess) throw new Error("Project access was removed before the task could run");
 		const projectOwnerEmail = projectAccess.ownerEmail;
 		if (!await markTaskRunningIfQueued(task, PROJECT_AGENT_BOOT_ID)) { const latest = await readProjectAgentTask(task.id); if (!latest) throw new Error("Task disappeared during guarded startup"); return latest; }
-		const [knowledge, projectChats, projectAgentHistory, personalChats] = await Promise.all([
+		const [knowledge, rawProjectChats, rawProjectAgentHistory, rawPersonalChats, sameChat] = await Promise.all([
 			getProjectAgentKnowledgeText(task.projectId, projectOwnerEmail, task.prompt, runtime),
 			loadProjectChatContext(task.projectId, task.ownerEmail, task.userPrompt ?? task.prompt),
-			loadProjectAgentTaskContext(task.projectId, task.ownerEmail, task.id, task.userPrompt ?? task.prompt),
+			loadProjectAgentTaskContext(task.projectId, task.ownerEmail, task.id, task.userPrompt ?? task.prompt, threadId),
 			loadDefaultMemoryContext(task.projectId, task.ownerEmail),
+			buildChatRecap(task).catch(() => ""),
 		]);
-		const { hindsightMemory, xerjContext } = await loadAgentSearchContext({ projectId: task.projectId, query: task.userPrompt ?? task.prompt, signal, log: (detail) => { void updateProjectAgentTask(task.id, { logLine: detail }).catch(() => {}); } });
+		const recalled = await loadAgentSearchContext({ projectId: task.projectId, query: task.userPrompt ?? task.prompt, signal, log: (detail) => { void updateProjectAgentTask(task.id, { logLine: detail }).catch(() => {}); } });
+		const { projectChats, projectAgentHistory, personalChats, hindsightMemory, xerjContext } = coordinateMemorySources({ sameChat, projectChats: rawProjectChats, projectAgentHistory: rawProjectAgentHistory, personalChats: rawPersonalChats, ...recalled }, runtime);
 		const user = projectAgentDifyUser(task.ownerEmail, task.projectId);
 		await updateProjectAgentTask(task.id, { logLine: "app_stage :: preparing_inputs" });
 		const taskInputs = await uploadProjectAgentTaskInputFiles(task.inputFiles ?? [], task.id, user, endpoint, apiKey);
@@ -143,7 +146,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			const runbookText = await loadRunbookPrompt(task.projectId, projectOwnerEmail);
 			const learned = await lessonsForTask(task.id).catch(() => []);
 			if (learned.length) void updateProjectAgentTask(task.id, { logLine: `learned :: ${learned.map((lesson) => lesson.id).join(",")}` }).catch(() => {});
-			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory.slice(0, 3_000), personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true, hindsightMemory, xerjContext)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
+			firstCall.query = `${buildProjectAgentQuery(task, projectAccess.project, knowledge, attached.names, projectChats, projectAgentHistory, personalChats, inputReadback, skillSet.context, [runbookText, lessonsPrompt(learned)].filter(Boolean).join("\n\n"), true, hindsightMemory, xerjContext)}\n\nFiles staged in /work/inputs: ${staged.length ? staged.join(", ") : "(none)"}${await describeWorkspace(task.projectId, chatKey, staged).then((text) => text ? `\n\n${text}` : "").catch(() => "")}`;
 			void updateProjectAgentTask(task.id, { logLine: `context :: query_chars=${firstCall.query.length} knowledge=${knowledge.length} project_chats=${projectChats.length} default_memory=${personalChats.length} agent_history=${projectAgentHistory.length} readback=${inputReadback.length} skills=${skillSet.context.length} runbook=${String(runbookText ?? "").length}` }).catch(() => {});
 		}
     if (retryBrief && runtime) firstCall.query += "\n\n" + retryBrief;

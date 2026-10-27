@@ -42,4 +42,14 @@ describe("Project Agent shared history context", () => {
 		expect(context.length).toBeLessThanOrEqual(16_000);
 		expect(context.match(/Earlier Project Agent request:/g)).toHaveLength(8);
 	});
+  it("excludes current-chat turns from related history", async () => {
+    mocks.listMembers.mockResolvedValue(["owner@example.com"]);
+    mocks.listTasks.mockResolvedValue([
+      { id: "same", conversationId: "chat-a", status: "done", prompt: "Same chat decision", resultText: "Avoid duplication" },
+      { id: "other", conversationId: "chat-b", status: "done", prompt: "Other chat", resultText: "Other result" },
+    ]);
+    const result = await loadProjectAgentTaskContext("project-1", "owner@example.com", "current", "", "chat-a");
+    expect(result).toContain("Other chat");
+    expect(result).not.toContain("Same chat decision");
+  });
 });

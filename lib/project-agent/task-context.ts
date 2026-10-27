@@ -17,6 +17,7 @@ export async function loadProjectAgentTaskContext(
   callerEmail: string,
   currentTaskId: string,
   query = "",
+  excludeConversationId?: string,
 ): Promise<string> {
   const members = await listProjectConversationMembers(projectId, callerEmail);
   if (!members) return "";
@@ -34,7 +35,7 @@ export async function loadProjectAgentTaskContext(
     }
   }
   const previous = rankRelevantHistory(
-    tasks.filter((task) => task.id !== currentTaskId && task.status === "done" && task.resultText?.trim()),
+    tasks.filter((task) => task.id !== currentTaskId && task.status === "done" && task.resultText?.trim() && (!excludeConversationId || task.conversationId !== excludeConversationId)),
     query.slice(0, 4_000),
     (task) => `${task.userPrompt ?? task.prompt}\n${task.resultText ?? ""}`,
     MAX_TASKS,
