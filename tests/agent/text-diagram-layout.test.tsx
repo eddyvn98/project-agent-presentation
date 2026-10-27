@@ -5,8 +5,8 @@ import { ProjectAgentCodeBlock } from "../../components/features/projects/Projec
 afterEach(cleanup);
 describe("host text diagram layout", () => {
   it("preserves monospaced box-drawing columns with no wrapping", () => {
-    const diagram = "┌─────────────────┐      ┌──────────────────┐\\n" +
-      "│ Planning        │ ──▶  │ Execution        │\\n" +
+    const diagram = "┌─────────────────┐      ┌──────────────────┐\n" +
+      "│ Planning        │ ──▶  │ Execution        │\n" +
       "└─────────────────┘      └──────────────────┘";
     const { container } = render(<ProjectAgentCodeBlock language="text" code={diagram} />);
     const pre = container.querySelector("pre")!;

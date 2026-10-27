@@ -91,7 +91,7 @@ test("long text diagram keeps its columns and scrolls on mobile instead of wrapp
     return { whitespace: css.whiteSpace, font: css.fontFamily,
       ligatures: css.fontVariantLigatures, overflow: css.overflowX,
       full: element.scrollWidth, visible: element.clientWidth,
-      lines: element.textContent?.split("\\n").length ?? 0 };
+      lines: element.textContent?.split("\n").length ?? 0 };
   });
   expect(layout.whitespace).toBe("pre");
   expect(layout.ligatures).toBe("none");

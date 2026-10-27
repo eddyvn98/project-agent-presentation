@@ -42,13 +42,7 @@ Eight synthetic states move a marker from left to right. The selected state expl
 
 The next synthetic diagram is intentionally wider than a phone. Scroll sideways; its box edges must stay aligned.
 
-```text
-ASCII diagram QA - long rows must stay aligned even on narrow mobile screens.
-┌──────────────────────┐          ┌─────────────────────────────────────────────────────────────────────────┐
-│ START                │ ───────▶ │ Read input and preserve each column instead of wrapping the long label. │
-└──────────────────────┘          └─────────────────────────────────────────────────────────────────────────┘
-```
-
+` + "```text\nASCII diagram QA - long rows must stay aligned even on narrow mobile screens.\n┌──────────────────────┐          ┌─────────────────────────────────────────────────────────────────────────┐\n│ START                │ ───────▶ │ Read input and preserve each column instead of wrapping the long label. │\n└──────────────────────┘          └─────────────────────────────────────────────────────────────────────────┘\n```\n" + String.raw`
 ## A compact diagram
 
 This fictional sequence has a start, a choice and two outcomes. Scroll or enlarge it to inspect labels.
