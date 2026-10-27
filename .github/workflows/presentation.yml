@@ -2,6 +2,9 @@ name: Presentation checks
 on: [push, pull_request]
 permissions:
   contents: read
+concurrency:
+  group: presentation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   presentation:
     runs-on: ubuntu-latest
@@ -14,6 +17,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run check:lines
+      - run: npm run check:agent-routes
       - run: npm test
       - run: npm run test:agent
       - run: node --test tests/node/*.test.mjs
@@ -25,3 +29,13 @@ jobs:
           PROJECT_AGENT_BROWSER_AGENT: "1"
           PROJECT_AGENT_P8_REAL_BROWSER_QA: "1"
       - run: npm run test:e2e
+      - name: Preserve browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: presentation-browser-failures
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 5
