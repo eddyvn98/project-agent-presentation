@@ -20,10 +20,18 @@ export async function loadAgentSearchContext(input: AgentContextInput): Promise<
     if (!await getProjectAccess(input.projectId, input.ownerEmail))
       return { hindsightMemory: "", xerjContext: "" };
   } catch { return { hindsightMemory: "", xerjContext: "" }; }
-  const [hindsightMemory, xerjContext] = await Promise.all([
+  const [hindsight, xerj] = await Promise.allSettled([
     recallProjectHindsight(input),
     prefetchProjectXerj(input.projectId, input.query, input.signal),
   ]);
+  // Critical L9 fence: membership may be revoked after the initial check but before retrieval completes.
+  if (input.signal?.aborted) return { hindsightMemory: "", xerjContext: "" };
+  try {
+    if (!await getProjectAccess(input.projectId, input.ownerEmail))
+      return { hindsightMemory: "", xerjContext: "" };
+  } catch { return { hindsightMemory: "", xerjContext: "" }; }
+  const hindsightMemory = hindsight.status === "fulfilled" ? hindsight.value : "";
+  const xerjContext = xerj.status === "fulfilled" ? xerj.value : "";
   if (xerjContext) input.log?.("using tool xerj_search :: Project indexed corpus");
   return { hindsightMemory, xerjContext };
 }

@@ -89,9 +89,13 @@ export async function deleteProjectHindsightBank(projectId: string): Promise<voi
 
 export async function deleteProjectHindsightTasks(projectId: string, taskIds: string[]): Promise<void> {
   if (!hindsightConfig(true)) return;
-  for (const taskId of [...new Set(taskIds)]) {
-    try {
-      await hindsightRequest(projectId, "/documents/" + encodeURIComponent(hindsightDocumentId(taskId)), "DELETE", undefined, 8_000, undefined, true);
-    } catch (cause) { if (!(cause instanceof HindsightHttpError && cause.status === 404)) throw cause; }
+  const ids = [...new Set(taskIds)];
+  // Bound in-flight HTTP operations. 5,000-task chats must not require 5,000 serial round trips.
+  for (let start = 0; start < ids.length; start += 8) {
+    await Promise.all(ids.slice(start, start + 8).map(async taskId => {
+      try {
+        await hindsightRequest(projectId, "/documents/" + encodeURIComponent(hindsightDocumentId(taskId)), "DELETE", undefined, 8_000, undefined, true);
+      } catch (cause) { if (!(cause instanceof HindsightHttpError && cause.status === 404)) throw cause; }
+    }));
   }
 }
