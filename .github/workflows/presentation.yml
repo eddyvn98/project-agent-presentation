@@ -146,6 +146,44 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  l11_l12_l13:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27019:27017
+    env:
+      L11_ISOLATED_QA: "1"
+      L11_MONGO_URI: mongodb://127.0.0.1:27019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false mongodb@6
+      - name: L11 crash consistency and L13 legacy schema safety
+        run: |
+          set -o pipefail
+          mkdir -p test-results/l11-l13
+          npm run test:l11l13 | tee test-results/l11-l13/fault-migration.json
+      - name: L12 20-user Project/conversation isolation fuzz
+        run: |
+          set -o pipefail
+          npm run test:l12 | tee test-results/l11-l13/multiuser.json
+      - name: Preserve L11-L13 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l11-l13-fault-isolation
+          path: test-results/l11-l13/
+          if-no-files-found: ignore
+          retention-days: 14
+
   p2_state_fuzz:
     needs: quality
     runs-on: ubuntu-latest
@@ -359,6 +397,14 @@ jobs:
         with:
           name: l5b-ui-performance
           path: test-results/l5b/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Preserve L15-L16 performance and browser lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l15-l16-regression
+          path: test-results/l15-l16/
           if-no-files-found: ignore
           retention-days: 14
       - name: Install isolated accessibility audit

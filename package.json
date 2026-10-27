@@ -20,6 +20,8 @@
     "test:l3b:hosts": "node scripts/l3b-two-hosts-qa.mjs",
     "test:l7:race": "node scripts/l7-memory-race-mongo.mjs",
     "test:l10:soak": "node scripts/l10-virtual-soak-mongo.mjs",
+    "test:l11l13": "node scripts/l11-l13-mongo-qa.mjs",
+    "test:l12": "node scripts/l12-multiuser-fuzz.mjs",
     "check:agent-routes": "node scripts/check-agent-routes.mjs",
     "check:host:p7": "node scripts/p7-host-preflight.mjs",
     "test:host:p7": "playwright test --config playwright.host.config.ts",
