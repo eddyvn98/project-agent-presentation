@@ -90,7 +90,22 @@ export async function saveAgentWorkflow(owner: string, input: {
       !input.projectId || input.projectId.length > 180) throw new Error("Invalid workflow fields");
   const steps = normalizeSteps(input.steps);
   await init(owner);
-  const existing = input.id ? await getAgentWorkflow(owner, input.id) : null;
+  // Serialize draft creation across requests, including separate workers sharing storage.
+  if (!input.id) return locked(path.join(ownerDir(owner), "create"), async () => {
+    const same = (await listAgentWorkflows(owner)).filter(w =>
+      w.projectId === input.projectId && w.title.trim().toLowerCase() === title.toLowerCase() && !w.enabled);
+    if (same.length > 1) throw new Error("Ambiguous workflow drafts; select an explicit id");
+    if (same.length === 1) return saveAgentWorkflow(owner, { ...input, id: same[0].id });
+    if ((await listAgentWorkflows(owner)).length >= 50) throw new Error("Workflow limit reached");
+    const now = new Date().toISOString();
+    const record: AgentWorkflow = { id: "awf_" + randomUUID(),
+      ownerEmail: owner.toLowerCase().trim(), projectId: input.projectId, title,
+      description, steps, enabled: input.enabled ?? false, createdAt: now, updatedAt: now };
+    const target = file(owner, record.id, "awf");
+    await write(target, record);
+    return record;
+  });
+  const existing = await getAgentWorkflow(owner, input.id);
   if (input.id && !existing) throw new Error("Workflow not found");
   if (!existing && (await listAgentWorkflows(owner)).length >= 50) throw new Error("Workflow limit reached");
   const now = new Date().toISOString();
