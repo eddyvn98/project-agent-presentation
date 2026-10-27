@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { getMongoAiDb } from "@/services/mongodb/client";
+import { CHECKPOINT_COLLECTION, appendSharedCheckpoint, listSharedCheckpoints, deleteSharedCheckpoints } from "./checkpoint-core.mjs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { contextScopeDir, type OutputScope } from "./context-output-store";
@@ -14,11 +16,28 @@ interface CheckpointEntry {
 const MAX_ENTRIES = 16;
 const MAX_CHECKPOINT_CHARS = 5_000;
 
+/** Set PROJECT_AGENT_CONTEXT_CHECKPOINT_BACKEND=mongo on every worker sharing the same Mongo DB. */
+const sharedMode = () => process.env.PROJECT_AGENT_CONTEXT_CHECKPOINT_BACKEND === "mongo";
+async function sharedCollection() {
+  const db = await getMongoAiDb();
+  const collection = db.collection(CHECKPOINT_COLLECTION);
+  await collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  return collection;
+}
+export async function deleteStoredContextCheckpoint(scope: OutputScope): Promise<void> {
+  if (!sharedMode()) return;
+  await deleteSharedCheckpoints(await sharedCollection(), scope as { projectId: string; chatId: string });
+}
+
+
 function checkpointPath(scope: OutputScope): string {
   return path.join(contextScopeDir(scope), "checkpoint.json");
 }
 
 async function history(scope: OutputScope): Promise<CheckpointEntry[]> {
+  if (sharedMode()) return await listSharedCheckpoints(
+    await sharedCollection(), scope as { projectId: string; chatId: string }, undefined,
+  ) as CheckpointEntry[];
   try {
     const parsed: unknown = JSON.parse(await fs.readFile(checkpointPath(scope), "utf8"));
     if (!Array.isArray(parsed)) return [];
@@ -34,6 +53,10 @@ export async function recordContextCheckpoint(
   scope: OutputScope,
   event: Omit<CheckpointEntry, "at">,
 ): Promise<void> {
+  if (sharedMode()) {
+    await appendSharedCheckpoint(await sharedCollection(), scope as { projectId: string; chatId: string }, event);
+    return;
+  }
   const dir = contextScopeDir(scope);
   await fs.mkdir(dir, { recursive: true, mode: 0o700 });
   const next = [...await history(scope), {

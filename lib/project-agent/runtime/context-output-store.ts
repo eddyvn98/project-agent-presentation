@@ -108,4 +108,6 @@ export async function searchContextOutput(scope: OutputScope, id: string, query:
 /** Delete this chat's captured observations when its Project conversation is deleted. */
 export async function deleteContextScope(scope: OutputScope): Promise<void> {
   await fs.rm(contextScopeDir(scope), { recursive: true, force: true });
+  const { deleteStoredContextCheckpoint } = await import("./context-checkpoint");
+  await deleteStoredContextCheckpoint(scope);
 }
