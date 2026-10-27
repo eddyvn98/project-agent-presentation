@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { Maximize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/dialog";
 
+import { colorizeMermaidNodes, MERMAID_THEME } from "@/lib/project-agent/mermaid-palette";
+
 type RenderedDiagram = { code: string; svg: string; width: number };
 const CONTROL = "inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-slate-200 px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800";
 
@@ -25,11 +27,12 @@ export function ProjectAgentMermaid({ code, title, caption }: { code: string; ti
 		(async () => {
 			try {
 				const mermaid = (await import("mermaid")).default;
-				mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict", flowchart: { curve: "linear", nodeSpacing: 60, rankSpacing: 70 } });
+				mermaid.initialize(MERMAID_THEME);
 				const { svg } = await mermaid.render(`agent-diagram-${Math.random().toString(36).slice(2, 9)}`, code);
 				if (cancelled) return;
 				const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
 				const viewBox = root.getAttribute("viewBox")?.trim().split(/[\s,]+/).map(Number);
+				colorizeMermaidNodes(root, code);
 				const width = viewBox?.[2] || Number.parseFloat(root.getAttribute("width") || "") || 800;
 				root.setAttribute("width", "100%");
 				root.removeAttribute("height");

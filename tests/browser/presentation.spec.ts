@@ -100,3 +100,21 @@ test("long text diagram keeps its columns and scrolls on mobile instead of wrapp
   expect(layout.lines).toBe(4);
   expect(layout.full).toBeGreaterThan(layout.visible);
 });
+
+test("default Mermaid nodes have varied pastel fills and distinct borders", async ({ page }) => {
+  const figure = page.locator("figure").filter({ has: page.getByRole("button", { name: "Enlarge Diagram", exact: true }) });
+  const svg = figure.locator('svg').first();
+  await expect(svg.locator("g.node")).toHaveCount(4, { timeout: 30000 });
+  const colors = await svg.locator("g.node").evaluateAll(nodes => nodes.map(node => {
+    const shape = node.querySelector("rect, polygon, path, circle, ellipse");
+    if (!shape) return null;
+    const style = getComputedStyle(shape);
+    return { fill: style.fill, stroke: style.stroke, text: node.textContent?.trim() };
+  }));
+  expect(colors.every(x => x && x.fill !== "rgb(255, 255, 255)" && x.stroke !== "none")).toBe(true);
+  expect(new Set(colors.map(x => x?.fill)).size).toBeGreaterThanOrEqual(3);
+  expect(colors.some(x => x?.fill === "rgb(254, 243, 199)")).toBe(true);
+  await page.getByRole("button", { name: "Enlarge Diagram", exact: true }).click();
+  const enlarged = page.getByRole("img", { name: "Diagram", exact: true });
+  await expect(enlarged.locator('g.node[data-agent-color]')).toHaveCount(4);
+});
