@@ -17,7 +17,7 @@ import { resolveDifyConversationId } from "./conversation";
 import { coordinateMemorySources } from "./memory-coordination"; import { buildChatRecap } from "./chat-recap";
 import { autoCompactIfNeeded } from "./auto-compact"; import { readProjectAgentTask, updateProjectAgentTask, recordGuardedTerminalTask } from "./task-store";
 import { routeModelSelector } from "./runtime/usage-pricing"; import { isG1QaTask, formatG1Receipt, type G1GoalReceipt } from "./runtime/g1-goal-check"; import { callDifyWithCalculator, type DifyCalculatorCall } from "./dify-calculator-bridge";
-import { commitTaskTerminalIfActive, markTaskRunningIfQueued } from "./task-terminal-guard"; import { buildChatRecap } from "./chat-recap"; import { retryContext } from "./retry-context";
+import { commitTaskTerminalIfActive, markTaskRunningIfQueued } from "./task-terminal-guard"; import { retryContext } from "./retry-context";
 const MAX_VISUAL_REVIEW_PASSES = 4;
 export function projectAgentDifyUser(ownerEmail: string, projectId: string): string {
 	return `project_${createHash("sha256").update(`${ownerEmail.trim().toLowerCase()}:${projectId}`).digest("hex").slice(0, 24)}`;
