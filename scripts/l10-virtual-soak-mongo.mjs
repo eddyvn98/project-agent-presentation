@@ -38,7 +38,9 @@ const report = { l10: "PASS", virtualHours: 48, cycles: 96,
   checkpoints: 0, orphans: 0, realElapsedMs: 0,
   realMongo: true, externalActions: false, modelCalls: false };
 try {
-  await clientAt(0);
+  // Preconnect every slot before parallel work; otherwise concurrent first-use
+  // calls can create untracked Mongo clients and keep the CI process alive.
+  for (let index = 0; index < 4; index++) await clientAt(index);
   db = clients[0].db(dbName);
   assert.equal((await db.listCollections().toArray()).length, 0);
   await db.collection("l10_test_run").insertOne({
