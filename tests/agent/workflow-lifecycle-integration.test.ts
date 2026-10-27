@@ -14,7 +14,7 @@ vi.mock("../../lib/project-agent/task-store", () => ({
 vi.mock("../../lib/project-agent/task-runner", () => ({ startProjectAgentTask: host.start }));
 
 import { advanceWorkflowForTask, approveWorkflowStep, launchWorkflow,
-  rejectWorkflowStep, tickWorkflowRuns } from "../../lib/project-agent/workflow-runner";
+  rejectWorkflowStep, tickWorkflowRuns, provideWorkflowInput } from "../../lib/project-agent/workflow-runner";
 import { changeAgentWorkflow, createWorkflowRun, getWorkflowRun, listAgentWorkflows, saveAgentWorkflow,
   updateWorkflowRun } from "../../lib/project-agent/workflow-store";
 import type { AgentWorkflowStep } from "../../lib/project-agent/workflow-types";
@@ -56,6 +56,48 @@ afterEach(async () => {
 });
 
 describe("persisted workflow lifecycle with synthetic task service", () => {
+  it("holds the same step for explicit missing input, then resumes exactly once", async () => {
+    const definition = await makeWorkflow();
+    const launched = await launchWorkflow(owner, definition.id);
+    const pausedTask = { ...finished(launched.taskId!, "Need sales figures"),
+      requestedInput: "What is the daily revenue?" };
+    await advanceWorkflowForTask(pausedTask);
+    const waiting = await getWorkflowRun(owner, launched.runId);
+    expect(waiting).toMatchObject({ status: "waiting_input", index: 0,
+      requestedInput: "What is the daily revenue?", history: [{ status: "waiting_input" }] });
+    expect(host.create).toHaveBeenCalledTimes(1);
+    expect((await tickWorkflowRuns()).resumed).toBe(0);
+    await expect(provideWorkflowInput(owner, launched.runId, "")).rejects.toThrow(/input/i);
+    const [a, b] = await Promise.allSettled([
+      provideWorkflowInput(owner, launched.runId, "120 orders"),
+      provideWorkflowInput(owner, launched.runId, "120 orders"),
+    ]);
+    expect([a,b].filter(x => x.status === "fulfilled")).toHaveLength(1);
+    expect(host.create).toHaveBeenCalledTimes(2);
+    const resume = [a,b].find(x => x.status === "fulfilled") as PromiseFulfilledResult<
+      Awaited<ReturnType<typeof provideWorkflowInput>>>;
+    expect(host.create.mock.calls[1][0].idempotencyKey).toContain(":input:1");
+    expect(host.create.mock.calls[1][0].prompt).toContain("120 orders");
+    await advanceWorkflowForTask(finished(resume.value.taskId!, "Revenue processed"));
+    expect(await getWorkflowRun(owner, launched.runId)).toMatchObject({
+      status: "waiting_approval", index: 1,
+    });
+  });
+
+  it("requires owner review before resuming when browser side effects may exist", async () => {
+    const def = await makeWorkflow(), launched = await launchWorkflow(owner, def.id);
+    await advanceWorkflowForTask({ ...finished(launched.taskId!, "Need your input"),
+      requestedInput: "Confirm date?", log: ["using tool browser :: clicked Submit"] });
+    expect(await getWorkflowRun(owner, launched.runId)).toMatchObject({
+      status: "waiting_input", inputReviewRequired: true,
+    });
+    await expect(provideWorkflowInput(owner, launched.runId, "Tomorrow"))
+      .rejects.toThrow(/Review earlier tool effects/);
+    expect(host.create).toHaveBeenCalledTimes(1);
+    await provideWorkflowInput(owner, launched.runId, "Tomorrow", true);
+    expect(host.create).toHaveBeenCalledTimes(2);
+  });
+
   it("connects a synthetic model action to draft, enable, dispatch and task creation", async () => {
     const raw = JSON.stringify({ action: "workflow", op: "propose", title: "Synthetic model draft",
       steps: [{ title: "Collect", prompt: "Read synthetic orders", requiresApproval: false }] });

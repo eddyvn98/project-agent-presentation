@@ -86,3 +86,42 @@ describe("source and verification evidence contracts", () => {
     expect(parsed.sources).toEqual([]);
   });
 });
+
+describe("snapshot recovery and retrieved-page evidence", () => {
+  it("retries read-only snapshot after a transient redirect without replaying click", async () => {
+    const { snapshotAfterNavigation } = await import(
+      "../../lib/project-agent/runtime/browser-agent/snapshot-after-navigation");
+    const wait = vi.fn().mockResolvedValue(undefined);
+    const session = { page: { waitForLoadState: wait } } as unknown as BrowserSession;
+    const snapshot = vi.fn().mockRejectedValueOnce(
+      new Error("Execution context was destroyed")).mockResolvedValue("new DOM");
+    expect(await snapshotAfterNavigation(session, snapshot)).toBe("new DOM");
+    expect(snapshot).toHaveBeenCalledTimes(2);
+    expect(wait).toHaveBeenCalledOnce();
+  });
+  it("does not retry non-navigation errors or retry indefinitely", async () => {
+    const { snapshotAfterNavigation } = await import(
+      "../../lib/project-agent/runtime/browser-agent/snapshot-after-navigation");
+    const session = { page: { waitForLoadState: async () => {} } } as unknown as BrowserSession;
+    const denied = vi.fn().mockRejectedValue(new Error("Permission denied"));
+    await expect(snapshotAfterNavigation(session, denied)).rejects.toThrow("Permission denied");
+    expect(denied).toHaveBeenCalledTimes(1);
+    const broken = vi.fn().mockRejectedValue(new Error("frame was detached"));
+    await expect(snapshotAfterNavigation(session, broken)).rejects.toThrow();
+    expect(broken).toHaveBeenCalledTimes(3);
+  });
+  it("cites only fetched pages, not search hits, and rejects unsafe source metadata", async () => {
+    const { appendRetrievedSources } = await import(
+      "../../lib/project-agent/runtime/retrieved-sources");
+    const sources = [
+      { url: "https://valid.test/report", title: "Annual [report]", sourceType: "page", fetchedAt: "2026-01-01" },
+      { url: "https://search.test/a", title: "Snippet", sourceType: "search", fetchedAt: "2026-01-01" },
+      { url: "https://name:secret@invalid.test/", title: "Credentials", sourceType: "page", fetchedAt: "2026-01-01" },
+    ] as Parameters<typeof appendRetrievedSources>[1];
+    const answer = appendRetrievedSources("Summary", sources);
+    expect(answer).toContain("https://valid.test/report");
+    expect(answer).not.toContain("https://search.test/a");
+    expect(answer).not.toContain("invalid.test");
+    expect(appendRetrievedSources(answer, sources)).toBe(answer);
+  });
+});

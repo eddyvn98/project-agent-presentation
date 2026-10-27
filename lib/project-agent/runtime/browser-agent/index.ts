@@ -18,7 +18,8 @@ import { getBrowserSession, scheduleIdleClose, withBrowserOp, restorePersonalBro
 import { captureBrowserWatch, finishBrowserWatch, type BrowserClickMarker } from "./watch";
 import { invalidateVisualFrame, observeVisualFrame, visualClick, visualType } from "./visual";
 import { browserRetryStalled, recordBrowserDomFailure, clearBrowserStall, P8_STALL_GUIDANCE } from "./stall-guard"; import { runP8BrowserLoopStep } from "./loop-step";
-import { waitForPageOrIntervention } from "./browser-wait"; import { agentBrowserSession } from "./project-sessions"; import { updateProjectActiveTab } from "./project-registry";
+import { waitForPageOrIntervention } from "./browser-wait";
+import { snapshotAfterNavigation } from "./snapshot-after-navigation"; import { agentBrowserSession } from "./project-sessions"; import { updateProjectActiveTab } from "./project-registry";
 const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
 function snapshotRefLine(snapshot: string, ref: string): string {
 	return snapshot.split("\n").find((line) => line.startsWith(`[ref=${ref}] `)) ?? "";
@@ -267,7 +268,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			}
 			const challenge = await checkCaptcha(session);
 			if (challenge) { await session.close(); return { text: challenge, failed: true }; }
-			const currentSnapshot = await snapshot(session);
+			const currentSnapshot = await snapshotAfterNavigation(session, () => snapshot(session));
 			return { text: extra ? `${extra}\n\n${currentSnapshot}` : currentSnapshot };
 		}, true, "agent", input.taskId));
 		if (supersededByUser) return result;
