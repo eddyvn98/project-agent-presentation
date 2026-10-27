@@ -29,11 +29,11 @@ test("L15 repeat-load regression keeps 5000-turn UI stable", async ({ page }, in
       syntheticMessages: 5000, samples }, null, 2));
 });
 
-test("L16 repeated browser contexts close all pages and listeners", async ({ browser }) => {
+test("L16 repeated browser contexts close all pages and listeners", async ({ browser, baseURL }) => {
   test.setTimeout(100_000);
   const baseline = browser.contexts().length;
   for (let i = 0; i < 12; i++) {
-    const context = await browser.newContext({ viewport: { width: i % 2 ? 390 : 1280,
+    const context = await browser.newContext({ baseURL, viewport: { width: i % 2 ? 390 : 1280,
       height: 840 } });
     let pages = 0;
     const onPage = () => { pages++; };
