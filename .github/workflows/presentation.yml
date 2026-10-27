@@ -184,6 +184,40 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  l19_l22_scheduler_chaos:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27019:27017
+    env:
+      L11_ISOLATED_QA: "1"
+      L11_MONGO_URI: mongodb://127.0.0.1:27019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false mongodb@6
+      - name: L19 scheduled 1000 occurrence CAS race and L22 composite recovery
+        run: |
+          set -o pipefail
+          mkdir -p test-results/l19-l22
+          npm run test:l19l22 | tee test-results/l19-l22/report.json
+      - name: Preserve L19-L22 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l19-l22-scheduler-chaos
+          path: test-results/l19-l22/
+          if-no-files-found: ignore
+          retention-days: 14
+
   p2_state_fuzz:
     needs: quality
     runs-on: ubuntu-latest

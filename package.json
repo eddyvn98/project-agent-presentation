@@ -22,6 +22,7 @@
     "test:l10:soak": "node scripts/l10-virtual-soak-mongo.mjs",
     "test:l11l13": "node scripts/l11-l13-mongo-qa.mjs",
     "test:l12": "node scripts/l12-multiuser-fuzz.mjs",
+    "test:l19l22": "node scripts/l19-l22-mongo-qa.mjs",
     "check:agent-routes": "node scripts/check-agent-routes.mjs",
     "check:host:p7": "node scripts/p7-host-preflight.mjs",
     "test:host:p7": "playwright test --config playwright.host.config.ts",
