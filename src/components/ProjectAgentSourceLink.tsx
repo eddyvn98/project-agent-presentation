@@ -20,7 +20,8 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
-    if (rect.top < 12 || rect.bottom > window.innerHeight - 12)
+    if ((rect.top < 12 || rect.bottom > window.innerHeight - 12) &&
+      typeof trigger.scrollIntoView === "function")
       trigger.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
   };
   const restoreTrigger = () => {
