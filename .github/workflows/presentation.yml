@@ -24,6 +24,43 @@ jobs:
       - run: node --test tests/node/*.test.mjs
       - run: npm run build:demo
 
+  p1_stress_chaos:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27019:27017
+    env:
+      P1_ISOLATED_QA: "1"
+      P1_MONGO_QA: "1"
+      P1_MONGO_URI: mongodb://127.0.0.1:27019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install isolated MongoDB test driver
+        run: npm install --no-save --package-lock=false mongodb@6
+      - name: Stress - twelve real workers and 120 synthetic tasks
+        run: |
+          mkdir -p test-results/p1
+          npm run test:p1:stress | tee test-results/p1/stress.json
+      - name: Chaos - SIGKILL, database disconnect, Stop fencing
+        run: npm run test:p1:chaos | tee test-results/p1/chaos.json
+      - name: Preserve P1 stress/chaos report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-agent-p1-stress-chaos
+          path: test-results/p1/
+          if-no-files-found: ignore
+          retention-days: 14
+
   mongo_recovery:
     needs: quality
     runs-on: ubuntu-latest
