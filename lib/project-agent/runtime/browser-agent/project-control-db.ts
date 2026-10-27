@@ -114,6 +114,7 @@ export async function withProjectControlOp<T>(scope: string,
   { returnDocument: "after" });
   if (!unwrap(row) || unwrap(row)?.opToken !== token)
     throw new Error("Browser control changed or another action is running");
+  const initialRevision = unwrap(row)!.revision;
   let lost = false, refreshing = false;
   const refresh = async () => {
     if (refreshing || lost) return;
@@ -129,16 +130,31 @@ export async function withProjectControlOp<T>(scope: string,
   };
   const timer = setInterval(() => { void refresh(); }, 8_000);
   timer.unref?.();
+  let value: T;
   try {
-    const value = await fn(unwrap(row)!.revision);
+    value = await fn(initialRevision);
     if (lost) throw new Error("Browser operation lease was lost");
-    return value;
   } finally {
     clearInterval(timer);
-    const released = await coll.updateOne({ _id: scope, opToken: token },
+    const end = Date.now();
+    const endAuthority = mode === "agent" ?
+      { mode: "agent", agentTaskId: taskId, agentUntil: { $gt: end } } :
+      mode === "human" ? { mode: "human", humanUntil: { $gt: end } } :
+      { mode: "agent", $and: [{ $or: [{ agentTaskId: { $exists: false } },
+        { agentUntil: { $lt: end } }] }] };
+    const released = await coll.updateOne({ _id: scope, opToken: token,
+      revision: initialRevision, ...endAuthority },
       { $unset: { opToken: "", opUntil: "" } });
-    if (released.matchedCount !== 1) onLost?.();
+    if (released.matchedCount !== 1) {
+      lost = true;
+      onLost?.();
+      // Clear only our stale lock; do not erase a replacement worker's lock.
+      await coll.updateOne({ _id: scope, opToken: token },
+        { $unset: { opToken: "", opUntil: "" } }).catch(() => {});
+    }
   }
+  if (lost) throw new Error("Browser operation lease was lost");
+  return value;
 }
 /** Stop-aware handback wait; Mongo status crosses process boundaries. */
 export async function waitForProjectControl(scope: string, signal?: AbortSignal) {

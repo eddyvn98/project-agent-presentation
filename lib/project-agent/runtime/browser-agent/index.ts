@@ -177,7 +177,10 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 				case "visual_type": await visualType(session, action.text!); break;
 			}
 			switch (action.op) {
-				case "open": await assertPublicHttpUrl(action.url!); await restorePersonalBrowserSession(session, action.url!); await session.page.goto(action.url!, { waitUntil: "domcontentloaded", timeout: 20_000 }); break;
+				case "open": await assertPublicHttpUrl(action.url!); await restorePersonalBrowserSession(session, action.url!);
+          await assertPersonalBrowserPermission(session, action.op);
+          if (input.signal?.aborted) throw input.signal.reason ?? new Error("Task stopped");
+          await session.page.goto(action.url!, { waitUntil: "domcontentloaded", timeout: 20_000 }); break;
 				case "back": await session.page.goBack({ timeout: 20_000 }).catch(() => null); break;
 				case "snapshot": break; case "inspect_scene": return await inspectWebMcpScene(session);
 				case "click": {
@@ -270,7 +273,7 @@ export async function runBrowserAction(input: RuntimeInput, action: BrowserActio
 			if (challenge) { await session.close(); return { text: challenge, failed: true }; }
 			const currentSnapshot = await snapshotAfterNavigation(session, () => snapshot(session));
 			return { text: extra ? `${extra}\n\n${currentSnapshot}` : currentSnapshot };
-		}, true, "agent", input.taskId));
+		}, true, "agent", input.taskId, input.signal, action.op));
 		if (supersededByUser) return result;
 		const authIssue = await checkSavedBrowserHealth(session);
     if (input.taskId) await captureBrowserWatch(input.taskId, session.page, action.op, marker);
