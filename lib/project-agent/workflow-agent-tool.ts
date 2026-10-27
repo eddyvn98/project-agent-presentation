@@ -17,7 +17,7 @@ export async function agentWorkflowAction(input: RuntimeInput, action: Action) {
     if (!await projectCap.getProjectAccess(input.projectId, input.ownerEmail))
       return { text: "Project access was revoked", failed: true };
     const workflow = await saveAgentWorkflow(input.ownerEmail, {
-      projectId: input.projectId, title: action.title!,
+      id: action.id, projectId: input.projectId, title: action.title!,
       description: action.description ?? "",
       steps: (action.steps ?? []).map((step, i) => ({ ...step, id: "step_" + (i + 1) })),
       enabled: false,
