@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { evaluateExpression, type InteractiveModel } from "@/lib/project-agent/interactive-model";
-import { responseLabels } from "../../../shared/project-agent/response-locale";
+import { responseLabels } from "../../shared/project-agent/response-locale";
 
 
 

@@ -11,7 +11,7 @@ import { ProjectAgentQuiz } from "./ProjectAgentQuiz";
 import { ProjectAgentFormBlock } from "./ProjectAgentFormBlock";
 import { ProjectAgentMermaid } from "./ProjectAgentMermaid";
 import { parseRichUiBlock, type RichTone, type RichUiBlock } from "@/lib/project-agent/rich-ui";
-import { responseLabels } from "../../../shared/project-agent/response-locale";
+import { responseLabels } from "../../shared/project-agent/response-locale";
 
 const AXIS_TICK = { fontSize: 11 } as const;
 const PALETTE = ["#4e79a7", "#f28e2b", "#59a14f", "#e15759", "#76b7b2", "#b07aa1", "#edc948", "#9c755f"];

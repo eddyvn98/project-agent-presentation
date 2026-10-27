@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { RichUiBlock } from "@/lib/project-agent/rich-ui";
-import { responseLabels } from "../../../shared/project-agent/response-locale";
+import { responseLabels } from "../../shared/project-agent/response-locale";
 
 type QuizBlock = Extract<RichUiBlock, { type: "quiz" }>;
 export function ProjectAgentQuiz({ block, language = "en" }: { block: QuizBlock; language?: string }) {
