@@ -6,10 +6,11 @@ import type { Page } from "playwright-core";
 import { beginBrowserIntervention, completeBrowserIntervention, notifyBrowserIntervention, claimHumanBrowserAction, takeBrowserControl, releaseBrowserControl, keepBrowserControl } from "./control";
 import { noteBrowserLoopTakeover, noteBrowserLoopHandback } from "./loop-state";
 import { browserWatchStatus, captureBrowserWatch, setBrowserWatch } from "./watch";
+import { assertSharedFrame, clearSharedFrame, sharedActivePage } from "./shared-frame";
 
 export type HumanBrowserAction =
   | { op: "takeover" | "release" | "heartbeat" }
-  | { op: "click"; x: number; y: number; frame: number; approvalTicket?: string }
+  | { op: "click"; x: number; y: number; frame: number; frameId?: string; approvalTicket?: string }
   | { op: "scroll"; direction: "up" | "down" }
   | { op: "type"; text: string }
   | { op: "key"; key: "Tab" | "Escape" | "Backspace" | "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight" | "Enter" };
@@ -24,6 +25,7 @@ export function parseHumanBrowserAction(value: unknown): HumanBrowserAction | nu
   if (raw.op === "click" && typeof raw.x === "number" && typeof raw.y === "number" &&
     Number.isFinite(raw.x) && Number.isFinite(raw.y) && raw.x >= 0 && raw.x <= 1 && raw.y >= 0 && raw.y <= 1 && typeof raw.frame === "number" && Number.isSafeInteger(raw.frame) && raw.frame > 0)
     return { op: "click", x: raw.x, y: raw.y, frame: raw.frame,
+      frameId: typeof raw.frameId === "string" && /^[a-f0-9-]{36}$/.test(raw.frameId) ? raw.frameId : undefined,
       approvalTicket: typeof raw.approvalTicket === "string" && /^[a-f0-9-]{36}$/.test(raw.approvalTicket) ? raw.approvalTicket : undefined };
   if (raw.op === "scroll" && (raw.direction === "up" || raw.direction === "down")) return { op: "scroll", direction: raw.direction };
   if (raw.op === "type" && typeof raw.text === "string" && raw.text.length >= 1 && raw.text.length <= 600 && !/[\x00-\x08\x0b-\x1f]/.test(raw.text)) return { op: "type", text: raw.text };
@@ -79,6 +81,7 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
         try { await withBrowserOp(session, async () => {}, false, "system"); }
         catch (cause) { releaseBrowserControl(taskId); throw cause; }
       } else releaseBrowserControl(taskId);
+      if (action.op === "release") await clearSharedFrame(taskId);
       if (action.op === "takeover") {
         if (!browserWatchStatus(taskId)?.watching) setBrowserWatch(taskId, true);
         await captureBrowserWatch(taskId, session.page, "human_takeover");
@@ -97,9 +100,13 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
   let privateLoginRequired = false;
   try {
     await withBrowserOp(session, async () => {
-      const page = session.page;
+      const page = session.persistent ? (await sharedActivePage(session))?.page : session.page;
+      if (!page) throw new Error("Active browser tab unavailable");
       if (action.op === "click") {
-        if (!browserWatchStatus(taskId)?.watching || browserWatchStatus(taskId)?.sequence !== action.frame)
+        if (session.persistent) {
+          if (!action.frameId || !project) throw new Error("Verified browser frame required");
+          await assertSharedFrame(session, taskId, project.owner, action.frameId, page);
+        } else if (!browserWatchStatus(taskId)?.watching || browserWatchStatus(taskId)?.sequence !== action.frame)
           throw new Error("The screenshot is stale; refresh the live Browser Watch frame");
         const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
         const x = Math.round(action.x * viewport.width), y = Math.round(action.y * viewport.height);
@@ -119,6 +126,7 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
           }
           challenges.delete(taskId);
         }
+        if (session.persistent) await clearSharedFrame(taskId);
         await page.mouse.click(x, y);
         privateLoginRequired = await privateLoginHasFocus(page);
         marker = { x: action.x, y: action.y, kind: "human" };

@@ -10,7 +10,7 @@ type Preview = {
   history: Array<{ sequence: number; action: string; updatedAt: number; location: string; marker?: { x: number; y: number; kind: "agent" | "human" } }>;
   action: string; location: string; hasImage: boolean; finished: boolean;
 };
-type BrowserStatus = { preview: Preview | null };
+type BrowserStatus = { preview: Preview | null; watching?: boolean; shared?: boolean };
 type BrowserCommandResult = { ok: boolean; sequence?: number; privateLoginRequired?: boolean };
 export function ProjectAgentBrowserWatch({ projectId, taskId, running, language = "en",
   manualMode = false, visible = true }: {
@@ -23,6 +23,10 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
   const [loginOpen, setLoginOpen] = useState(false);
   const [streamFailed, setStreamFailed] = useState(false);
   const [streamEpoch, setStreamEpoch] = useState(0);
+  const [shared, setShared] = useState(false);
+  const [frameUrl, setFrameUrl] = useState("");
+  const [frameId, setFrameId] = useState("");
+  const frameRef = useRef("");
   const autoWatchStarted = useRef(false);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const actionQueue = useRef<Promise<BrowserCommandResult>>(Promise.resolve({ ok: true }));
@@ -34,7 +38,11 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     const response = await fetch(base, { cache: "no-store", signal });
     if (!response.ok) return null;
     const data = await response.json() as BrowserStatus;
-    if (!signal?.aborted) setPreview(data.preview);
+    if (!signal?.aborted) {
+      setPreview(data.preview); setShared(Boolean(data.shared));
+      if (data.watching && !data.preview) setPreview({ watching: true, sequence: 0,
+        updatedAt: Date.now(), history: [], action: "", location: "", hasImage: false, finished: false });
+    }
     return data;
   }, [base]);
   useEffect(() => {
@@ -75,6 +83,28 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     }, 17_000);
     return () => window.clearInterval(timer);
   }, [visible, running, manualMode, preview?.watching]);
+  useEffect(() => {
+    if (!manualMode || !shared || !visible || !running) return;
+    let alive = true;
+    const capture = async () => {
+      try {
+        const response = await fetch(base + "/frame", { cache: "no-store" });
+        if (!response.ok || !alive) return;
+        const token = response.headers.get("X-Browser-Frame-Id") ?? "";
+        if (!token) return;
+        const url = URL.createObjectURL(await response.blob());
+        if (!alive) { URL.revokeObjectURL(url); return; }
+        frameRef.current = token; setFrameId(token);
+        setFrameUrl(previous => { if (previous) URL.revokeObjectURL(previous); return url; });
+      } catch { /* Invalid frames remain unusable until refreshed. */ }
+    };
+    void capture();
+    const interval = window.setInterval(() => { void capture(); }, 2_000);
+    return () => {
+      alive = false; window.clearInterval(interval); frameRef.current = ""; setFrameId("");
+      setFrameUrl(previous => { if (previous) URL.revokeObjectURL(previous); return ""; });
+    };
+  }, [manualMode, shared, visible, running, base]);
   const command = async (action: Record<string, unknown>): Promise<BrowserCommandResult> => {
     setLoading(true); setError("");
     try {
@@ -114,16 +144,17 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
     textTimer.current = window.setTimeout(() => { void flushText(); }, 280);
   }
   async function clickPreview(event: MouseEvent<HTMLDivElement>) {
-    if (!manualMode || !running || !preview?.hasImage) return;
+    if (!manualMode || !running || !(shared ? frameId : preview?.hasImage)) return;
     surfaceRef.current?.focus();
     const rect = event.currentTarget.getBoundingClientRect();
     await flushText();
     const x = (event.clientX - rect.left) / rect.width, y = (event.clientY - rect.top) / rect.height;
-    const result = await enqueue({ op: "click", frame: preview.sequence, x, y });
+    const result = await enqueue({ op: "click", frame: Math.max(1, preview.sequence),
+      ...(shared ? { frameId: frameRef.current } : {}), x, y });
     if (result?.privateLoginRequired) setLoginOpen(true);
   }
   async function scrollPreview(event: WheelEvent<HTMLDivElement>) {
-    if (!manualMode || !running || !preview?.hasImage) return;
+    if (!manualMode || !running || !(shared ? frameId : preview?.hasImage)) return;
     event.preventDefault();
     surfaceRef.current?.focus();
     await flushText();
@@ -147,12 +178,12 @@ export function ProjectAgentBrowserWatch({ projectId, taskId, running, language 
   if (!visible || (!running && !preview?.watching)) return null;
   return <>
     <section aria-label={ui.open} className="not-prose relative overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700">
-      {preview?.hasImage ? <div ref={surfaceRef} role="application" tabIndex={manualMode ? 0 : -1} aria-label="Browser tab"
+      {(shared ? (manualMode ? Boolean(frameUrl) : Boolean(preview?.watching)) : preview?.hasImage) ? <div ref={surfaceRef} role="application" tabIndex={manualMode ? 0 : -1} aria-label="Browser tab"
         aria-busy={loading} onKeyDown={(event) => void keyDown(event)}
         onClick={(event) => void clickPreview(event)} onWheel={(event) => void scrollPreview(event)}
         className="block w-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={streaming ? live : image} alt="Browser tab" draggable={false}
+        <img src={shared && manualMode ? frameUrl : streaming ? live : image} alt="Browser tab" draggable={false}
           onError={() => { if (streaming) setStreamFailed(true); }}
           className="block h-auto w-full select-none" />
       </div> : <div aria-label="Loading browser tab" className="h-64 animate-pulse bg-slate-100 dark:bg-slate-900" />}

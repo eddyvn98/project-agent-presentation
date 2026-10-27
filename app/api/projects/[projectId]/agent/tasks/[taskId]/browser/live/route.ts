@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { readProjectAgentTask } from "@/lib/project-agent/task-store";
 import { resolveTaskBrowser } from "@/lib/project-agent/runtime/browser-agent/task-browser";
+import { sharedBrowserWatchAllowed } from "@/lib/project-agent/runtime/browser-agent/watch-access-db";
+import { sharedActivePage } from "@/lib/project-agent/runtime/browser-agent/shared-frame";
 
 import { sensitiveScreenshotMask } from "@/lib/project-agent/runtime/browser-agent/privacy";
 
@@ -18,6 +20,8 @@ export async function GET(req: NextRequest, { params }: {
   if (!task || task.projectId !== params.projectId ||
     task.ownerEmail.toLowerCase() !== access.callerEmail?.toLowerCase())
     return NextResponse.json({ error: "Browser stream not found" }, { status: 404, headers });
+  if (!await sharedBrowserWatchAllowed(task.id, params.projectId, task.ownerEmail))
+    return NextResponse.json({ error: "Browser watch not enabled" }, { status: 403, headers });
   const browser = await resolveTaskBrowser(task.id, params.projectId, task.ownerEmail);
   if (!browser || browser.owner !== task.ownerEmail.toLowerCase() ||
     !["queued","running"].includes(task.status))
@@ -30,14 +34,18 @@ export async function GET(req: NextRequest, { params }: {
         const encoder = new TextEncoder();
         try {
           for (let i = 0; i < 22 && !stopped && !req.signal.aborted; i++) {
-            if (!browser.page || browser.page.isClosed()) break;
+            if (!await sharedBrowserWatchAllowed(task.id, params.projectId, task.ownerEmail)) break;
+            const active = browser.persistent ? await sharedActivePage(browser) :
+              { page: browser.page, tabIndex: 0 };
+            const page = active?.page;
+            if (!page || page.isClosed()) break;
             if ((controller.desiredSize ?? 1) <= 0) {
               await new Promise(resolve => setTimeout(resolve, 200)); continue;
             }
             try {
-              const bytes = await browser.page.screenshot({
+              const bytes = await page.screenshot({
                 type: "jpeg", quality: 48, animations: "disabled", timeout: 3500,
-                mask: [sensitiveScreenshotMask(browser.page)], maskColor: "#64748b",
+                mask: [sensitiveScreenshotMask(page)], maskColor: "#64748b",
               });
               if (bytes.byteLength <= 600_000) {
                 controller.enqueue(encoder.encode("--" + boundary +

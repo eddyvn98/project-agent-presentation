@@ -4,6 +4,8 @@ import { readProjectAgentTask } from "@/lib/project-agent/task-store";
 import { browserWatchImage, browserWatchStatus, captureBrowserWatch, setBrowserWatch } from "@/lib/project-agent/runtime/browser-agent/watch";
 import { resolveTaskBrowser, taskBrowserControlStatus } from "@/lib/project-agent/runtime/browser-agent/task-browser";
 import { releaseBrowserControl } from "@/lib/project-agent/runtime/browser-agent/control";
+import { setSharedBrowserWatch, sharedBrowserWatchAllowed } from "@/lib/project-agent/runtime/browser-agent/watch-access-db";
+import { clearSharedFrame } from "@/lib/project-agent/runtime/browser-agent/shared-frame";
 import { browserLoopEnabled, browserLoopStatus } from "@/lib/project-agent/runtime/browser-agent/loop-state";
 
 export const runtime = "nodejs";
@@ -30,6 +32,8 @@ export async function GET(req: NextRequest, { params }: Params) {
     const rawSequence = req.nextUrl.searchParams.get("sequence");
     const sequence = rawSequence === null ? undefined : Number(rawSequence);
     if (sequence !== undefined && (!Number.isSafeInteger(sequence) || sequence < 1)) return new NextResponse(null, { status: 400, headers: HEADERS });
+    if (!await sharedBrowserWatchAllowed(params.taskId, params.projectId, checked.task!.ownerEmail))
+      return new NextResponse(null, { status: 403, headers: HEADERS });
     const bytes = browserWatchImage(params.taskId, sequence);
     if (!bytes) return new NextResponse(null, { status: 404, headers: HEADERS });
     return new NextResponse(new Uint8Array(bytes), {
@@ -37,7 +41,10 @@ export async function GET(req: NextRequest, { params }: Params) {
     });
   }
   const control = await taskBrowserControlStatus(params.taskId, params.projectId, checked.task!.ownerEmail);
-  return NextResponse.json({ preview: browserWatchStatus(params.taskId), control,
+  const enabled = await sharedBrowserWatchAllowed(params.taskId, params.projectId, checked.task!.ownerEmail);
+  if (enabled) await setSharedBrowserWatch(params.taskId, params.projectId, checked.task!.ownerEmail, true);
+  return NextResponse.json({ preview: enabled ? browserWatchStatus(params.taskId) : null,
+    watching: enabled, control, shared: process.env.PROJECT_AGENT_STEEL_BROWSER === "1",
     ...(browserLoopEnabled() ? { loop: browserLoopStatus(params.taskId) } : {}) }, { headers: HEADERS });
 }
 
@@ -58,7 +65,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (body.watch && !["queued", "running"].includes(checked.task!.status)) {
     return NextResponse.json({ error: "Only active tasks can start a browser watch" }, { status: 409, headers: HEADERS });
   }
-  if (!body.watch) releaseBrowserControl(params.taskId);
+  await setSharedBrowserWatch(params.taskId, params.projectId, checked.task!.ownerEmail, body.watch);
+  if (!body.watch) {
+    releaseBrowserControl(params.taskId);
+    await clearSharedFrame(params.taskId);
+  }
   setBrowserWatch(params.taskId, body.watch);
   if (body.watch) {
     // No browser launch: capture only the session which the agent has already created.

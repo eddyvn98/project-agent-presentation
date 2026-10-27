@@ -72,9 +72,14 @@ export function ProjectAgentBrowserPreview({ projectId, taskId, running, languag
   }
   async function close() {
     if (manualMode) {
-      try { await fetch(root + "/control", { method: "POST",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "release" }) }); }
-      catch { /* Browser control is best-effort on close. */ }
+      try {
+        const response = await fetch(root + "/control", { method: "POST",
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "release" }) });
+        if (!response.ok) throw new Error("Handback failed; retry before closing");
+      } catch (error) {
+        setControlError(error instanceof Error ? error.message : "Handback failed");
+        return;
+      }
     }
     setManualMode(false);
     setOpen(false);
