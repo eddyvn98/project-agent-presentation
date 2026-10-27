@@ -25,7 +25,7 @@ export function ProjectAgentMermaid({ code, title, caption }: { code: string; ti
 		(async () => {
 			try {
 				const mermaid = (await import("mermaid")).default;
-				mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict" });
+				mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict", flowchart: { curve: "linear", nodeSpacing: 60, rankSpacing: 70 } });
 				const { svg } = await mermaid.render(`agent-diagram-${Math.random().toString(36).slice(2, 9)}`, code);
 				if (cancelled) return;
 				const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;

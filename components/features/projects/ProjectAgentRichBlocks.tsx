@@ -99,7 +99,7 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 							<YAxis tick={AXIS_TICK} />
 							{tooltip}
 							{block.series.length > 1 && <Legend />}
-							{block.series.map((series, index) => <Line key={series.name} type="monotone" dataKey={series.name} stroke={PALETTE[index % PALETTE.length]} strokeWidth={2} dot={{ r: 3 }} />)}
+							{block.series.map((series, index) => <Line key={series.name} type="linear" dataKey={series.name} stroke={PALETTE[index % PALETTE.length]} strokeWidth={2} dot={{ r: 3 }} />)}
 						</LineChart>
 					) : (
 						<BarChart data={data}>

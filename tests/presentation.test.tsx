@@ -47,6 +47,16 @@ describe("safe and complete Markdown", () => {
   });
 });
 
+
+  it("does not wrap ASCII/Unicode box diagrams or destroy their spacing", () => {
+    const ascii = "┌────┐       ┌────────┐\\n│ A  │ ───▶  │ B      │\\n└────┘       └────────┘";
+    const { container } = render(<ProjectAgentAnswer markdown={"```text\\n" + ascii + "\\n```"} />);
+    const pre = container.querySelector("pre");
+    expect(pre?.className).toContain("whitespace-pre");
+    expect(pre?.className).not.toContain("whitespace-pre-wrap");
+    expect(pre?.textContent).toContain(ascii);
+  });
+
 describe("figures and adapter compatibility", () => {
   it.each(["javascript:alert(1)", "data:image/svg+xml,test", "//untrusted.test/a", "https:\\evil.test", "java\nscript:test"])("rejects unsafe URL %s", (url) => {
     expect(safePresentationUrl(url)).toBe(false);

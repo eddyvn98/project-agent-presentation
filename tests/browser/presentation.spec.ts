@@ -79,3 +79,24 @@ test("failed images and invalid visuals leave complete prose", async ({ page }) 
   await expect(page.getByText("Visual unavailable. Continue with the accompanying explanation.")).toBeVisible();
   await expect(page.getByText("The explanation remains visible when optional visual data is malformed:")).toBeVisible();
 });
+
+
+test("long text diagram keeps its columns and scrolls on mobile instead of wrapping", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  const diagram = page.locator("pre").filter({ hasText: "ASCII diagram QA" });
+  await expect(diagram).toBeVisible();
+  const layout = await diagram.evaluate(element => {
+    const css = getComputedStyle(element);
+    return { whitespace: css.whiteSpace, font: css.fontFamily,
+      ligatures: css.fontVariantLigatures, overflow: css.overflowX,
+      full: element.scrollWidth, visible: element.clientWidth,
+      lines: element.textContent?.split("\\n").length ?? 0 };
+  });
+  expect(layout.whitespace).toBe("pre");
+  expect(layout.ligatures).toBe("none");
+  expect(layout.overflow).toBe("auto");
+  expect(layout.font.toLowerCase()).toMatch(/mono/);
+  expect(layout.lines).toBe(4);
+  expect(layout.full).toBeGreaterThan(layout.visible);
+});

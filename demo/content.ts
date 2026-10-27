@@ -38,6 +38,17 @@ Invalid notation falls back visibly: $\notARealCommand{x}$. A literal price is \
 Eight synthetic states move a marker from left to right. The selected state explains its position in words; use the selector to jump directly to any state.
 
 ` + "```agent-ui\n" + JSON.stringify(explorer) + "\n```\n" + String.raw`
+## Text diagrams keep their columns
+
+The next synthetic diagram is intentionally wider than a phone. Scroll sideways; its box edges must stay aligned.
+
+```text
+ASCII diagram QA - long rows must stay aligned even on narrow mobile screens.
+┌──────────────────────┐          ┌─────────────────────────────────────────────────────────────────────────┐
+│ START                │ ───────▶ │ Read input and preserve each column instead of wrapping the long label. │
+└──────────────────────┘          └─────────────────────────────────────────────────────────────────────────┘
+```
+
 ## A compact diagram
 
 This fictional sequence has a start, a choice and two outcomes. Scroll or enlarge it to inspect labels.

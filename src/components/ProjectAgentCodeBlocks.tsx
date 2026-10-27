@@ -21,11 +21,11 @@ function CopyButton({ text, dark }: { text: string; dark?: boolean }) {
 	</button>;
 }
 
-/** Plain text, logs and command output: a light card with wrapped text and a copy button (no syntax colours). */
+/** Preserve monospaced text diagrams and ASCII/Unicode box alignment; scroll horizontally instead of wrapping. */
 function TextBlock({ code, label }: { code: string; label: string }) {
 	return <figure className="not-prose my-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
 		<figcaption className="flex items-center justify-between border-b border-slate-200 px-3.5 py-1.5 dark:border-slate-700"><span className="font-mono text-[11px] uppercase tracking-wide text-slate-400">{label}</span><CopyButton text={code} /></figcaption>
-		<pre className="max-h-96 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12.5px] leading-6 text-slate-700 dark:text-slate-200">{code}</pre>
+		<pre className="max-h-96 w-full overflow-auto whitespace-pre px-4 py-3 font-mono text-[12.5px] leading-6 text-slate-700 dark:text-slate-200" style={{ fontVariantLigatures: "none", tabSize: 4 }}>{code}</pre>
 	</figure>;
 }
 
