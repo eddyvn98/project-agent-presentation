@@ -114,7 +114,7 @@ test("default Mermaid nodes have varied pastel fills and distinct borders", asyn
   expect(colors.every(x => x && x.fill !== "rgb(255, 255, 255)" && x.stroke !== "none")).toBe(true);
   expect(new Set(colors.map(x => x?.fill)).size).toBeGreaterThanOrEqual(3);
   expect(colors.some(x => x?.fill === "rgb(254, 243, 199)")).toBe(true);
-  await page.getByRole("button", { name: "Enlarge Diagram", exact: true }).click();
+  await figure.getByRole("button", { name: "Enlarge Diagram", exact: true }).first().click();
   const enlarged = page.getByRole("img", { name: "Diagram", exact: true });
   await expect(enlarged.locator('g.node[data-agent-color]')).toHaveCount(4);
 });
