@@ -5,6 +5,8 @@ const local = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: [
+    { find: "@/lib/skills/skillsStore", replacement: local("./tests/agent-host/skills-store.ts") },
+    { find: "@/lib/skills/ossClient", replacement: local("./tests/agent-host/skills-oss-client.ts") },
     { find: "@/lib/projects/api-access", replacement: local("./tests/agent-host/request-access.ts") },
     { find: "@/lib/capabilities/project-sharing", replacement: local("./tests/agent-host/project-sharing.ts") },
     { find: "@/app/api/aidt-access/_module-guard", replacement: local("./tests/agent-host/module-guard.ts") },
