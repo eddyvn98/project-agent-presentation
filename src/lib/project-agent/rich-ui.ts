@@ -4,6 +4,7 @@ import { safeProject3DViewerUrl } from "./scene3d-policy";
 import { parseInteractiveModel, type InteractiveModel } from "./interactive-model";
 import { normalizeResponseFences, RESPONSE_BLOCK_TYPES } from "../../../shared/project-agent/response-contract";
 export { RESPONSE_BLOCK_TYPES };
+import { RESPONSE_SELECTION_POLICY } from "../../../shared/project-agent/response-selection-policy";
 
 export type RichTone = "neutral" | "info" | "success" | "warning" | "danger";
 export type RichSceneColor = "blue" | "orange" | "yellow" | "green" | "red" | "purple" | "slate" | "white" | "black";
@@ -201,9 +202,12 @@ export function extractAskBlock(markdown: string): RichAskBlock | null {
 }
 
 export const RICH_UI_INSTRUCTIONS = [
+	...RESPONSE_SELECTION_POLICY,
 	"RICH ANSWER BLOCKS: when a visual explains the answer better than prose, put fenced ```agent-ui blocks (one JSON object each, valid JSON, real values only, never invent numbers) between normal Markdown paragraphs. The chat renders them as cards, charts, interactive explorers and diagrams. Types:",
 	'kpis: {"type":"kpis","items":[{"label":"Budget","value":"3 billion VND","hint":"incl. contingency","tone":"success"}]} (2 to 4 items)',
 	'chart: {"type":"chart","kind":"bar|line|pie|stacked","title":"Cost by option","unit":"billion","categories":["A","B"],"series":[{"name":"Total","values":[2.6,3.0]}],"caption":"..."}',
+	'interactive: {"type":"interactive","title":"Explore the estimate","parameters":[{"id":"units","label":"Units","min":1,"max":20,"step":1,"initial":5}],"outputs":[{"label":"Total","expression":{"op":"mul","args":[{"var":"units"},125]}}]} (bounded numeric expressions only; no scripts)',
+	'quiz: {"type":"quiz","question":"What is 2 + 2?","options":["3","4"],"answerIndex":1} (teaching only, never invent the correct answer)',
 	'stack: {"type":"stack","title":"Budget breakdown","total":"2.96 billion","items":[{"label":"Structure","value":1240,"display":"1,240 million"}]}',
 	'progress: {"type":"progress","title":"Budget check","value":2960,"max":3000,"label":"40 million left","note":"...","tone":"warning"}',
 	'options: {"type":"options","items":[{"title":"Option B","summary":"...","price":"2.96 billion","badge":"Recommended","recommended":true,"tone":"success","points":["..."]}]} (2 to 4 options)',
@@ -218,6 +222,6 @@ export const RICH_UI_INSTRUCTIONS = [
 	'writing: a fenced ```agent-doc block, first line "title: Weekly minutes", then the finished text as Markdown (headings, lists, tables). Use it when the user asks you to draft something to copy or send: a letter, email, memo, minutes, proposal, policy, speech, post. Put one short sentence before it and nothing inside it except the text itself; if the text contains code fences, open and close the block with four backticks. Do not use it for ordinary answers or explanations.',
 	"Keep the surrounding prose complete when a visual is absent or fails. Start with a short answer, then use sections only when they help scanning. Keep each image beside the paragraph it explains, use concise captions and supplied source attribution, and avoid image walls or duplicate representations. Never invent data or sources. Use $...$ for inline math and $$ on separate lines for display math; escape literal currency dollar signs. Structured visuals are optional.",
 	"Structure long answers with Markdown headings (## Section) and short paragraphs. Use blocks sparingly: a short answer needs none. For a linear explanation, prefer a readable ordered list; choose an explorer when stepping through states or changing a value teaches something, and avoid wide flowcharts that hide most steps beyond horizontal scrolling. Tables stay as normal Markdown tables.",
-	"ASKING BACK: before doing substantial work, ask when the request is broad, ambiguous, missing key numbers or constraints (budget, location, audience, scale, deadline), or high-stakes (money, legal, safety, a large deliverable). Ask in ONE ask block with 1 to 4 questions (or, when you need 5 to 10 facts such as an intake for a business, project or brief, ONE form block with those fields, put the most decisive first and let the user skip any), each with concrete options, after at most two sentences of text; if useful, say what you would assume otherwise. Do not run the full task until the user answers. Do not ask for simple factual requests, when the user says to just do it or 'whatever you prefer', or twice for the same information; then proceed and state your assumptions in a callout.",
-	"CLARIFY, EXPAND, DEEPEN: after a substantive answer, finish with one followups block of exactly 3 items: one that goes deeper on the most important point, one that broadens to a related area or alternative, and one that checks or challenges the result (risks, sources, edge cases). Write each label in the user's language as a short action.",
+	"ASKING BACK: only ask when missing information truly blocks a reliable answer or an unsafe/high-stakes action. For ambiguous but workable requests, proceed with clearly labeled assumptions. Use one concise ask block for one to four independent choices, and a form only when at least five facts are essential. Never repeat a resolved question.",
+	"FOLLOW-UP: include a followups block only when the answer genuinely benefits from one to three relevant next actions, without repeating the conclusion. Match labels to the user language.",
 ].join("\n");
