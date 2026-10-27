@@ -69,7 +69,7 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 				} else {
 					const link = document.createElement("a"); const downloadUrl = URL.createObjectURL(png); link.href = downloadUrl; link.download = `${(block.title || "chart").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "chart"}.png`; link.click(); window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 15000);
 				}
-				setShareError(share ? (navigator.clipboard?.write && typeof ClipboardItem !== "undefined" ? "Chart image copied." : "Sharing is unavailable; chart image downloaded instead.") : "");
+				setShareError(share ? (typeof navigator.clipboard?.write === "function" && typeof ClipboardItem !== "undefined" ? "Chart image copied." : "Sharing is unavailable; chart image downloaded instead.") : "");
 			} finally { URL.revokeObjectURL(source); }
 		} catch { setShareError(share ? "Could not copy chart image." : "Could not download chart image."); }
 	}
