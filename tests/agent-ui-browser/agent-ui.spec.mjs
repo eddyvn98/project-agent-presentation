@@ -66,7 +66,7 @@ test("Workflows: list first, then create an editable process", async ({ page }) 
   await open(page, "workflows");
   await expect(page.getByText("Weekly report", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "New workflow" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Create workflow", exact: true }).click();
+  await page.getByRole("button", { name: /Create workflow/ }).first().click();
   await page.getByRole("heading", { name: "New workflow" }).waitFor();
   const form = page.locator("form");
   await form.getByRole("textbox", { name: "Name" }).fill("Synthetic QA flow");
@@ -92,7 +92,7 @@ test("Browser sessions: permissions change without duplicating grants", async ({
   await open(page, "sessions");
   await expect(page.getByText("docs.example.test")).toBeVisible();
   const automation = page.getByRole("checkbox", { name: "Allow unattended tasks to reuse login" });
-  await automation.check();
+  await automation.click();
   await expect(automation).toBeChecked();
   await expect(page.getByText("docs.example.test")).toHaveCount(1);
 });

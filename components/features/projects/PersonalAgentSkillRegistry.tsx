@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, CircleHelp, Plus, Search, Sparkles } from "lucide-react";
 import { AgentSkillCatalog } from "./AgentSkillCatalog";
 import { PersonalAgentSkillCard } from "./PersonalAgentSkillCard";
@@ -14,6 +14,7 @@ export function PersonalAgentSkillRegistry() {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [editor, setEditor] = useState<PersonalAgentSkill | null | undefined>(undefined);
+  const editorOpener = useRef<HTMLElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -70,7 +71,7 @@ export function PersonalAgentSkillRegistry() {
           applied when relevant—not run automatically as code.
         </p>
       </div>
-      <button type="button" onClick={() => setEditor(null)}
+      <button type="button" onClick={e => { editorOpener.current = e.currentTarget; setEditor(null); }}
         className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950">
         <Plus className="h-4 w-4" aria-hidden="true"/> Create skill
       </button>
@@ -100,7 +101,7 @@ export function PersonalAgentSkillRegistry() {
         {(["all", "enabled", "disabled"] as const).map(item => <button type="button" key={item}
           aria-pressed={filter === item} onClick={() => setFilter(item)}
           className={"rounded-lg px-3 py-2 text-xs capitalize " +
-            (filter === item ? "bg-white font-semibold shadow-sm dark:bg-slate-700" : "text-slate-500")}>
+            (filter === item ? "bg-white font-semibold shadow-sm dark:bg-slate-700" : "text-slate-700 dark:text-slate-300")}>
           {item === "disabled" ? "Off" : item}</button>)}
       </div>}
     </div>
@@ -110,7 +111,7 @@ export function PersonalAgentSkillRegistry() {
       {loading ? <p role="status" className="text-sm text-slate-500">Loading your skills…</p> :
         visible.length ? <div className="grid gap-3 md:grid-cols-2">{visible.map(skill =>
           <PersonalAgentSkillCard key={skill.id} skill={skill} busy={busy}
-            onEdit={setEditor}
+            onEdit={skill => { editorOpener.current = document.activeElement as HTMLElement; setEditor(skill); }}
             onToggle={item => void command("PATCH", { id: item.id, enabled: !item.enabled },
               item.enabled ? "Skill disabled." : "Skill enabled for matching tasks.")}
             onDelete={item => { if (window.confirm("Delete " + item.name + "?"))
@@ -133,6 +134,7 @@ export function PersonalAgentSkillRegistry() {
         or guarantee an action was performed. Check task activity for actual results.</p>
     </div>
     <PersonalAgentSkillEditor open={editor !== undefined} skill={editor ?? null}
-      busy={busy} onClose={() => setEditor(undefined)} onSave={draft => void save(draft)}/>
+      busy={busy} returnFocusTo={editorOpener.current}
+      onClose={() => setEditor(undefined)} onSave={draft => void save(draft)}/>
   </section>;
 }

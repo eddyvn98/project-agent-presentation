@@ -14,11 +14,11 @@ export function PersonalAgentSkillCard({ skill, busy, onEdit, onDelete, onToggle
       </div>
       <span className={"shrink-0 rounded-full px-2.5 py-1 text-xs font-medium " +
         (skill.enabled ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" :
-          "bg-slate-100 text-slate-500 dark:bg-slate-800")}>
+          "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200")}>
         {skill.enabled ? "Enabled" : "Off"}
       </span>
     </div>
-    <p className="mt-2 text-xs text-slate-400">Version {skill.version} · Updated {new Date(skill.updatedAt).toLocaleDateString()}</p>
+    <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">Version {skill.version} · Updated {new Date(skill.updatedAt).toLocaleDateString()}</p>
     <div className="mt-4 flex flex-wrap items-center gap-2">
       <button type="button" role="switch" aria-checked={skill.enabled}
         aria-label={skill.enabled ? "Disable " + skill.name : "Enable " + skill.name}

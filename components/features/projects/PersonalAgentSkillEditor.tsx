@@ -7,10 +7,11 @@ import type { PersonalAgentSkill } from "@/lib/project-agent/personal-agent-skil
 export interface SkillDraft { name: string; description: string; instructions: string; id?: string }
 interface Props {
   open: boolean; skill: PersonalAgentSkill | null; busy: boolean;
+  returnFocusTo?: HTMLElement | null;
   onClose(): void; onSave(draft: SkillDraft): void;
 }
 const field = "mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-600 focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-slate-800";
-export function PersonalAgentSkillEditor({ open, skill, busy, onClose, onSave }: Props) {
+export function PersonalAgentSkillEditor({ open, skill, busy, returnFocusTo, onClose, onSave }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -23,7 +24,9 @@ export function PersonalAgentSkillEditor({ open, skill, busy, onClose, onSave }:
   return <Dialog.Root open={open} onOpenChange={next => { if (!next && !busy) onClose(); }}>
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-[2px]"/>
-      <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[min(90vh,760px)] w-[min(94vw,640px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+      <Dialog.Content onCloseAutoFocus={event => {
+        event.preventDefault(); if (returnFocusTo?.isConnected) returnFocusTo.focus();
+      }} className="fixed left-1/2 top-1/2 z-50 flex max-h-[min(90vh,760px)] w-[min(94vw,640px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-start justify-between gap-3 border-b p-5 dark:border-slate-800">
           <div><Dialog.Title className="text-xl font-semibold">{skill ? "Edit skill" : "Create a skill"}</Dialog.Title>
             <Dialog.Description className="mt-1 text-sm text-slate-500">
