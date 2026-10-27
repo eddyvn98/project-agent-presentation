@@ -30,10 +30,14 @@ export function extractAgentSideEffects(answer: string): AgentSideEffects {
 		const value = (item ?? {}) as Record<string, unknown>;
 		const url = text(value.url, 600);
 		if (!/^https?:\/\//i.test(url)) continue;
+		let parsed: URL;
+		try { parsed = new URL(url); } catch { continue; }
+		if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname ||
+			parsed.username || parsed.password) continue;
 		const facts = Array.isArray(value.facts) ? value.facts.map((fact) => text(fact, 300)).filter(Boolean).slice(0, 12) : [];
 		const summary = text(value.summary, 1_500);
 		if (!summary && facts.length === 0) continue;
-		sources.push({ url, title: text(value.title, 120) || new URL(url).hostname, summary, facts, replace: value.replace === true });
+		sources.push({ url, title: text(value.title, 120) || parsed.hostname, summary, facts, replace: value.replace === true });
 	}
 	const notes: NoteOp[] = [];
 	for (const item of tags(answer, "project_note")) {
