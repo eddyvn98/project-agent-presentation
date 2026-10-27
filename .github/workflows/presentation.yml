@@ -21,6 +21,19 @@ jobs:
       - run: npm run check:agent-routes
       - run: npm test
       - run: npm run test:agent
+      - name: L1 L2 deterministic long-session test (100/500/1000 turns)
+        run: |
+          mkdir -p test-results/long-session
+          npm run test:long-session 2>&1 | tee test-results/long-session/l1-l2.log
+      - name: Preserve L1 L2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: long-session-l1-l2
+          path: test-results/long-session/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - run: node --test tests/node/*.test.mjs
       - run: npm run build:demo
 
