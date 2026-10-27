@@ -93,7 +93,7 @@ describe("commercial-style agent Skills surface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add to my skills" }));
     expect(await screen.findByRole("switch", { name: "Enable Source verification" })).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "Explore library" }));
-    expect(screen.getByRole("button", { name: "In your library" }).hasAttribute("disabled")).toBe(true);
+    expect((await screen.findByRole("button", { name: "In your library" })).hasAttribute("disabled")).toBe(true);
     expect(fetcher.mock.calls.filter(([url, opts]) => url === "/api/project-agent/skill-catalog" &&
       (opts as { method?: string } | undefined)?.method === "POST")).toHaveLength(1);
   });
