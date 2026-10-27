@@ -66,8 +66,10 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
     // Radix/native scroll restoration can run AFTER focus is returned.
     // Observe those scrolls while the trigger retains keyboard focus.
     let frame: number | null = null;
+    let observer: IntersectionObserver | null = null;
     const stop = () => {
       if (frame !== null) cancelAnimationFrame(frame);
+      observer?.disconnect();
       document.removeEventListener("scroll", schedule, true);
       window.removeEventListener("scroll", schedule, true);
       for (const type of ["wheel", "touchstart", "pointerdown", "keydown"])
@@ -86,6 +88,12 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
       });
     };
     stopCloseGuard.current = stop;
+    if (typeof IntersectionObserver === "function") {
+      observer = new IntersectionObserver(entries => {
+        if (entries.some(entry => !entry.isIntersecting)) schedule();
+      }, { threshold: 0.01 });
+      observer.observe(trigger);
+    }
     trigger.addEventListener("blur", stop, { once: true });
     document.addEventListener("scroll", schedule, { capture: true, passive: true });
     window.addEventListener("scroll", schedule, { capture: true, passive: true });
