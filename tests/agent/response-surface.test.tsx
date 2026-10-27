@@ -1,8 +1,14 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ProjectAgentTaskAnswer } from "../../components/features/projects/ProjectAgentTaskAnswer";
 
-afterEach(cleanup);
+// jsdom does not implement browser layout observers used by Recharts.
+beforeEach(() => vi.stubGlobal("ResizeObserver", class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}));
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const draw = (markdown: string, running = false) =>
   render(<ProjectAgentTaskAnswer markdown={markdown} sources={[]} resolveImage={() => null}
     running={running} language="en" />);
