@@ -35,8 +35,8 @@ describe("P0 model-independent goal receipt with real isolated Chromium DOM", ()
         const out = document.querySelector("#qa-output")!;
         out.textContent = String(Number(out.textContent) + 1);
       }));
-      const input = { taskId: id, ownerEmail: owner, userPrompt: g1QaPrompt("success") }
-        as RuntimeInput;
+      const input = ({ taskId: id, ownerEmail: owner,
+        userPrompt: g1QaPrompt("success") } as RuntimeInput);
       fixtures.session.mockReturnValue({ owner, browser: { isConnected: () => true }, page });
       fixtures.loop.mockReturnValue({ verified: 1, actions: 1 });
       fixtures.probe.mockReturnValue({ connected: true, networkAttempts: 0 });
