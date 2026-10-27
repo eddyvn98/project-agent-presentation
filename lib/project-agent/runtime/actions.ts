@@ -37,7 +37,7 @@ export type RuntimeAction =
       id?: string; title?: string; prompt?: string; kind?: "once" | "daily" | "weekly" | "interval" | "watch";
       timezone?: string; localTime?: string; runAt?: string; url?: string;
       everyMinutes?: number; weekdays?: number[]; note?: string }
-	| { action: "workflow"; op: "list" | "propose"; title?: string; description?: string;
+	| { action: "workflow"; op: "list" | "propose"; id?: string; title?: string; description?: string;
       steps?: Array<{ title: string; prompt: string; requiresApproval: boolean }>; note?: string }
 	| BrowserAction
 	| PdfAction
@@ -194,7 +194,9 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
       });
       if (steps.some(s => typeof s.title !== "string" || typeof s.prompt !== "string"))
         return { error: "Each workflow step needs title and prompt" };
-      return { action: "workflow", op: "propose", title: raw.title,
+      if (raw.id !== undefined && (typeof raw.id !== "string" || !/^awf_[0-9a-f-]{36}$/.test(raw.id)))
+        return { error: "Workflow update requires a valid draft id" };
+      return { action: "workflow", op: "propose", id: typeof raw.id === "string" ? raw.id : undefined, title: raw.title,
         description: typeof raw.description === "string" ? raw.description : "",
         steps: steps as Array<{ title: string; prompt: string; requiresApproval: boolean }>, note };
     }
