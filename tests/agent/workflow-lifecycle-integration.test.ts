@@ -15,9 +15,12 @@ vi.mock("../../lib/project-agent/task-runner", () => ({ startProjectAgentTask: h
 
 import { advanceWorkflowForTask, approveWorkflowStep, launchWorkflow,
   rejectWorkflowStep, tickWorkflowRuns } from "../../lib/project-agent/workflow-runner";
-import { createWorkflowRun, getWorkflowRun, saveAgentWorkflow,
+import { changeAgentWorkflow, createWorkflowRun, getWorkflowRun, listAgentWorkflows, saveAgentWorkflow,
   updateWorkflowRun } from "../../lib/project-agent/workflow-store";
 import type { AgentWorkflowStep } from "../../lib/project-agent/workflow-types";
+import type { RuntimeInput } from "../../lib/project-agent/runtime/run-agent-types";
+import { parseRuntimeAction } from "../../lib/project-agent/runtime/actions";
+import { agentWorkflowAction } from "../../lib/project-agent/workflow-agent-tool";
 
 const owner = "lifecycle-owner@example.test", projectId = "isolated-project";
 const steps: AgentWorkflowStep[] = [
@@ -53,6 +56,25 @@ afterEach(async () => {
 });
 
 describe("persisted workflow lifecycle with synthetic task service", () => {
+  it("connects a synthetic model action to draft, enable, dispatch and task creation", async () => {
+    const raw = JSON.stringify({ action: "workflow", op: "propose", title: "Synthetic model draft",
+      steps: [{ title: "Collect", prompt: "Read synthetic orders", requiresApproval: false }] });
+    const action = parseRuntimeAction(raw);
+    if ("error" in action || action.action !== "workflow") throw new Error("Invalid synthetic model action");
+    const input = { chatId: "chat_synthetic", user: "synthetic", query: "",
+      ownerEmail: owner, projectId } as RuntimeInput;
+    const proposal = await agentWorkflowAction(input, action);
+    expect(proposal.failed).not.toBe(true);
+    expect(proposal.text).toContain("DISABLED");
+    const draft = (await listAgentWorkflows(owner))[0];
+    expect(draft).toMatchObject({ title: "Synthetic model draft", enabled: false });
+    await expect(launchWorkflow(owner, draft.id)).rejects.toThrow(/disabled/);
+    await changeAgentWorkflow(owner, draft.id, "enable");
+    const run = await launchWorkflow(owner, draft.id);
+    expect(run.status).toBe("running");
+    expect(host.create).toHaveBeenCalledTimes(1);
+  });
+
   it("requires approval, rejects repeat approval and advances only after the approved task", async () => {
     const definition = await makeWorkflow();
     const launched = await launchWorkflow(owner, definition.id);
