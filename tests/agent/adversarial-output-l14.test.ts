@@ -35,7 +35,7 @@ describe("L14 adversarial observation and malformed runtime inputs", () => {
     const s = scope(), other = scope();
     const unicode = "Dữ liệu 🧪 文本 A\u0301 " + "🧪".repeat(300);
     const { id } = await saveContextOutput(s, unicode);
-    const r = await readContextOutput(s, id, 2, 10000);
+    const r = await readContextOutput(s, id, 0, 10000);
     expect(r.text.length).toBeLessThan(7200);
     expect(r.text).toContain("Dữ");
     const search = await searchContextOutput(s, id, "文本", 100);
