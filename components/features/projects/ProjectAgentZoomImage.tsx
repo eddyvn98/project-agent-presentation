@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Brush } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "../../ui/dialog";
 
 /** Wraps a thumbnail so a click enlarges the image in a dialog on the same page instead of opening a new tab. */
 export function ProjectAgentZoomImage({ src, alt, title, label, className, children, onMark }: { src: string; alt: string; title?: string; label: string; className?: string; children: ReactNode; onMark?: () => void }) {

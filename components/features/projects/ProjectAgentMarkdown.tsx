@@ -4,10 +4,10 @@ import { isValidElement, type ReactElement } from "react";
 import type { Components } from "react-markdown";
 import { ProjectAgentSourceLink } from "./ProjectAgentSourceLink";
 import { ProjectAgentRichBlock } from "./ProjectAgentRichBlocks";
-import { repairOngUiFences } from "@/lib/project-agent/rich-ui";
+import { repairOngUiFences } from "../../../lib/project-agent/rich-ui";
 import { ProjectAgentCodeBlock } from "./ProjectAgentCodeBlocks";
 import { ProjectAgentDocumentCard } from "./ProjectAgentDocumentCard";
-import type { ProjectAgentTaskSource } from "@/lib/project-agent/types";
+import type { ProjectAgentTaskSource } from "../../../lib/project-agent/types";
 import { ProjectAgentFigure, type ImagePresentation } from "./ProjectAgentFigure";
 import { isLocalImageSource } from "./projectAgentInlineImages";
 

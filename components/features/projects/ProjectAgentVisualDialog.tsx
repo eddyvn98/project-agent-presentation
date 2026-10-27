@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "../../ui/dialog";
 
 /** Makes a diagram scrollable at every zoom level instead of cropping it to the viewport. */
 export function ProjectAgentVisualDialog({ label, children, width = 800 }: {

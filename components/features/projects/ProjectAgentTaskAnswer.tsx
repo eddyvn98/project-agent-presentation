@@ -7,9 +7,9 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
-import type { ProjectAgentTaskSource } from "@/lib/project-agent/types";
-import { activityText, type ActivityLanguage } from "@/lib/project-agent/activity-language";
-import { completedStreamingMarkdown, splitPresentationSections } from "@/lib/project-agent/presentation-mode";
+import type { ProjectAgentTaskSource } from "../../../lib/project-agent/types";
+import { activityText, type ActivityLanguage } from "../../../lib/project-agent/activity-language";
+import { completedStreamingMarkdown, splitPresentationSections } from "../../../lib/project-agent/presentation-mode";
 import { createProjectAgentMarkdownComponents, normalizeProjectAgentMarkdown } from "./ProjectAgentMarkdown";
 import type { ImagePresentation } from "./ProjectAgentFigure";
 

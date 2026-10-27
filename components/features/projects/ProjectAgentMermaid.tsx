@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Maximize2, Minus, Plus, RotateCcw } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "../../ui/dialog";
 
-import { colorizeMermaidNodes, MERMAID_THEME } from "@/lib/project-agent/mermaid-palette";
+import { colorizeMermaidNodes, MERMAID_THEME } from "../../../lib/project-agent/mermaid-palette";
 
 type RenderedDiagram = { code: string; svg: string; width: number };
 const CONTROL = "inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-slate-200 px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800";
