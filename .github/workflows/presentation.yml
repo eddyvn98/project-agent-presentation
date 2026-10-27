@@ -62,15 +62,40 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Match Firefox and WebKit binaries to lockfile
-        run: npx playwright install firefox webkit
-      - name: Firefox and WebKit Agent component smoke QA
-        run: npm run test:agent-ui:cross
+      - name: Match WebKit browser to lockfile
+        run: npx playwright install webkit
+      - name: WebKit Agent component smoke QA
+        run: npm run test:agent-ui:cross -- --project=webkit
       - name: Preserve cross-browser failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: agent-ui-cross-browser-failures
+          path: test-results/cross-browser/
+          if-no-files-found: ignore
+          retention-days: 5
+
+  firefox:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install Firefox in native runner (no Docker user namespace restrictions)
+        timeout-minutes: 5
+        run: npx playwright install firefox
+      - name: Firefox Agent component smoke QA
+        run: npm run test:agent-ui:cross -- --project=firefox
+      - name: Preserve Firefox failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-ui-firefox-failures
           path: test-results/cross-browser/
           if-no-files-found: ignore
           retention-days: 5
