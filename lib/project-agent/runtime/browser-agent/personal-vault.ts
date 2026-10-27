@@ -135,14 +135,16 @@ export async function savePersonalBrowserGrant(owner: string, url: string,
 }
 export async function readPersonalBrowserGrant(owner: string, url: string): Promise<StoredGrant | null> {
   const host = vaultHost(url);
+  // An already-revoked grant must remain absent even if its account key is no
+  // longer decryptable (e.g. after master-key rotation or deletion).
+  const raw = await fs.readFile(sitePath(owner, host), "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (!raw) return null;
   const secret = await getUserKey(owner, false);
   if (!secret) return null;
   try {
-    const raw = await fs.readFile(sitePath(owner, host), "utf8").catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return null;
-      throw error;
-    });
-    if (!raw) return null;
     const envelope = JSON.parse(raw) as SealedPayload | { host: string; sealed: SealedPayload };
     if ("host" in envelope && envelope.host !== host) throw new Error("Vault host mismatch");
     const cipher = "sealed" in envelope ? envelope.sealed : envelope;
