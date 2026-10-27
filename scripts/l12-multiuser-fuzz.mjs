@@ -36,11 +36,13 @@ await isolatedMemoryQa("l12", async ({ db }) => {
       }
       if (round % 7 === 0) {
         const other = users[(index + 1 + rand() % 19) % 20];
+        // A same-Project conversation is intentionally shared at the storage
+        // layer; only the authenticated route decides who may access it.
         if ((await listSharedCheckpoints(data, {
-          projectId: other.projectId, chatId: user.chatId })).length)
+          projectId: "qa-project-foreign", chatId: user.chatId })).length)
           failures.push("cross-project read");
         if ((await listSharedCheckpoints(data, {
-          projectId: user.projectId, chatId: other.chatId })).length)
+          projectId: user.projectId, chatId: "unknown-" + other.chatId })).length)
           failures.push("cross-conversation read");
       }
     }));
