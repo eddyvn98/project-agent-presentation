@@ -112,6 +112,40 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  l10_virtual_soak:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27019:27017
+    env:
+      L10_ISOLATED_QA: "1"
+      L10_MONGO_URI: mongodb://127.0.0.1:27019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false mongodb@6
+      - name: L10 virtual 48-hour shared Mongo lease/Stop/crash/reconnect test
+        run: |
+          set -o pipefail
+          mkdir -p test-results/l10
+          npm run test:l10:soak | tee test-results/l10/virtual-soak.json
+      - name: Preserve L10 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l10-virtual-soak
+          path: test-results/l10/
+          if-no-files-found: ignore
+          retention-days: 14
+
   p2_state_fuzz:
     needs: quality
     runs-on: ubuntu-latest
