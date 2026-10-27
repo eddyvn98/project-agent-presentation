@@ -48,7 +48,7 @@ export type RuntimeAction =
 	| { action: "generate_image"; prompt: string; aspectRatio?: string; resolution?: string; model?: string; count?: number; references?: string[]; note?: string }
 	| ({ action: "wait"; note?: string } & WaitSpec)
 	| { action: "plan"; items: PlanItem[]; note?: string }
-	| { action: "final"; answer: string; files?: string[]; note?: string };
+	| { action: "final"; answer: string; files?: string[]; needsInput?: string; note?: string };
 
 function firstJsonObject(text: string): string | null {
 	const start = text.indexOf("{");
@@ -226,7 +226,7 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
 		case "reference":
 			return typeof raw.id === "string" && raw.id.trim() ? { action: "reference", id: raw.id.trim(), find: typeof raw.find === "string" ? raw.find.trim().slice(0, 120) : undefined, note } : typeof raw.query === "string" && raw.query.trim() ? { action: "reference", query: raw.query.trim().slice(0, 500), note } : { error: "reference needs a query or id" };
 		case "final":
-			return typeof raw.answer === "string" ? { action: "final", answer: raw.answer, files: Array.isArray(raw.files) ? raw.files.filter((file): file is string => typeof file === "string") : [], note } : { error: "final needs an answer" };
+			return typeof raw.answer === "string" ? { action: "final", answer: raw.answer, files: Array.isArray(raw.files) ? raw.files.filter((file): file is string => typeof file === "string") : [], needsInput: typeof raw.needsInput === "string" && raw.needsInput.trim().length > 0 && raw.needsInput.length <= 500 ? raw.needsInput.trim() : undefined, note } : { error: "final needs an answer" };
 		default:
 			return { error: `unknown action ${JSON.stringify(raw.action)}` };
 	}

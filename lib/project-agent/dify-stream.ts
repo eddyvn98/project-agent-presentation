@@ -10,6 +10,8 @@ const MAX_THOUGHTS = 200;
 
 export interface DifyAgentMessage {
 	answer: string;
+	/** Explicit runtime signal; prose alone must never advance a waiting workflow. */
+	needsInput?: string;
 	conversationId?: string;
 	inlineFiles: DifyInlineFile[];
 	officeVerified?: boolean;

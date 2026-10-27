@@ -39,6 +39,7 @@ export interface ProjectAgentTask {
   /** Exact prior task for a retry; never grants cross-owner access. */
   retryOfTaskId?: string;
   workflowRunId?: string;
+  requestedInput?: string;
   projectOwnerEmail?: string;
   /** Stable id of the chat (thread) this task belongs to; usually the first Dify conversation id. */
   conversationId?: string;

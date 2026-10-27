@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import * as projectCap from "@/lib/capabilities/project";
 import { listAgentWorkflows, listWorkflowRuns, saveAgentWorkflow, changeAgentWorkflow } from "@/lib/project-agent/workflow-store";
-import { launchWorkflow, approveWorkflowStep, rejectWorkflowStep } from "@/lib/project-agent/workflow-runner";
+import { launchWorkflow, approveWorkflowStep, rejectWorkflowStep, provideWorkflowInput } from "@/lib/project-agent/workflow-runner";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,13 +43,15 @@ export async function PATCH(req: NextRequest) {
   if (!originOk(req)) return NextResponse.json({ error: "Origin denied" }, { status: 403, headers });
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
   if (!body || typeof body.id !== "string" ||
-    !["enable","disable","delete","run","approve_step","reject_step"].includes(String(body.action)))
+    !["enable","disable","delete","run","approve_step","reject_step","provide_input"].includes(String(body.action)))
     return NextResponse.json({ error: "Invalid workflow action" }, { status: 400, headers });
   try {
     if (body.action === "run")
       return NextResponse.json(await launchWorkflow(owner, body.id), { headers });
     if (body.action === "approve_step")
       return NextResponse.json(await approveWorkflowStep(owner, body.id), { headers });
+    if (body.action === "provide_input")
+      return NextResponse.json(await provideWorkflowInput(owner, body.id, body.input as string, body.reviewed === true), { headers });
     if (body.action === "reject_step")
       return NextResponse.json({ run: await rejectWorkflowStep(owner, body.id) }, { headers });
     const workflow = await changeAgentWorkflow(owner, body.id,

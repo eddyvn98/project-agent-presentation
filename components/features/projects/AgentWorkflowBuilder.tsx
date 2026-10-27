@@ -14,6 +14,7 @@ export function AgentWorkflowBuilder() {
   const [projectId, setProjectId] = useState("");
   const [steps, setSteps] = useState<AgentWorkflowStep[]>([newStep()]);
   const [editing, setEditing] = useState<string | null>(null);
+  const [pendingInputs, setPendingInputs] = useState<Record<string, string>>({});
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const reload = useCallback(async () => {
     const r = await fetch("/api/project-agent/workflows", { cache: "no-store" });
@@ -157,6 +158,15 @@ export function AgentWorkflowBuilder() {
           <p>Run {run.id.slice(-8)} · {run.status} · Step {Math.min(run.index+1,run.steps.length)}/{run.steps.length}</p>
           {run.error && <p role="alert" className="text-red-600">{run.error}</p>}
           {run.history.map(h => <p key={h.index}>{h.title}: {h.status} {h.taskId ?? ""}</p>)}
+          {run.status === "waiting_input" && <div className="space-y-2">
+            <p role="status">Input needed: {run.requestedInput}</p>
+            {run.inputReviewRequired && <p className="text-amber-700">Review previous tool effects before resuming.</p>}
+            <textarea className={field} aria-label="Workflow missing input" maxLength={4000}
+              value={pendingInputs[run.id] ?? ""} onChange={e => setPendingInputs(old => ({ ...old, [run.id]: e.target.value }))}/>
+            <button type="button" disabled={busy || !pendingInputs[run.id]?.trim()}
+              onClick={() => { const reviewed = !run.inputReviewRequired || window.confirm("Have you reviewed earlier tool effects and approved continuing?"); if (reviewed) void send("PATCH", { id: run.id, action: "provide_input", input: pendingInputs[run.id], reviewed }); }}
+              className="rounded border px-2 py-1">Continue with input</button>
+          </div>}
           {run.status === "waiting_approval" && <div className="flex gap-2">
             <button type="button" disabled={busy} onClick={() => void send("PATCH", { id: run.id, action: "approve_step" })}
               className="rounded bg-slate-900 px-2 py-1 text-white">Approve next step</button>

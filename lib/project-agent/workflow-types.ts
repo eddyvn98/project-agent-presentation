@@ -10,11 +10,13 @@ export interface AgentWorkflow {
 export interface AgentWorkflowRun {
   id: string; workflowId: string; ownerEmail: string; projectId: string;
   steps: AgentWorkflowStep[]; index: number;
-  status: "ready" | "dispatching" | "running" | "waiting_approval" | "done" | "failed";
+  status: "ready" | "dispatching" | "running" | "waiting_approval" | "waiting_input" | "done" | "failed";
   taskId?: string;
+  requestedInput?: string; pendingInput?: string; inputAttempt?: number;
+  inputReviewRequired?: boolean;
   transitionCount?: number; previousResult?: string;
   history: Array<{ index: number; title: string; taskId?: string;
-    status: "done" | "failed"; completedAt: string; error?: string }>;
+    status: "done" | "failed" | "waiting_input"; completedAt: string; error?: string }>;
   createdAt: string; updatedAt: string; error?: string;
   approvedIndex?: number; acknowledgedAt?: string;
 }

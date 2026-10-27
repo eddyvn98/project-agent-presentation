@@ -261,7 +261,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 					files.push({ name: item.name, bytes: new Uint8Array(0), resource: stored });
 				}
 				const g1Receipt = await checkG1SyntheticGoal(input); if (g1Receipt) input.onG1Receipt?.(g1Receipt); if (input.projectId) await saveScriptsOut(input.projectId, input.chatId).catch(() => 0);
-				return { answer: g1Receipt ? action.answer + "\n\n" + formatG1Receipt(g1Receipt) : action.answer, conversationId, inlineFiles: files, promptTokens: totalPromptTokens ? estimateContextTokens(totalPromptTokens, rounds) : undefined, iterations: rounds, sources: input.sources };
+				return { answer: g1Receipt ? action.answer + "\n\n" + formatG1Receipt(g1Receipt) : action.answer, conversationId, inlineFiles: files, promptTokens: totalPromptTokens ? estimateContextTokens(totalPromptTokens, rounds) : undefined, iterations: rounds, sources: input.sources, ...(action.needsInput ? { needsInput: action.needsInput } : {}) };
 			}
 			const replayKey = spanKey(action.action, JSON.stringify({ ...action, note: undefined }));
 			const effectful = mayHaveExternalEffects(action), blocked = replay.before(action.action, replayKey, effectful);

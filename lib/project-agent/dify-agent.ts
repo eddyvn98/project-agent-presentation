@@ -277,7 +277,8 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		if (isG1QaTask(task) && (!g1Receipt || g1Receipt.taskId !== task.id || !latestAnswer.includes(formatG1Receipt(g1Receipt)))) throw new Error("G1 independent checker and final receipt required before done"); const accepted = await commitTaskTerminalIfActive(task, "done", {
 			completedAt: new Date().toISOString(), ...conversationPatch(conversationId),
 			...(message.promptTokens ? { contextTokens: message.promptTokens } : {}),
-			resultText: latestAnswer, ...(runtimeSources.length ? { sources: runtimeSources } : {}),
+			resultText: latestAnswer, ...(task.workflowRunId && message.needsInput ? { requestedInput: message.needsInput } : {}),
+			...(runtimeSources.length ? { sources: runtimeSources } : {}),
 			files: latestFiles,
 			...(latestFiles.length ? { filesExpireAt: new Date(Date.now() + 86400000).toISOString() } : {}),
 			logLine: "Dify Project Agent completed",
