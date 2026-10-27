@@ -77,6 +77,16 @@ export async function retainProjectHindsight(task: ProjectAgentTask): Promise<bo
       }],
       async: false,
     }, 20_000);
+    // A project may be deleted or membership revoked while the remote write is in flight.
+    // Compensate the just-written document before reporting success.
+    let stillAuthorized = false;
+    try { stillAuthorized = Boolean(await getProjectAccess(task.projectId, task.ownerEmail)); }
+    catch { stillAuthorized = false; }
+    if (!stillAuthorized) {
+      // Propagate cleanup failures: do not silently claim a successful retain or deletion.
+      await deleteProjectHindsightTasks(task.projectId, [task.id]);
+      return false;
+    }
     return true;
   } catch { return false; }
 }
