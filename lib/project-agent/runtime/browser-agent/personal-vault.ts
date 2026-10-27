@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { isIP } from "node:net";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { BrowserContext } from "playwright-core";
@@ -20,7 +21,8 @@ export const ownerKey = (owner: string) => {
 export function vaultHost(url: string): string {
   const parsed = new URL(url);
   if (parsed.protocol !== "https:" || parsed.port && parsed.port !== "443" ||
-      !parsed.hostname.includes(".") || parsed.username || parsed.password)
+      !parsed.hostname.includes(".") || isIP(parsed.hostname.replace(/^\[|\]$/g, "")) !== 0 ||
+      parsed.username || parsed.password)
     throw new Error("Personal browser sessions require a public HTTPS hostname");
   return parsed.hostname.toLowerCase();
 }
