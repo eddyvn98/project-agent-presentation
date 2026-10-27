@@ -5,6 +5,7 @@ vi.mock("../../lib/project-agent/runtime/context-output-store", () => ({
 }));
 vi.mock("@/services/mongodb/projectAgentTasks.repo", () => ({
   deleteProjectAgentConversation: mock.deleteRows,
+  findProjectAgentTaskByWorkspaceTurn: vi.fn(),
 }));
 import { deleteProjectAgentConversation } from "../../lib/project-agent/task-store";
 
