@@ -24,6 +24,39 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
       typeof trigger.scrollIntoView === "function")
       trigger.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
   };
+  // Re-anchor after layout-only shifts; never override an intentional scroll.
+  const protectOpenTrigger = () => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    let frame: number | null = null;
+    let lastScrollY = window.scrollY;
+    const stop = () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      observer?.disconnect();
+      for (const type of ["wheel", "touchstart", "pointerdown", "keydown"])
+        window.removeEventListener(type, stop, true);
+      if (stopCloseGuard.current === stop) stopCloseGuard.current = null;
+    };
+    const check = () => {
+      frame = null;
+      if (!openRef.current || !trigger.isConnected) { stop(); return; }
+      if (window.scrollY !== lastScrollY) { lastScrollY = window.scrollY; return; }
+      revealTrigger();
+      lastScrollY = window.scrollY;
+    };
+    const schedule = () => {
+      if (frame === null) frame = requestAnimationFrame(check);
+    };
+    const observer = typeof IntersectionObserver === "function"
+      ? new IntersectionObserver(entries => {
+        if (entries.some(entry => !entry.isIntersecting)) schedule();
+      }, { threshold: 0.01 }) : null;
+    observer?.observe(trigger);
+    for (const type of ["wheel", "touchstart", "pointerdown", "keydown"])
+      window.addEventListener(type, stop, { capture: true, passive: true });
+    stopCloseGuard.current = stop;
+    schedule();
+  };
   const restoreTrigger = () => {
     const trigger = triggerRef.current;
     if (!trigger) return;
@@ -62,7 +95,7 @@ export function ProjectAgentSourceLink({ href, host, label, title }: ProjectAgen
     schedule();
   };
   if (!safePresentationUrl(href) || !/^https?:\/\//i.test(href)) return <span>{label}</span>;
-  return <Popover.Root onOpenChange={(open) => { openRef.current = open; if (open) { stopCloseGuard.current?.(); revealTrigger(); } }}>
+  return <Popover.Root onOpenChange={(open) => { openRef.current = open; if (open) { stopCloseGuard.current?.(); revealTrigger(); protectOpenTrigger(); } }}>
     <Popover.Trigger asChild><button ref={triggerRef} type="button" aria-label={`Show source: ${title} (${host})`}
       className="not-prose mx-0.5 inline-flex min-h-6 max-w-[14rem] items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 align-baseline text-xs leading-5 text-slate-600 focus-visible:ring-2 focus-visible:ring-orange-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
       <Globe2 aria-hidden className="h-3 w-3 shrink-0" /><span className="truncate">{label}</span>
