@@ -28,7 +28,7 @@ export function AgentAccountNav({ current, children }: { current: AgentAccountPa
     {primary.map(item => <a key={item.href} href={item.href}
       aria-current={current === item.href ? "page" : undefined}
       className={navClass(current === item.href)}>{item.label}</a>)}
-    <details className="group relative" open={undefined} key={advanced ? "advanced-open" : "advanced-closed"}>
+    <details className="group relative" defaultOpen={advanced}>
       <summary className={navClass(advanced) + " cursor-pointer list-none gap-1 [&::-webkit-details-marker]:hidden"}
         aria-label="Advanced developer tools">
         <Settings2 className="h-4 w-4" aria-hidden="true"/> Advanced

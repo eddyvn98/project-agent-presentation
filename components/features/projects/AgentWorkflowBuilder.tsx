@@ -14,6 +14,7 @@ export function AgentWorkflowBuilder() {
   const [projectId, setProjectId] = useState("");
   const [steps, setSteps] = useState<AgentWorkflowStep[]>([newStep()]);
   const [editing, setEditing] = useState<string | null>(null);
+  const [showEditor, setShowEditor] = useState(false), [search, setSearch] = useState("");
   const [pendingInputs, setPendingInputs] = useState<Record<string, string>>({});
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const reload = useCallback(async () => {
@@ -32,10 +33,10 @@ export function AgentWorkflowBuilder() {
     return () => clearInterval(timer);
   }, [reload]);
   function reset() {
-    setEditing(null); setTitle(""); setDescription(""); setSteps([newStep()]);
+    setEditing(null); setShowEditor(false); setTitle(""); setDescription(""); setSteps([newStep()]);
   }
   function edit(w: AgentWorkflow) {
-    setEditing(w.id); setTitle(w.title); setDescription(w.description);
+    setEditing(w.id); setShowEditor(true); setTitle(w.title); setDescription(w.description);
     setProjectId(w.projectId); setSteps(w.steps.map(s => ({ ...s })));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -69,15 +70,36 @@ export function AgentWorkflowBuilder() {
     finally { setBusy(false); }
   }
   const field = "w-full rounded-lg border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900";
-  return <section aria-label="Agent workflow builder" className="mx-auto max-w-5xl space-y-5 p-4">
-    <header><h1 className="text-xl font-semibold">Workflow Builder</h1>
-      <p className="text-sm text-slate-500">Create repeatable multi-step Agent processes. Optional approval gates prevent a step from starting until you authorize it.</p></header>
+  const needingAttention = runs.filter(r => ["waiting_input", "waiting_approval"].includes(r.status)).length;
+  const matching = workflows.filter(w =>
+    (w.title + " " + w.description + " " + w.steps.map(s => s.title).join(" "))
+      .toLowerCase().includes(search.trim().toLowerCase()));
+  return <section aria-label="Agent workflow builder" className="space-y-6">
+    <header className="flex flex-wrap items-start justify-between gap-4">
+      <div className="max-w-2xl">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">Automations</p>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Workflows</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-500">Create multi-step Agent processes,
+          track their progress, and approve high-impact actions before they run.</p>
+      </div>
+      <button type="button" onClick={() => { reset(); setShowEditor(true); }}
+        className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950">
+        + Create workflow</button>
+    </header>
+    <div className="grid gap-3 sm:grid-cols-3" aria-label="Workflow summary">
+      {([["Workflows", workflows.length], ["Enabled", workflows.filter(w => w.enabled).length],
+        ["Needs attention", needingAttention]] as const).map(([label, count]) =>
+        <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
+          <p className="text-xs text-slate-500">{label}</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{count}</p>
+        </div>)}
+    </div>
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-    <form className="space-y-3 rounded-xl border p-4" onSubmit={e => {
+    {showEditor && <form className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/40" onSubmit={e => {
       e.preventDefault();
       void send("POST", { ...(editing ? { id: editing } : {}), projectId, title, description, steps });
     }}>
-      <h2 className="font-semibold">{editing ? "Edit workflow" : "New workflow"}</h2>
+      <h2 className="text-lg font-semibold">{editing ? "Edit workflow" : "New workflow"}</h2>
       <div className="grid gap-2 sm:grid-cols-2">
         <label className="text-sm">Name<input className={field} maxLength={120} value={title}
           onChange={e => setTitle(e.target.value)} required/></label>
@@ -137,9 +159,17 @@ export function AgentWorkflowBuilder() {
           {editing ? "Save workflow" : "Create workflow"}</button>
         {editing && <button type="button" onClick={reset} className="rounded-lg border px-3 py-2 text-sm">Cancel</button>}
       </div>
-    </form>
-    <div className="space-y-3"><h2 className="font-semibold">Saved workflows ({workflows.length})</h2>
-      {workflows.map(w => <article className="space-y-2 rounded-xl border p-3" key={w.id}>
+    </form>}
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Your workflows</h2>
+        <input aria-label="Search workflows" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search workflows…" className="min-h-10 w-full max-w-xs rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900"/>
+      </div>
+      {!matching.length && <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500 dark:border-slate-700">
+        {workflows.length ? "No workflows match your search." : "No workflows yet. Create a workflow to automate a repeatable task."}
+      </div>}
+      {matching.map(w => <article className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/50" key={w.id}>
         <div className="flex flex-wrap justify-between gap-2"><strong>{w.title}</strong>
           <span className="text-xs text-slate-500">{w.enabled ? "Enabled" : "Disabled"} · {w.steps.length} steps</span></div>
         <p className="text-sm text-slate-500">{w.description}</p>
@@ -155,7 +185,7 @@ export function AgentWorkflowBuilder() {
         </div>
         {runs.filter(r => r.workflowId === w.id).slice(0,5).map(run => <div key={run.id}
           className="space-y-1 rounded-lg border bg-slate-50 p-2 text-xs dark:bg-slate-900">
-          <p>Run {run.id.slice(-8)} · {run.status} · Step {Math.min(run.index+1,run.steps.length)}/{run.steps.length}</p>
+          <p>Run {run.id.slice(-8)} · {run.status.replaceAll("_", " ")} · Step {Math.min(run.index+1,run.steps.length)}/{run.steps.length}</p>
           {run.error && <p role="alert" className="text-red-600">{run.error}</p>}
           {run.history.map(h => <p key={h.taskId ?? (h.index + ":" + h.completedAt)}>{h.title}: {h.status} {h.taskId ?? ""}</p>)}
           {run.status === "waiting_input" && <div className="space-y-2">
