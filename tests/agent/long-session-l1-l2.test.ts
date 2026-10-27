@@ -6,6 +6,10 @@ vi.mock("../../lib/project-agent/task-store", () => ({
   listProjectAgentTaskPage: fake.page, updateProjectAgentTask: fake.update,
 }));
 vi.mock("../../lib/project-agent/compact", () => ({ compactChat: fake.compact }));
+// L1/L2 unit scenarios stub coordination; L7 runs the real Mongo lock and Stop fencing.
+vi.mock("../../lib/project-agent/compact-lease", () => ({
+  withCompactionLease: async (_task: unknown, _source: string, fn: () => Promise<string | undefined>) => fn(),
+}));
 import { encodeProjectAgentTaskCursor } from "../../lib/project-agent/task-pagination";
 import { buildChatRecap } from "../../lib/project-agent/chat-recap";
 import { recentConversationTasks } from "../../lib/project-agent/conversation-history";
