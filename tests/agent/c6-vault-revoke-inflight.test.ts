@@ -7,7 +7,8 @@ vi.mock("../../lib/project-agent/runtime/browser-agent/personal-vault", () => ({
   readPersonalBrowserGrant: vi.fn(),
 }));
 import { readPersonalBrowserGrant } from "../../lib/project-agent/runtime/browser-agent/personal-vault";
-import { withBrowserOp } from "../../lib/project-agent/runtime/browser-agent/session";
+import { withBrowserOp, assertPersonalBrowserPermission }
+  from "../../lib/project-agent/runtime/browser-agent/session";
 describe("C6 Vault refresh/revoke during browser action queue", () => {
   it("rejects a queued write after the owner's Vault grant is revoked", async () => {
     const close = vi.fn(async () => {});
@@ -18,6 +19,9 @@ describe("C6 Vault refresh/revoke during browser action queue", () => {
     vi.mocked(readPersonalBrowserGrant).mockResolvedValueOnce({
       grant: { mode: "interact", automation: true, version: "v1" },
     } as never).mockResolvedValue(null);
+    // Model the initial successful preflight BEFORE the human revokes consent.
+    await expect(assertPersonalBrowserPermission(session, "click")).resolves.toBeUndefined();
+    expect(readPersonalBrowserGrant).toHaveBeenCalledTimes(1);
     let release!: () => void, started!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
     const ready = new Promise<void>(resolve => { started = resolve; });
@@ -25,10 +29,13 @@ describe("C6 Vault refresh/revoke during browser action queue", () => {
       false, "system");
     await ready;
     const write = vi.fn(async () => "unsafe");
+    // Vault now returns null after the first authorized read (the revoke event).
+    // The queued write must revalidate after the operation lock becomes available.
     const pending = withBrowserOp(session, write, true, "agent", "pat_fedcba987654",
       undefined, "click");
     release(); await first;
     await expect(pending).rejects.toThrow(/revoked or changed/i);
+    expect(readPersonalBrowserGrant).toHaveBeenCalledTimes(2);
     expect(write).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledOnce();
   });
