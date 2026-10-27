@@ -42,6 +42,8 @@
     "test:g2:multiworker:db": "node scripts/g2-multiworker-browser-qa.mjs",
     "test:p1:stress": "node scripts/p1-stress-mongo-qa.mjs",
     "test:p1:chaos": "node scripts/p1-chaos-mongo-qa.mjs",
+    "test:p2:fuzz": "node scripts/p2-state-fuzz-mongo.mjs",
+    "test:p2:outage": "node scripts/p2-mongo-outage.mjs",
     "test:host:g2": "node scripts/g2-host-preflight.mjs && playwright test --config playwright.host.config.ts tests/host-browser/g2-two-next.api.spec.ts --project=host-api",
     "test:g2:origin": "node --test tests/node/g2-host-origins.test.mjs",
     "test:g2:mode:unit": "vitest run --config vitest.agent.config.ts tests/agent/g2-browser-op-mode.test.ts",
