@@ -3,11 +3,12 @@ on: [push, pull_request]
 permissions:
   contents: read
 concurrency:
-  group: presentation-${{ github.workflow }}-${{ github.ref }}
+  group: presentation-v2-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  presentation:
+  quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,8 +23,27 @@ jobs:
       - run: npm run test:agent
       - run: node --test tests/node/*.test.mjs
       - run: npm run build:demo
-      - run: npx playwright install --with-deps chromium
-      - name: Isolated P8 Chromium benchmark (40 local fixtures)
+
+  browser:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install isolated Chromium
+        timeout-minutes: 5
+        run: npx playwright install chromium
+      - name: P8 browser benchmark (40 synthetic pages)
         run: npm run test:p8:browser
         env:
           PROJECT_AGENT_BROWSER_AGENT: "1"
