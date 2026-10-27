@@ -13,6 +13,7 @@ export interface RuntimeInput {
 	user: string;
 	ownerEmail?: string;
 	scheduledRun?: boolean;
+	workflowStep?: boolean;
 	engines?: string[];
 	onBoard?(boardId: string): void;
 	boardId?: string;

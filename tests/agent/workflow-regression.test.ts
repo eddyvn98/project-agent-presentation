@@ -5,6 +5,7 @@ import path from "node:path";
 import { parseRuntimeAction } from "../../lib/project-agent/runtime/actions";
 import { nextWorkflowStep } from "../../lib/project-agent/workflow-branch";
 import { listAgentWorkflows, saveAgentWorkflow } from "../../lib/project-agent/workflow-store";
+import { auditFinalAnswer } from "../../lib/project-agent/runtime/final-audit";
 
 const owner = "workflow-regression@example.test";
 const projectId = "project_qa";
@@ -55,6 +56,22 @@ describe("workflow identity and draft persistence", () => {
   });
 });
 
+describe("workflow explicit outcome contract", () => {
+  it("fails closed when model omits a workflow completion outcome", () => {
+    const payload = { answer: "I need sales data", trace: [], attempts: 0, workflowStep: true } as const;
+    expect(auditFinalAnswer(payload)).toMatch(/workflowOutcome/);
+    expect(auditFinalAnswer({ ...payload, workflowOutcome: "complete", needsInput: "What is sales?" })).not.toBeNull();
+    expect(auditFinalAnswer({ ...payload, workflowOutcome: "needs_input", needsInput: "What is sales?" })).toBeNull();
+    expect(auditFinalAnswer({ ...payload, workflowOutcome: "complete", needsInput: undefined })).toBeNull();
+  });
+  it("does not silently accept malformed missing-input values", () => {
+    const act = (needsInput: unknown) => parseRuntimeAction(JSON.stringify({ action: "final",
+      answer: "Need more information", workflowOutcome: "needs_input", needsInput }));
+    expect(act("")).toHaveProperty("error");
+    expect(act("x".repeat(501))).toHaveProperty("error");
+    expect(act("What is the sales number?")).toMatchObject({ workflowOutcome: "needs_input" });
+  });
+});
 describe("workflow transition contract", () => {
   it("advances only for a genuinely completed task", () => {
     expect(nextWorkflowStep(steps[0], "done", "Finished: 120 orders", 0, 2, 1))

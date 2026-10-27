@@ -246,9 +246,9 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 				}
 				const nudge = missing.length || wrapReason !== null ? null : gate.check(listed);
         const finalAudit = !nudge && !input.depth ? auditFinalAnswer({
-          answer: action.answer, trace: input.trace!, attempts: invalid,
+          answer: action.answer, trace: input.trace!, attempts: invalid, workflowStep: input.workflowStep, workflowOutcome: action.workflowOutcome, needsInput: action.needsInput,
         }) : null;
-        if (finalAudit) { invalid++; results.push(finalAudit); break; }
+        if (finalAudit) { if (++invalid > MAX_INVALID_REPLIES) throw new Error(finalAudit); results.push(finalAudit); break; }
 				if (nudge) { results.push(nudge); break; }
 				const verdict = missing.length || wrapReason !== null ? null : await evaluator.check(runRuntimeAgent, input, action.answer, listed);
 				if (verdict) { results.push(verdict); break; }

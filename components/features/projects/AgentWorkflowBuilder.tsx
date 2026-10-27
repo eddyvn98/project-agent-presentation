@@ -157,7 +157,7 @@ export function AgentWorkflowBuilder() {
           className="space-y-1 rounded-lg border bg-slate-50 p-2 text-xs dark:bg-slate-900">
           <p>Run {run.id.slice(-8)} · {run.status} · Step {Math.min(run.index+1,run.steps.length)}/{run.steps.length}</p>
           {run.error && <p role="alert" className="text-red-600">{run.error}</p>}
-          {run.history.map(h => <p key={h.index}>{h.title}: {h.status} {h.taskId ?? ""}</p>)}
+          {run.history.map(h => <p key={h.taskId ?? (h.index + ":" + h.completedAt)}>{h.title}: {h.status} {h.taskId ?? ""}</p>)}
           {run.status === "waiting_input" && <div className="space-y-2">
             <p role="status">Input needed: {run.requestedInput}</p>
             {run.inputReviewRequired && <p className="text-amber-700">Review previous tool effects before resuming.</p>}
