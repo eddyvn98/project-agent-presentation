@@ -19,12 +19,13 @@ type Props = {
 	resolveImage: (src: string) => string | null;
 	images?: Record<string, ImagePresentation>;
 	presentation?: boolean;
+	enable3DViewer?: boolean;
 	running?: boolean;
 	language?: ActivityLanguage;
 	onStop?: () => void;
 };
 
-export function ProjectAgentTaskAnswer({ markdown, sources, resolveImage, images = {}, presentation = false, running = false, onStop, language = "en" }: Props) {
+export function ProjectAgentTaskAnswer({ markdown, sources, resolveImage, images = {}, presentation = false, enable3DViewer = false, running = false, onStop, language = "en" }: Props) {
 	const [presenting, setPresenting] = useState(false);
 	const [slide, setSlide] = useState(0);
 	const stream = useMemo(() => running ? completedStreamingMarkdown(markdown) : { text: markdown, pending: false }, [markdown, running]);
@@ -33,7 +34,7 @@ export function ProjectAgentTaskAnswer({ markdown, sources, resolveImage, images
 	const canPresent = presentation && !running && sections.length > 1;
 	const index = Math.min(slide, sections.length - 1);
 	const visible = presenting && canPresent ? sections[index] : normalized;
-	const components = useMemo(() => createProjectAgentMarkdownComponents(sources, resolveImage, images), [sources, resolveImage, images]);
+	const components = useMemo(() => createProjectAgentMarkdownComponents(sources, resolveImage, images, enable3DViewer), [sources, resolveImage, images, enable3DViewer]);
 	const move = (next: number) => setSlide(Math.max(0, Math.min(sections.length - 1, next)));
 	const onKeys = (event: KeyboardEvent<HTMLDivElement>) => {
 		if (!presenting || !canPresent || event.altKey || event.ctrlKey || event.metaKey) return;

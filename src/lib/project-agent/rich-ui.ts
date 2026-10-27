@@ -1,6 +1,9 @@
 // The agent can answer with fenced ```agent-ui JSON blocks; the chat renders them as cards, charts and diagrams
 // instead of plain text. Parsing is defensive: a malformed block never breaks the answer, it just falls back.
 import { safeProject3DViewerUrl } from "./scene3d-policy";
+import { parseInteractiveModel, type InteractiveModel } from "./interactive-model";
+import { normalizeResponseFences, RESPONSE_BLOCK_TYPES } from "../../../shared/project-agent/response-contract";
+export { RESPONSE_BLOCK_TYPES };
 
 export type RichTone = "neutral" | "info" | "success" | "warning" | "danger";
 export type RichSceneColor = "blue" | "orange" | "yellow" | "green" | "red" | "purple" | "slate" | "white" | "black";
@@ -24,6 +27,8 @@ export type RichUiBlock =
 	| { type: "scene3d"; title: string; caption?: string; viewerUrl: string }
 	| { type: "ask"; title?: string; questions: Array<{ question: string; options: string[]; multi: boolean }> }
 	| { type: "form"; title?: string; intro?: string; submit?: string; fields: Array<{ label: string; hint?: string; kind: "choice" | "multi" | "text"; options: string[]; placeholder?: string }> }
+	| InteractiveModel
+	| { type: "quiz"; title?: string; question: string; options: string[]; answerIndex: number; explanation?: string }
 	| { type: "followups"; items: Array<{ label: string; prompt: string }> };
 
 const MAX_ITEMS = 12;
@@ -157,6 +162,19 @@ export function parseRichUiBlock(source: string): RichUiBlock | null {
 			}).filter((item) => item.label);
 			return fields.length ? { type: "form", title: text(raw.title, 100) || undefined, intro: text(raw.intro, 300) || undefined, submit: text(raw.submit, 40) || undefined, fields } : null;
 		}
+		case "interactive":
+			return parseInteractiveModel(raw);
+		case "quiz": {
+			const question = text(raw.question, 250);
+			const options = Array.isArray(raw.options) ? raw.options.slice(0, 5).map((option) => text(option, 100)) : [];
+			const index = raw.answerIndex;
+			if (!question || options.length < 2 || options.some((option) => !option) ||
+				typeof index !== "number" || !Number.isInteger(index) ||
+				index < 0 || index >= options.length) return null;
+			return { type: "quiz", title: text(raw.title, 100) || undefined,
+				question, options, answerIndex: index,
+				explanation: text(raw.explanation, 300) || undefined };
+		}
 		case "followups": {
 			const items = list(raw.items, 4).map(record).map((item) => ({ label: text(item.label, 100), prompt: text(item.prompt, 400) || text(item.label, 100) })).filter((item) => item.label);
 			return items.length ? { type: "followups", items } : null;
@@ -168,7 +186,7 @@ export function parseRichUiBlock(source: string): RichUiBlock | null {
 
 /** Models sometimes drop the backticks and write "agent-ui" followed by the JSON line; put the fence back so it renders as a block. */
 export function repairAgentUiFences(markdown: string): string {
-	return markdown.replace(/(^|\n)[ \t]*(?:agent-ui|agent_ui)[ \t]*\n?[ \t]*(\{[^\n]*\})[ \t]*(?=\n|$)/g, (_match, lead: string, json: string) => `${lead}\`\`\`agent-ui\n${json}\n\`\`\``);
+	return normalizeResponseFences(markdown.replace(/(^|\n)[ \t]*(?:agent-ui|agent_ui)[ \t]*\n?[ \t]*(\{[^\n]*\})[ \t]*(?=\n|$)/g, (_match, lead: string, json: string) => `${lead}\`\`\`agent-ui\n${json}\n\`\`\``), "demo");
 }
 
 export type RichAskBlock = Extract<RichUiBlock, { type: "ask" }>;

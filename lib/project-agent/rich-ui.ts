@@ -1,4 +1,7 @@
 import { parseInteractiveModel, type InteractiveModel } from "./interactive-model";
+import { safeProject3DViewerUrl } from "./scene3d-policy";
+import { normalizeResponseFences, RESPONSE_BLOCK_TYPES } from "../../shared/project-agent/response-contract";
+export { RESPONSE_BLOCK_TYPES };
 // The agent can answer with fenced ```ong-ui JSON blocks; the chat renders them as cards, charts and diagrams
 // instead of plain text. Parsing is defensive: a malformed block never breaks the answer, it just falls back.
 
@@ -21,6 +24,7 @@ export type RichUiBlock =
 	| { type: "steps"; items: Array<{ title: string; text?: string; meta?: string }> }
 	| { type: "explorer"; title: string; intro?: string; previousLabel?: string; nextLabel?: string; controlLabel?: string; steps: Array<{ label: string; title: string; text: string; visual?: string; scene?: RichScene }> }
 	| { type: "mermaid"; title?: string; caption?: string; code: string }
+	| { type: "scene3d"; title: string; caption?: string; viewerUrl: string }
 	| { type: "ask"; title?: string; questions: Array<{ question: string; options: string[]; multi: boolean }> }
 	| { type: "form"; title?: string; intro?: string; submit?: string; fields: Array<{ label: string; hint?: string; kind: "choice" | "multi" | "text"; options: string[]; placeholder?: string }> }
 	| InteractiveModel
@@ -136,6 +140,12 @@ export function parseRichUiBlock(source: string): RichUiBlock | null {
 			const code = typeof raw.code === "string" ? raw.code.trim().slice(0, 4000) : "";
 			return code ? { type: "mermaid", title: text(raw.title, 120) || undefined, caption: text(raw.caption, 240) || undefined, code } : null;
 		}
+		case "scene3d": {
+			const viewerUrl = safeProject3DViewerUrl(raw.viewerUrl);
+			const title = text(raw.title, 120);
+			return title && viewerUrl ? { type: "scene3d", title,
+				caption: text(raw.caption, 240) || undefined, viewerUrl } : null;
+		}
 		case "ask": {
 			const questions = list(raw.questions, 4).map(record).map((item) => ({
 				question: text(item.question, 200), multi: item.multi === true,
@@ -171,7 +181,7 @@ export function parseRichUiBlock(source: string): RichUiBlock | null {
 
 /** Models sometimes drop the backticks and write "ong-ui" followed by the JSON line; put the fence back so it renders as a block. */
 export function repairOngUiFences(markdown: string): string {
-	return markdown.replace(/(^|\n)[ \t]*(?:ong-ui|ong_ui)[ \t]*\n?[ \t]*(\{[^\n]*\})[ \t]*(?=\n|$)/g, (_match, lead: string, json: string) => `${lead}\`\`\`ong-ui\n${json}\n\`\`\``);
+	return normalizeResponseFences(markdown.replace(/(^|\n)[ \t]*(?:ong-ui|ong_ui)[ \t]*\n?[ \t]*(\{[^\n]*\})[ \t]*(?=\n|$)/g, (_match, lead: string, json: string) => `${lead}\`\`\`ong-ui\n${json}\n\`\`\``), "host");
 }
 
 export type RichAskBlock = Extract<RichUiBlock, { type: "ask" }>;

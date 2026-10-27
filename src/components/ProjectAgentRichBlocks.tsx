@@ -6,6 +6,8 @@ import { AlertTriangle, CheckCircle2, Download, Info, Share2, Table2, OctagonAle
 import { AskBlock, FollowupsBlock } from "./ProjectAgentReply";
 import { ProjectAgentExplorer } from "./ProjectAgentExplorer";
 import { ProjectAgentScene3D } from "./ProjectAgentScene3D";
+import { ProjectAgentInteractive } from "./ProjectAgentInteractive";
+import { ProjectAgentQuiz } from "./ProjectAgentQuiz";
 import { ProjectAgentFormBlock } from "./ProjectAgentFormBlock";
 import { ProjectAgentMermaid } from "./ProjectAgentMermaid";
 import { parseRichUiBlock, type RichTone, type RichUiBlock } from "@/lib/project-agent/rich-ui";
@@ -220,6 +222,10 @@ function RichBlock({ source, enable3DViewer = false }: { source: string; enable3
 			return <AskBlock block={block} />;
 		case "form":
 			return <ProjectAgentFormBlock block={block} />;
+		case "interactive":
+			return <ProjectAgentInteractive block={block} />;
+		case "quiz":
+			return <ProjectAgentQuiz block={block} />;
 		case "followups":
 			return <FollowupsBlock block={block} />;
 		case "mermaid":

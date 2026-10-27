@@ -9,6 +9,7 @@ import { ProjectAgentFormBlock } from "./ProjectAgentFormBlock";
 import { ProjectAgentMermaid } from "./ProjectAgentMermaid";
 import { ProjectAgentInteractive } from "./ProjectAgentInteractive";
 import { ProjectAgentQuiz } from "./ProjectAgentQuiz";
+import { ProjectAgentScene3D } from "./ProjectAgentScene3D";
 import { parseRichUiBlock, type RichTone, type RichUiBlock } from "@/lib/project-agent/rich-ui";
 
 const AXIS_TICK = { fontSize: 11 } as const;
@@ -120,7 +121,7 @@ const ChartBlock = memo(function ChartBlock({ block }: { block: Extract<RichUiBl
 
 const CALLOUT_ICON: Record<RichTone, typeof Info> = { neutral: Info, info: Info, success: CheckCircle2, warning: AlertTriangle, danger: OctagonAlert };
 
-export function ProjectAgentRichBlock({ source }: { source: string }) {
+export function ProjectAgentRichBlock({ source, enable3DViewer = false }: { source: string; enable3DViewer?: boolean }) {
 	const block = useMemo(() => parseRichUiBlock(source), [source]);
 	if (!block) {
 		// Unfinished while streaming, or invalid JSON: show a quiet placeholder rather than raw JSON.
@@ -226,6 +227,8 @@ export function ProjectAgentRichBlock({ source }: { source: string }) {
 			return <ProjectAgentQuiz block={block} />;
 		case "followups":
 			return <FollowupsBlock block={block} />;
+		case "scene3d":
+			return enable3DViewer ? <ProjectAgentScene3D block={block} /> : <p role="status">3D preview unavailable.</p>;
 		case "mermaid":
 			return <ProjectAgentMermaid code={block.code} title={block.title} caption={block.caption} />;
 	}
