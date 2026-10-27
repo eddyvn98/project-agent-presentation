@@ -63,7 +63,8 @@
     "test:host:l3c-l8b": "node scripts/l3c-l8b-two-next.mjs",
     "test:inspiration:agent": "vitest run --config vitest.agent.config.ts tests/agent/browser-visual-viewport.test.ts tests/agent/browser-webmcp-readonly.test.ts",
     "test:inspiration:presentation": "vitest run tests/presentation-scene3d.test.tsx",
-    "test:browser:binary-integrity": "vitest run --config vitest.agent.config.ts tests/agent/browser-binary-integrity.test.ts"
+    "test:browser:binary-integrity": "vitest run --config vitest.agent.config.ts tests/agent/browser-binary-integrity.test.ts",
+    "test:c7:mongo": "node scripts/g2-multiworker-browser-qa.mjs"
   },
   "peerDependencies": {
     "next": ">=14",

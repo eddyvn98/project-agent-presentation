@@ -427,6 +427,41 @@ jobs:
           G2_MULTIWORKER_MONGO_QA: "1"
           G2_MW_MONGO_URI: mongodb://127.0.0.1:27019
 
+  c7_integration_chaos:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27019:27017
+    env:
+      G2_ISOLATED_QA: "1"
+      G2_MULTIWORKER_MONGO_QA: "1"
+      G2_MW_MONGO_URI: mongodb://127.0.0.1:27019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false mongodb@6
+      - name: C7D/C7E two-process Mongo crash, Stop, takeover and tenant isolation
+        run: |
+          set -o pipefail
+          mkdir -p test-results/c7
+          npm run test:c7:mongo | tee test-results/c7/mongo-chaos.json
+      - name: Preserve C7 fault-injection evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c7-integration-chaos
+          path: test-results/c7/
+          if-no-files-found: ignore
+          retention-days: 14
+
   cross_browser:
     needs: quality
     runs-on: ubuntu-latest
@@ -506,6 +541,10 @@ jobs:
         run: npx vitest run --config vitest.agent.config.ts tests/agent/p0-browser-watch-real.test.ts tests/agent/p0-g1-browser-goal-real.test.ts
         env:
           PROJECT_AGENT_P8_REAL_BROWSER_QA: "1"
+      - name: C7A/C7C/C7E real Chromium Stop/takeover and screenshot isolation
+        env:
+          PROJECT_AGENT_P8_REAL_BROWSER_QA: "1"
+        run: npx vitest run --config vitest.agent.config.ts tests/agent/c7-browser-chromium.test.ts
       - run: npm run test:e2e
       - name: Preserve L5B browser performance metrics
         if: always()
