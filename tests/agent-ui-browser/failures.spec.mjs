@@ -60,7 +60,7 @@ test("untrusted skill text is rendered as text, never evaluated as HTML", async 
   state.skills[0].description = probe;
   state.skills[0].instructions = probe;
   await page.goto("/agent-ui-qa.html?view=skills");
-  await expect(page.getByText(probe, { exact: true })).toBeVisible();
+  await expect(page.getByText(probe, { exact: true }).first()).toBeVisible();
   await page.getByText("View instructions").first().click();
   await expect(page.locator('img[src="x"]')).toHaveCount(0);
   expect(await page.evaluate(() => Boolean(window.__qa_injected))).toBe(false);

@@ -133,7 +133,7 @@ export function PersonalAgentSkillRegistry() {
       <p>Skills help guide the agent on relevant tasks. They do not grant tools, bypass approvals
         or guarantee an action was performed. Check task activity for actual results.</p>
     </div>
-    <PersonalAgentSkillEditor open={editor !== undefined} skill={editor ?? null}
+    <PersonalAgentSkillEditor open={editor !== undefined} skill={editor ?? null} error={error}
       busy={busy} returnFocusTo={editorOpener.current}
       onClose={() => setEditor(undefined)} onSave={draft => void save(draft)}/>
   </section>;

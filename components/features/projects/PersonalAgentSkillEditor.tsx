@@ -7,11 +7,11 @@ import type { PersonalAgentSkill } from "@/lib/project-agent/personal-agent-skil
 export interface SkillDraft { name: string; description: string; instructions: string; id?: string }
 interface Props {
   open: boolean; skill: PersonalAgentSkill | null; busy: boolean;
-  returnFocusTo?: HTMLElement | null;
+  returnFocusTo?: HTMLElement | null; error?: string;
   onClose(): void; onSave(draft: SkillDraft): void;
 }
 const field = "mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-slate-600 focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-slate-800";
-export function PersonalAgentSkillEditor({ open, skill, busy, returnFocusTo, onClose, onSave }: Props) {
+export function PersonalAgentSkillEditor({ open, skill, busy, error, returnFocusTo, onClose, onSave }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -35,6 +35,7 @@ export function PersonalAgentSkillEditor({ open, skill, busy, returnFocusTo, onC
           <Dialog.Close aria-label="Close editor" disabled={busy}
             className="rounded-lg p-2 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4"/></Dialog.Close>
         </div>
+        {error && <p role="alert" className="mx-5 mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">{error}</p>}
         <form id="personal-skill-form" className="space-y-4 overflow-y-auto p-5"
           onSubmit={event => { event.preventDefault(); if (!busy) onSave({
             ...(skill ? { id: skill.id } : {}), name: name.trim(), description: description.trim(),

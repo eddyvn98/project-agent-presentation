@@ -49,6 +49,32 @@ jobs:
           G2_MULTIWORKER_MONGO_QA: "1"
           G2_MW_MONGO_URI: mongodb://127.0.0.1:27019
 
+  cross_browser:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Match Firefox and WebKit binaries to lockfile
+        run: npx playwright install firefox webkit
+      - name: Firefox and WebKit Agent component smoke QA
+        run: npm run test:agent-ui:cross
+      - name: Preserve cross-browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-ui-cross-browser-failures
+          path: test-results/cross-browser/
+          if-no-files-found: ignore
+          retention-days: 5
+
   browser:
     needs: quality
     runs-on: ubuntu-latest
