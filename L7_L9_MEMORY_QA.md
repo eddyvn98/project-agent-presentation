@@ -1,0 +1,7 @@
+# L7–L9 memory robustness QA
+
+- L7: distributed Mongo compaction lock keyed by owner, Project and conversation. Leases are source-versioned, token-fenced and 5-minute bounded. Tests race 50 clients across 6 source generations and Stop during a lease. A stopped task may still have produced an upstream Dify summary, but cannot publish it through a lost lock.
+- L8: Hindsight history deletion now enumerates up to 100,000 Project tasks and checks cursor progress before deleting. Eight bounded parallel HTTP deletes support 5,000+ turns. Local deletion must fail when remote cleanup is incomplete. Previously cached client state and Project-linked memory are separately covered by existing tests.
+- L9: Re-authorize after Hindsight/XERJ retrieval and reject responses after mid-request revocation/abort. Historic memory remains untrusted evidence and must not be executed as system instructions. Tests cover injection escaping, scope separation and partial provider outage.
+
+QA limitations: L7 uses real isolated Mongo connections rather than browser tabs or live model calls; L8 5,000-turn deletion uses deterministic mocked task pages and remote API; L9 does not probe a production identity provider. A two-Next host and real Dify multi-user QA are additional acceptance gates.

@@ -18,6 +18,7 @@
     "test:long-session": "vitest run --config vitest.agent.config.ts tests/agent/long-session-l1-l2.test.ts tests/agent/runtime-compact-continuity.test.ts",
     "test:l3:recovery": "node scripts/l3-long-session-mongo-qa.mjs",
     "test:l3b:hosts": "node scripts/l3b-two-hosts-qa.mjs",
+    "test:l7:race": "node scripts/l7-memory-race-mongo.mjs",
     "check:agent-routes": "node scripts/check-agent-routes.mjs",
     "check:host:p7": "node scripts/p7-host-preflight.mjs",
     "test:host:p7": "playwright test --config playwright.host.config.ts",

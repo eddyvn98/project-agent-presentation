@@ -78,6 +78,40 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  l7_memory_race:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27019:27017
+    env:
+      L7_ISOLATED_QA: "1"
+      L7_MONGO_URI: mongodb://127.0.0.1:27019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false mongodb@6
+      - name: L7 50-way compact/Stop race and checkpoint contention
+        run: |
+          set -o pipefail
+          mkdir -p test-results/l7
+          npm run test:l7:race | tee test-results/l7/report.json
+      - name: Preserve L7 race evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l7-memory-race
+          path: test-results/l7/
+          if-no-files-found: ignore
+          retention-days: 14
+
   p2_state_fuzz:
     needs: quality
     runs-on: ubuntu-latest
