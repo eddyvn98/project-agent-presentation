@@ -27,8 +27,8 @@ const cases = [
   {
     id: "terminal-write-scoped-owner",
     path: "lib/project-agent/task-terminal-guard.ts",
-    before: '_id: task.id, projectId: task.projectId, ownerEmail: task.ownerEmail,',
-    after: '_id: task.id, projectId: task.projectId, ownerEmail: "foreign@project-agent.test",',
+    before: '_id: task.id, projectId: task.projectId, ownerEmail: task.ownerEmail,\n    status: status === "failed"',
+    after: '_id: task.id, projectId: task.projectId, ownerEmail: "foreign@project-agent.test",\n    status: status === "failed"',
     test: ["tests/agent/p7-terminal-write-stop-race.test.ts"],
   },
   {
