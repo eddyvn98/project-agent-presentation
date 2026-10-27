@@ -53,6 +53,7 @@ beforeEach(() => {
   m.op.mockImplementation(async (_session: unknown, fn: () => Promise<unknown>) => fn());
   m.control.mockResolvedValue({ paused: true, revision: 1 });
   m.keep.mockResolvedValue(true);
+  m.touch.mockResolvedValue(true);
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("C7 manual browser operation, safe tabs and takeover", () => {
