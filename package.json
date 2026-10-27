@@ -16,6 +16,8 @@
     "check:lines": "node tests/check-lines.mjs",
     "test:agent": "vitest run --config vitest.agent.config.ts",
     "test:c1:coverage": "vitest run --config vitest.agent.config.ts --coverage && node scripts/c1-coverage-report.mjs",
+    "test:c2:mutation": "node scripts/c2-mutation-qa.mjs",
+    "test:c3:model-fuzz": "node scripts/c3-model-state-fuzz-mongo.mjs",
     "test:long-session": "vitest run --config vitest.agent.config.ts tests/agent/long-session-l1-l2.test.ts tests/agent/runtime-compact-continuity.test.ts",
     "test:l3:recovery": "node scripts/l3-long-session-mongo-qa.mjs",
     "test:l3b:hosts": "node scripts/l3b-two-hosts-qa.mjs",

@@ -218,6 +218,88 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  c1_agent_coverage:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install Vitest v5 matching V8 coverage provider
+        run: npm install --no-save --package-lock=false @vitest/coverage-v8@5.0.5
+      - name: Measure Agent line/branch coverage and rank coverage gaps
+        run: npm run test:c1:coverage
+      - name: Preserve branch coverage and risk ranking
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c1-agent-coverage-report
+          path: test-results/c1/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  c2_mutation_safety:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      C2_MUTATION_QA: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Kill semantic security mutants with original focused tests
+        run: npm run test:c2:mutation
+      - name: Preserve killed/surviving mutant evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c2-security-mutation-report
+          path: test-results/c2/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  c3_reference_state_fuzz:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27019:27017
+    env:
+      P2_ISOLATED_QA: "1"
+      P2_MONGO_URI: mongodb://127.0.0.1:27019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false mongodb@6
+      - name: Independent reference model on 24,000 real Mongo state transitions
+        run: |
+          set -o pipefail
+          mkdir -p test-results/c3
+          npm run test:c3:model-fuzz | tee test-results/c3/state-model.json
+      - name: Preserve fuzz seeds, steps and violation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c3-mongo-state-model
+          path: test-results/c3/
+          if-no-files-found: ignore
+          retention-days: 14
+
   p2_state_fuzz:
     needs: quality
     runs-on: ubuntu-latest

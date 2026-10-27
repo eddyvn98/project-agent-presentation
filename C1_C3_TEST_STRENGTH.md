@@ -1,0 +1,9 @@
+# C1–C3: Measuring test strength rather than counting passing cases
+
+**C1 coverage:** Vitest v5 V8 coverage instruments all `lib/project-agent` TS/MJS files reached by Agent unit tests. CI uploads JSON, JSON summary, LCOV and `agent-coverage-gaps.json`, ranking uncovered branch risks. Low coverage is not misrepresented as a pass; the gate proves instrumentation completed and produces baseline measurements. Add meaningful branch targets only after the observed baseline is reviewed.
+
+**C2 mutation:** Four deliberately altered *real source* invariants: uncertain-recovery decision, owner-scoped compaction hash, task-owner-scoped terminal writes and the vacant-state browser claim. Each mutation is run against the exact existing focused tests. Each source file is restored in `finally` and verified with SHA-256. This destructive-to-the-checkout procedure is allowed only in clean ephemeral GitHub Actions checkout, with explicit C2_MUTATION_QA opt-in; it is not executed on developer worktrees. Mutants surviving are reported and fail the C2 job. This is a targeted smoke sample, not a complete Stryker project-wide mutation score.
+
+**C3 model-based fuzzing:** Three deterministic seeds × 8,000 steps on a real isolated Mongo server, 12 synthetic browser slots. An independent reference state tracks vacant/agent/human/quarantined/stopped/closed, owner, epoch and revision after every operation. Tests Stop fencing, takeover, handback, expired lease quarantine, explicit review, terminal close, foreign-owner rejection and claim replay. On mismatch, output contains the seed/step/operation to reproduce. This is not multi-host or live-browser E2E.
+
+All new jobs are separate from the existing 13 CI jobs. Coverage does not touch production data; C3 only drops its unique marker-verified QA database.

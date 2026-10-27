@@ -28,13 +28,13 @@ export default defineConfig({
     "__tests__/project-agent/task-error-notice.test.tsx",
     "__tests__/project-agent/task-pagination.test.ts", "__tests__/project-agent/wait-action.test.ts", "__tests__/project-agent/runtime-actions.test.ts"],
     setupFiles: ["./tests/setup.ts", "./tests/agent/setup.ts"],
-  },
-  coverage: {
+    coverage: {
     provider: "v8",
     all: true,
     include: ["lib/project-agent/**/*.ts", "lib/project-agent/**/*.mjs"],
     exclude: ["**/*.d.ts", "**/*.d.mts", "**/*.test.ts", "**/node_modules/**"],
     reporter: ["text", "json", "json-summary", "lcov"],
     reportsDirectory: "test-results/c1/coverage",
+    },
   },
 });
