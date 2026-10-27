@@ -62,6 +62,13 @@ jobs:
           set -o pipefail
           mkdir -p test-results/l3
           npm run test:l3:recovery | tee test-results/l3/recovery.json
+      - name: L3B three isolated HTTP hosts with shared Mongo checkpoint
+        env:
+          L3B_ISOLATED_QA: "1"
+          L3B_MONGO_URI: mongodb://127.0.0.1:27019
+        run: |
+          set -o pipefail
+          npm run test:l3b:hosts | tee test-results/l3/shared-hosts.json
       - name: Preserve L3 recovery evidence
         if: always()
         uses: actions/upload-artifact@v4
