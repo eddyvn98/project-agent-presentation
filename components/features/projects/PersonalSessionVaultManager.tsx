@@ -26,8 +26,8 @@ export function PersonalSessionVaultManager() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Vault unavailable"); }
     finally { setBusy(""); }
   }
-  return <section aria-label="Personal website sessions" className="space-y-3 rounded-xl border p-4">
-    <h2 className="font-semibold">Personal website sessions</h2>
+  return <section aria-label="Personal website sessions" className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
+    <h2 className="text-lg font-semibold">Saved website access</h2>
     <p className="text-sm text-slate-500">Encrypted logins belong to your account across all projects. Unattended agent access is opt-in per website.</p>
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
     {!items.length && <p className="text-sm text-slate-500">No saved website sessions. Sign in through Browser Preview first.</p>}

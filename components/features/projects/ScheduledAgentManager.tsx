@@ -22,6 +22,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [showEditor, setShowEditor] = useState(false), [search, setSearch] = useState("");
   const load = async () => {
     const response = await fetch("/api/project-agent/schedules", { cache: "no-store" });
     if (!response.ok) throw new Error("Cannot read schedules");
@@ -61,7 +62,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
       if (!response.ok) throw new Error(data.error || "Cannot update scheduled task");
       await load();
       if (method === "POST") { setTitle(""); setPrompt(""); }
-      setEditing(null);
+      setEditing(null); setShowEditor(false);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   }
@@ -79,12 +80,26 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
       { projectId, title, prompt: effectivePrompt, workflowId: workflowId || undefined, spec });
   }
   const input = "w-full rounded-lg border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900";
-  return <section aria-label="Scheduled Agent Tasks" className="mx-auto max-w-4xl space-y-5 p-4">
-    <header><h1 className="text-xl font-semibold">Scheduled Agent Tasks</h1>
-      <p className="text-sm text-slate-500">Account-wide schedules, independent of your open browser. Runs appear in the selected Project chat.</p></header>
+  const visible = items.filter(item => (item.title + " " + item.prompt).toLowerCase().includes(search.trim().toLowerCase()));
+  const attention = items.filter(item => item.status === "pending" || Boolean(item.pendingAction)).length;
+  return <section aria-label="Scheduled Agent Tasks" className="space-y-6">
+    <header className="flex flex-wrap items-start justify-between gap-4">
+      <div className="max-w-2xl"><p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">Automations</p>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Scheduled tasks</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-500">Run Agent tasks on your schedule, even when you are not actively chatting. Results appear in the selected Project.</p>
+      </div>
+      <button type="button" className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white dark:bg-slate-100 dark:text-slate-950"
+        onClick={() => { setEditing(null); setShowEditor(true); }}>+ Create schedule</button>
+    </header>
+    <div className="grid gap-3 sm:grid-cols-3" aria-label="Scheduled task overview">
+      {([["Schedules",items.length],["Active",items.filter(item => item.status === "active").length],["Needs attention",attention]] as const)
+        .map(([label,value]) => <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
+          <p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+        </div>)}
+    </div>
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-    <div className="space-y-3 rounded-xl border p-4">
-      <h2 className="font-semibold">{editing ? "Edit scheduled task" : "New scheduled task"}</h2>
+    {showEditor && <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/50">
+      <h2 className="text-lg font-semibold">{editing ? "Edit scheduled task" : "New scheduled task"}</h2>
       <label className="block text-sm">Title<input className={input} value={title} onChange={e => setTitle(e.target.value)} maxLength={140}/></label>
       <label className="block text-sm">Work to run
         <select className={input} value={workflowId} onChange={e => {
@@ -115,10 +130,16 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
           onChange={e => setWeekdays(old => e.target.checked ? [...old,i] : old.filter(n => n !== i))}/>{day}</label>)}</div>}
       <button type="button" disabled={busy || !title || (!workflowId && !prompt) || !projectId || (kind === "once" && !runAt) || (kind === "watch" && !watchUrl)}
         onClick={submit} className="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50">{editing ? "Save changes" : "Create schedule"}</button>
-      {editing && <button type="button" className="ml-2 rounded border px-3 py-2 text-sm" onClick={() => setEditing(null)}>Cancel edit</button>}
-    </div>
-    <div className="space-y-3"><h2 className="font-semibold">Your schedules ({items.length})</h2>
-      {items.map(item => <article key={item.id} className="space-y-2 rounded-xl border p-3">
+      <button type="button" className="ml-2 rounded border px-3 py-2 text-sm" onClick={() => { setEditing(null); setShowEditor(false); }}>Cancel</button>
+    </div>}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">Your schedules</h2>
+        <input value={search} onChange={e => setSearch(e.target.value)} aria-label="Search scheduled tasks"
+          placeholder="Search schedules…" className="min-h-10 w-full max-w-xs rounded-xl border border-slate-200 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"/>
+      </div>
+      {!visible.length && <p className="rounded-2xl border border-dashed p-8 text-center text-sm text-slate-500">
+        {items.length ? "No schedules match your search." : "No schedules yet. Create one to automate recurring work."}</p>}
+      {visible.map(item => <article key={item.id} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
         <div className="flex flex-wrap items-center justify-between gap-2"><strong>{item.title}</strong>
           <span className="text-xs text-slate-500">{item.status}</span></div>
         <p className="whitespace-pre-wrap text-sm">{item.workflowId ? "Workflow: " + (workflows.find(w => w.id === item.workflowId)?.title ?? item.workflowId) : item.prompt}</p>
@@ -128,7 +149,7 @@ export function ScheduledAgentManager({ initialProjectId }: { initialProjectId?:
           {item.pendingAction && <><span className="text-xs text-amber-700">Agent requests: {item.pendingAction}</span><button type="button" disabled={busy} className="rounded border border-orange-400 px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: "approve_action" })}>Approve change</button><button type="button" disabled={busy} className="rounded border px-2 py-1" onClick={() => void send("PATCH", { id: item.id, action: "reject_action" })}>Reject change</button></>}
           {item.status === "pending" && <span className="text-xs text-amber-600">Agent suggestion — requires your approval.</span>}
           <button disabled={busy} className="rounded border px-2 py-1" onClick={() => {
-            setEditing(item.id); setTitle(item.title); setPrompt(item.prompt); setProjectId(item.projectId); setWorkflowId(item.workflowId ?? "");
+            setEditing(item.id); setShowEditor(true); setTitle(item.title); setPrompt(item.prompt); setProjectId(item.projectId); setWorkflowId(item.workflowId ?? "");
             setKind(item.spec.kind); setTimezone(item.spec.timezone);
             setLocalTime(item.spec.localTime ?? "08:00"); setWatchUrl(item.spec.url ?? ""); setEveryMinutes(item.spec.everyMinutes ?? 60); setWeekdays(item.spec.weekdays ?? [1,2,3,4,5]);
             setRunAt(item.spec.runAt ? formatLocalScheduleInstant(item.spec.runAt, item.spec.timezone) : "");

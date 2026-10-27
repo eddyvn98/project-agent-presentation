@@ -29,7 +29,7 @@ export function AgentApprovalInbox() {
     finally { setBusy(""); }
   }
   const pending = approvals.filter(x => x.state === "pending" && Date.parse(x.expiresAt) > Date.now());
-  return <section className="space-y-3 rounded-xl border p-4" aria-label="Agent approval inbox">
+  return <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/50" aria-label="Agent approval inbox">
     <h2 className="font-semibold">Approval inbox ({pending.length})</h2>
     <p className="text-sm text-slate-500">One-time consent for sensitive browser actions. Every request is bound to your account, project, site and exact action. Approval expires automatically.</p>
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
