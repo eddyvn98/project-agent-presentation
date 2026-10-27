@@ -140,6 +140,47 @@ async function crashAfterAction() {
   assert.equal((await coll.findOne({ _id: id })).state, "quarantined");
   return { case: "crash_after_effect_quarantines_without_replay", pass: true };
 }
+async function crossOwnerIsolation() {
+  const id = newTask(), secondId = newTask(), a = await ready(id, "owner-safe");
+  const coll = db.collection("projectAgentBrowserOwnership");
+  a.send("claim"); assert.equal((await a.next()).event, "claimed");
+  const legitimate = await coll.findOne({ _id: id });
+  const outsider = "another-owner@project-agent.test";
+  assert.equal(await claimFor(outsider, id), null);
+  assert.equal(await stopBrowserLease(coll, id, outsider), false);
+  assert.equal(await acknowledgeBrowserRecovery(coll, id, outsider, true), false);
+  a.send("agent"); assert.equal((await a.next()).event, "agent_action");
+  const otherClaim = await claimFor(outsider, secondId);
+  assert.ok(otherClaim);
+  assert.equal(await stopBrowserLease(coll, secondId, owner), false);
+  assert.ok(await assertLease(otherClaim));
+  assert.equal((await events(id)).length, 1);
+  assert.equal((await events(secondId)).length, 0);
+  assert.equal((await coll.findOne({ _id: id })).leaseToken, legitimate.leaseToken);
+  a.send("close"); assert.equal((await a.next()).event, "closed");
+  return { case: "cross_owner_lease_and_stop_isolation", pass: true };
+}
+async function claimFor(email, taskId) {
+  const { claimBrowserLease } = await import("../lib/project-agent/runtime/browser-agent/g2-lease-core.mjs");
+  return claimBrowserLease(db.collection("projectAgentBrowserOwnership"), taskId, email, "isolation-probe");
+}
+async function assertLease(claim) {
+  const { assertBrowserLease } = await import("../lib/project-agent/runtime/browser-agent/g2-lease-core.mjs");
+  return assertBrowserLease(db.collection("projectAgentBrowserOwnership"), claim);
+}
+async function stopDuringTakeover() {
+  const id = newTask(), a = await ready(id, "stop-takeover-a"), b = await ready(id, "stop-takeover-b");
+  a.send("claim"); assert.equal((await a.next()).event, "claimed");
+  a.send("takeover"); assert.equal((await a.next()).event, "human_owner");
+  const coll = db.collection("projectAgentBrowserOwnership");
+  assert.equal(await stopBrowserLease(coll, id, owner), true);
+  a.send("agent"); assert.equal((await a.next()).event, "fenced");
+  b.send("claim"); assert.equal((await b.next()).event, "lost");
+  assert.equal(await stopBrowserLease(coll, id, owner), false);
+  assert.equal((await events(id)).length, 0);
+  assert.equal((await coll.findOne({ _id: id })).state, "stopped");
+  return { case: "stop_during_takeover_fences_all_workers", pass: true };
+}
 async function remoteStop() {
   const id = newTask(), a = await ready(id, "stopped-a"), b = await ready(id, "stopped-b");
   a.send("claim"); assert.equal((await a.next()).event, "claimed");
@@ -160,7 +201,8 @@ try {
   });
   created = true;
   const cases = [await race(), await humanTakeover(),
-    await crashRecover(), await crashAfterAction(), await remoteStop()];
+    await crashRecover(), await crashAfterAction(), await remoteStop(),
+    await crossOwnerIsolation(), await stopDuringTakeover()];
   console.log(JSON.stringify({ scope: "two_node_processes_real_mongo",
     cases, chromium: false, nextWorkers: false, externalCalls: false }, null, 2));
 } finally {

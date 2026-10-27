@@ -124,6 +124,10 @@ jobs:
         env:
           PROJECT_AGENT_BROWSER_AGENT: "1"
           PROJECT_AGENT_P8_REAL_BROWSER_QA: "1"
+      - name: P0 isolated Chromium Watch, handoff and Stop E2E
+        run: npx vitest run --config vitest.agent.config.ts tests/agent/p0-browser-watch-real.test.ts
+        env:
+          PROJECT_AGENT_P8_REAL_BROWSER_QA: "1"
       - run: npm run test:e2e
       - name: Install isolated accessibility audit
         run: npm install --no-save --package-lock=false @axe-core/playwright@4
