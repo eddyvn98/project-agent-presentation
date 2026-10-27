@@ -84,7 +84,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 			loadDefaultMemoryContext(task.projectId, task.ownerEmail),
 			buildChatRecap(task).catch(() => ""),
 		]);
-		const recalled = await loadAgentSearchContext({ projectId: task.projectId, query: task.userPrompt ?? task.prompt, signal, log: (detail) => { void updateProjectAgentTask(task.id, { logLine: detail }).catch(() => {}); } });
+		const recalled = await loadAgentSearchContext({ projectId: task.projectId, ownerEmail: task.ownerEmail, query: task.userPrompt ?? task.prompt, signal, log: (detail) => { void updateProjectAgentTask(task.id, { logLine: detail }).catch(() => {}); } });
 		const { projectChats, projectAgentHistory, personalChats, hindsightMemory, xerjContext } = coordinateMemorySources({ sameChat, projectChats: rawProjectChats, projectAgentHistory: rawProjectAgentHistory, personalChats: rawPersonalChats, ...recalled }, runtime);
 		const user = projectAgentDifyUser(task.ownerEmail, task.projectId);
 		await updateProjectAgentTask(task.id, { logLine: "app_stage :: preparing_inputs" });
