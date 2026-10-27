@@ -1,0 +1,111 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import type { ProjectAgentTask } from "../../lib/project-agent/types";
+
+const host = vi.hoisted(() => ({
+  access: vi.fn(), create: vi.fn(), read: vi.fn(), start: vi.fn(),
+}));
+vi.mock("@/lib/capabilities/project", () => ({ getProjectAccess: host.access }));
+vi.mock("../../lib/project-agent/task-store", () => ({
+  createProjectAgentTask: host.create, readProjectAgentTask: host.read,
+}));
+vi.mock("../../lib/project-agent/task-runner", () => ({ startProjectAgentTask: host.start }));
+
+import { advanceWorkflowForTask, approveWorkflowStep, launchWorkflow,
+  rejectWorkflowStep, tickWorkflowRuns } from "../../lib/project-agent/workflow-runner";
+import { createWorkflowRun, getWorkflowRun, saveAgentWorkflow,
+  updateWorkflowRun } from "../../lib/project-agent/workflow-store";
+import type { AgentWorkflowStep } from "../../lib/project-agent/workflow-types";
+
+const owner = "lifecycle-owner@example.test", projectId = "isolated-project";
+const steps: AgentWorkflowStep[] = [
+  { id: "step_1", title: "Collect", prompt: "Read synthetic orders", requiresApproval: false },
+  { id: "step_2", title: "Publish", prompt: "Publish synthetic summary", requiresApproval: true },
+];
+let dir: string, sequence = 0;
+const tasks = new Map<string, ProjectAgentTask>();
+const finished = (taskId: string, resultText: string): ProjectAgentTask =>
+  ({ ...tasks.get(taskId)!, status: "done", resultText, completedAt: new Date().toISOString() });
+const makeWorkflow = () => saveAgentWorkflow(owner, {
+  projectId, title: "QA sales pipeline", steps, enabled: true,
+});
+beforeEach(async () => {
+  dir = await mkdtemp(path.join(os.tmpdir(), "agent-lifecycle-"));
+  process.env.PROJECT_AGENT_WORKFLOWS_DIR = dir;
+  tasks.clear(); sequence = 0;
+  host.access.mockReset().mockResolvedValue({ ownerEmail: owner });
+  host.start.mockReset();
+  host.create.mockReset().mockImplementation(async input => {
+    const task = { ...input, id: "pat_" + String(++sequence).padStart(12, "0"),
+      ownerEmail: owner, status: "queued", log: [], createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString() } as ProjectAgentTask;
+    tasks.set(task.id, task);
+    return task;
+  });
+  host.read.mockReset().mockImplementation(async id => tasks.get(id) ?? null);
+});
+afterEach(async () => {
+  delete process.env.PROJECT_AGENT_WORKFLOWS_DIR;
+  await rm(dir, { recursive: true, force: true });
+  vi.clearAllMocks();
+});
+
+describe("persisted workflow lifecycle with synthetic task service", () => {
+  it("requires approval, rejects repeat approval and advances only after the approved task", async () => {
+    const definition = await makeWorkflow();
+    const launched = await launchWorkflow(owner, definition.id);
+    expect(launched.status).toBe("running");
+    expect(host.create).toHaveBeenCalledTimes(1);
+    await advanceWorkflowForTask(finished(launched.taskId!, "Orders: 7"));
+    const paused = await getWorkflowRun(owner, launched.runId);
+    expect(paused).toMatchObject({ status: "waiting_approval", index: 1, history: [{ status: "done" }] });
+    expect(host.create).toHaveBeenCalledTimes(1);
+    const approved = await approveWorkflowStep(owner, launched.runId);
+    expect(approved.status).toBe("running");
+    expect(host.create).toHaveBeenCalledTimes(2);
+    expect(host.create.mock.calls[1][0].prompt).toContain("Orders: 7");
+    await expect(approveWorkflowStep(owner, launched.runId)).rejects.toThrow(/approval/i);
+    await advanceWorkflowForTask(finished(approved.taskId!, "Published"));
+    expect(await getWorkflowRun(owner, launched.runId)).toMatchObject({
+      status: "done", index: 2, history: [{ status: "done" }, { status: "done" }],
+    });
+    await advanceWorkflowForTask(finished(approved.taskId!, "Published"));
+    expect(host.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejecting an approval never dispatches the blocked step", async () => {
+    const definition = await makeWorkflow();
+    const launched = await launchWorkflow(owner, definition.id);
+    await advanceWorkflowForTask(finished(launched.taskId!, "Ready"));
+    await rejectWorkflowStep(owner, launched.runId);
+    expect(await getWorkflowRun(owner, launched.runId)).toMatchObject({ status: "failed", index: 1 });
+    expect(host.create).toHaveBeenCalledTimes(1);
+    await expect(approveWorkflowStep(owner, launched.runId)).rejects.toThrow(/approval/i);
+  });
+
+  it("fails closed when Project permission is revoked before dispatch", async () => {
+    const definition = await makeWorkflow();
+    host.access.mockResolvedValue(null);
+    await expect(launchWorkflow(owner, definition.id)).rejects.toThrow(/revoked/);
+    expect(host.create).not.toHaveBeenCalled();
+  });
+
+  it("quarantines an uncertain expired dispatch rather than replaying a mutation", async () => {
+    const definition = await makeWorkflow();
+    const run = await createWorkflowRun(owner, definition);
+    await updateWorkflowRun(owner, run.id, current => {
+      current.status = "dispatching";
+      current.updatedAt = "2000-01-01T00:00:00.000Z";
+    });
+    // The store refreshes updatedAt: simulate an expired crash using controlled time.
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse("2100-01-01T00:00:00.000Z"));
+    try {
+      const report = await tickWorkflowRuns();
+      expect(report.uncertain).toBe(1);
+      expect(await getWorkflowRun(owner, run.id)).toMatchObject({ status: "failed" });
+      expect(host.create).not.toHaveBeenCalled();
+    } finally { clock.mockRestore(); }
+  });
+});
