@@ -5,6 +5,7 @@ const local = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 export default defineConfig({
   plugins: [react()],
   resolve: { alias: [
+    { find: "@/lib/markdown/CodeBlock.client", replacement: local("./src/lib/markdown/CodeBlock.client.tsx") },
     { find: "@/lib/skills/skillsStore", replacement: local("./tests/agent-host/skills-store.ts") },
     { find: "@/lib/skills/ossClient", replacement: local("./tests/agent-host/skills-oss-client.ts") },
     { find: "@/lib/projects/api-access", replacement: local("./tests/agent-host/request-access.ts") },
