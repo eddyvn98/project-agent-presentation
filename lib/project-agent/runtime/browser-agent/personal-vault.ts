@@ -190,9 +190,32 @@ export async function updatePersonalBrowserGrant(owner: string, url: string,
   // New version forces every existing browser context to revalidate its grant.
   return savePersonalBrowserGrant(owner, url, saved.state, mode, automation, saved.grant.relatedHosts);
 }
+/** Revocation must work even after the master key was lost or rotated away.
+ * Do not enumerate only decryptable records: that leaves inaccessible cookies behind. */
 export async function revokeAllPersonalBrowserGrants(owner: string): Promise<void> {
-  const entries = await listPersonalBrowserGrants(owner);
-  for (const grant of entries) await revokePersonalBrowserGrant(owner, "https://" + grant.host);
+  const dir = userPath(owner);
+  const names = await fs.readdir(dir).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return [] as string[];
+    throw error;
+  });
+  for (const name of names.filter(value => /^[a-f0-9]{64}\.json$/.test(value))) {
+    const target = path.join(dir, name);
+    const data = await fs.readFile(target, "utf8").catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return "";
+      throw error;
+    });
+    let host: string | null = null;
+    try {
+      const value = JSON.parse(data) as { host?: unknown };
+      if (typeof value.host === "string" &&
+          hash("site:" + value.host) + ".json" === name) host = value.host;
+    } catch { /* Still delete malformed encrypted artifacts. */ }
+    const remove = async () => fs.unlink(target).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+    if (host) await withSiteLock(owner, host, remove);
+    else await remove();
+  }
 }
 
 /** Persist refreshed website tokens without changing an owner's consent or resurrecting a revoked grant. */
