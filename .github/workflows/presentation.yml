@@ -319,6 +319,14 @@ jobs:
         env:
           PROJECT_AGENT_P8_REAL_BROWSER_QA: "1"
       - run: npm run test:e2e
+      - name: Preserve L5B browser performance metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: l5b-ui-performance
+          path: test-results/l5b/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Install isolated accessibility audit
         run: npm install --no-save --package-lock=false @axe-core/playwright@4
       - name: Real-component Agent UX QA (desktop/mobile, light/dark, accessibility)
