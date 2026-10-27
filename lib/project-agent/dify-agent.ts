@@ -65,7 +65,7 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 	let partialQueue: Promise<void> = Promise.resolve();
 	const threadId = task.conversationId;
 	const runtime = isRuntimeEnabled();
-	let conversationId = (runtime ? undefined : await autoCompactIfNeeded(task)) ?? await resolveDifyConversationId(task);
+	let conversationId = await resolveDifyConversationId(task);
 	const conversationPatch = (difyId?: string) => difyId ? { conversationId: threadId ?? difyId, ...(threadId && difyId !== threadId ? { difyConversationId: difyId } : {}) } : {};
 	try {
 		const apiKey = process.env.PROJECT_AGENT_DIFY_API_KEY?.trim();
@@ -75,6 +75,8 @@ export async function runProjectAgentTask(taskId: string, signal?: AbortSignal):
 		if (!projectAccess) throw new Error("Project access was removed before the task could run");
 		const projectOwnerEmail = projectAccess.ownerEmail;
 		if (!await markTaskRunningIfQueued(task, PROJECT_AGENT_BOOT_ID)) { const latest = await readProjectAgentTask(task.id); if (!latest) throw new Error("Task disappeared during guarded startup"); return latest; }
+		// After the queued-to-running CAS and Project access check, Dify compaction may run safely.
+		if (!runtime) conversationId = (await autoCompactIfNeeded(task)) ?? conversationId;
 		const [knowledge, rawProjectChats, rawProjectAgentHistory, rawPersonalChats, sameChat] = await Promise.all([
 			getProjectAgentKnowledgeText(task.projectId, projectOwnerEmail, task.prompt, runtime),
 			loadProjectChatContext(task.projectId, task.ownerEmail, task.userPrompt ?? task.prompt),
