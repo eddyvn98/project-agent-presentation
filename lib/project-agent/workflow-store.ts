@@ -43,6 +43,18 @@ async function locked<T>(target: string, action: () => Promise<T>) {
   catch { throw new Error("Workflow busy; retry"); }
   try { return await action(); } finally { await fs.rmdir(lock).catch(() => {}); }
 }
+async function lockedCreate<T>(owner: string, action: () => Promise<T>): Promise<T> {
+  const target = path.join(ownerDir(owner), "create");
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try { return await locked(target, action); }
+    catch (error) {
+      if (!(error instanceof Error) || error.message !== "Workflow busy; retry" || attempt === 39)
+        throw error;
+      await new Promise(resolve => setTimeout(resolve, 15 + attempt * 5));
+    }
+  }
+  throw new Error("Workflow create lock timeout");
+}
 function normalizeSteps(input: AgentWorkflowStep[]): AgentWorkflowStep[] {
   if (!Array.isArray(input) || input.length < 1 || input.length > 12)
     throw new Error("Workflow needs 1-12 steps");
@@ -91,7 +103,7 @@ export async function saveAgentWorkflow(owner: string, input: {
   const steps = normalizeSteps(input.steps);
   await init(owner);
   // Serialize draft creation across requests, including separate workers sharing storage.
-  if (!input.id) return locked(path.join(ownerDir(owner), "create"), async () => {
+  if (!input.id) return lockedCreate(owner, async () => {
     const same = (await listAgentWorkflows(owner)).filter(w =>
       w.projectId === input.projectId && w.title.trim().toLowerCase() === title.toLowerCase() && !w.enabled);
     if (same.length > 1) throw new Error("Ambiguous workflow drafts; select an explicit id");
