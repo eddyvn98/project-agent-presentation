@@ -52,6 +52,8 @@ describe("P2 deterministic Browser Agent security fuzz", () => {
     const credDns = vi.fn(async () => [{ address: "1.1.1.1" }]);
     await expect(assertPublicHttpUrl("https://user:token@public.example", credDns))
       .rejects.toThrow(/credentials/);
+    await expect(guardedRequest("https://user:token@public.example/", { lookup: credDns }))
+      .rejects.toThrow(/credentials/);
     expect(credDns).not.toHaveBeenCalled();
   });
 

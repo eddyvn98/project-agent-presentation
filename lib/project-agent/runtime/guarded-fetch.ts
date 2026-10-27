@@ -17,6 +17,7 @@ export interface GuardedRequest {
 export async function guardedRequest(rawUrl: string, options: GuardedRequest = {}): Promise<GuardedResponse> {
 	const url = new URL(rawUrl);
 	if (!/^https?:$/.test(url.protocol)) throw new Error("only http and https URLs are allowed");
+	if (url.username || url.password) throw new Error("URLs containing credentials are not allowed");
 	const addresses = await resolvePublicAddresses(url.hostname, options.lookup);
 	const pinned: LookupFunction = (_hostname, lookupOptions, callback) => {
 		if (lookupOptions?.all) (callback as (error: null, list: typeof addresses) => void)(null, addresses);
