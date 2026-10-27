@@ -11,7 +11,9 @@ import {
 
 const url = "https://c7.example.test", alice = "alice@project-agent.test";
 const bob = "bob@project-agent.test";
-const state = { cookies: [], origins: [] };
+const state = { cookies: [{ name: "qa_session", value: "synthetic-only",
+  domain: "c7.example.test", path: "/", expires: -1, httpOnly: true,
+  secure: true, sameSite: "Lax" as const }], origins: [] };
 let directory: string;
 const synthetic = (owner: string, version: string) => ({
   scopeId: "pat_012345abcdef", owner, authHost: "c7.example.test",
