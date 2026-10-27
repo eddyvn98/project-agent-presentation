@@ -4,7 +4,7 @@ import { MongoClient } from "mongodb";
 
 export async function isolatedMemoryQa(purpose, fn) {
   assert.equal(process.env.L11_ISOLATED_QA, "1", "Explicit QA isolation required");
-  assert.ok(["l11l13", "l12"].includes(purpose));
+  assert.ok(["l11l13", "l12", "l19l22"].includes(purpose));
   const uri = new URL(process.env.L11_MONGO_URI ?? "");
   assert.ok(uri.protocol === "mongodb:" && uri.hostname === "127.0.0.1" &&
     uri.port === "27019" && ["", "/"].includes(uri.pathname) &&
