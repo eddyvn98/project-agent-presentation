@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check, Copy, Loader2, MessageSquareQuote, Paperclip, Pencil, RotateCcw, Sparkles, Square, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import type { PublicProjectAgentTask } from "@/lib/project-agent/public-task";
 import { clearProjectAgentFileContext, clearProjectAgentView, consumeProjectAgentInitialFiles, consumeProjectAgentInitialPrompt, getProjectAgentFileContext, getProjectAgentViewId, NEW_PROJECT_AGENT_VIEW_ID, selectProjectAgentView, subscribeToProjectAgentFileEdit, subscribeToProjectAgentView, type ProjectAgentFileContext } from "@/lib/project-agent/view-session";
@@ -33,6 +33,7 @@ import { useProjectAgentConversationSync } from "./useProjectAgentConversationSy
 import { useProjectAgentTaskControls } from "./useProjectAgentTaskControls";
 import { useProjectAgentSubmit } from "./useProjectAgentSubmit";
 import { ProjectAgentTaskAnswer } from "./ProjectAgentTaskAnswer";
+import { LONG_CHAT_BATCH, longChatWindow } from "@/lib/project-agent/long-chat-window";
 import { ProjectAgentBrowserPreview } from "./ProjectAgentBrowserPreview";
 import { ProjectAgentProjectBrowser } from "./ProjectAgentProjectBrowser";
 import { ProjectAgentScheduleApproval } from "./ProjectAgentScheduleApproval";
@@ -128,6 +129,18 @@ export function ProjectAgentConversationPane() {
 	}, [projectId, viewId]);
 
 	const orderedTasks = useMemo(() => [...tasks].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt)), [tasks]);
+  const [visibleLimit, setVisibleLimit] = useState(LONG_CHAT_BATCH);
+  const restoreScrollRef = useRef<{ height: number; top: number } | null>(null);
+  useEffect(() => { setVisibleLimit(LONG_CHAT_BATCH); restoreScrollRef.current = null; }, [projectId, viewId]);
+  const fullVisibleTasks = useMemo(() => orderedTasks.filter(task => task.userPrompt !== "/compact"), [orderedTasks]);
+  const displayTasks = useMemo(() => longChatWindow(fullVisibleTasks, visibleLimit), [fullVisibleTasks, visibleLimit]);
+  const hiddenLoaded = fullVisibleTasks.length - displayTasks.length;
+  useLayoutEffect(() => {
+    const before = restoreScrollRef.current, container = conversationRef.current;
+    if (!before || !container) return;
+    container.scrollTop = before.top + container.scrollHeight - before.height;
+    restoreScrollRef.current = null;
+  }, [visibleLimit]);
 	const activeFileContext = fileContext && (fileContext.conversationId === viewId || orderedTasks.some((task) => task.id === fileContext.taskId && (task.conversationId ?? task.id) === viewId)) ? fileContext : null;
 	const latestTask = orderedTasks.at(-1);
 	const pendingAsk = latestTask && latestTask.status === "done" && dismissedAskId !== latestTask.id && !busy && latestTask.resultText ? extractAskBlock(latestTask.resultText) : null;
@@ -200,7 +213,8 @@ export function ProjectAgentConversationPane() {
 			{orderedTasks.length === 0 && viewId !== NEW_PROJECT_AGENT_VIEW_ID && loadedViewId !== viewId && !error && !loadError && <div className="flex justify-center py-24"><Loader2 className="h-5 w-5 animate-spin text-slate-400" aria-label="Loading chat" /></div>}
 			{hasOlder && orderedTasks.length === 0 && viewId !== NEW_PROJECT_AGENT_VIEW_ID && loadedViewId === viewId && <p role="status" className="mx-auto max-w-xl py-10 text-center text-sm text-slate-500">This chat is older than the loaded history. Choose “Load earlier messages” to continue finding it.</p>}
 			{orderedTasks.length === 0 && !hasOlder && !outgoing && (viewId === NEW_PROJECT_AGENT_VIEW_ID || loadedViewId === viewId || Boolean(error || loadError)) && <div className="mx-auto flex min-h-[min(52vh,520px)] max-w-2xl flex-col items-center justify-center py-10 text-center"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 dark:bg-orange-950/50 dark:text-orange-300"><Sparkles className="h-6 w-6" /></div><p className="mt-5 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">What would you like to work on?</p><p className="mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">Your Project Agent can use the files and instructions saved in {projectName || "this project"}.</p><div className="mt-6 flex max-w-xl flex-wrap justify-center gap-2">{["Summarize project files", "Analyze a document", "Create a report"].map((suggestion) => <button key={suggestion} type="button" onClick={() => { setDraft(suggestion); requestAnimationFrame(() => formRef.current?.querySelector("textarea")?.focus()); }} className="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">{suggestion}</button>)}</div></div>}
-			{orderedTasks.filter((task) => task.userPrompt !== "/compact").map((task, index, visibleTasks) => <div key={task.id}>
+			{hiddenLoaded > 0 && <div className="mx-auto mb-4 flex max-w-3xl justify-center"><button type="button" aria-label="Show earlier loaded messages" className="rounded-full border border-slate-200 px-4 py-2 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300" onClick={() => { const node = conversationRef.current; if (node) restoreScrollRef.current = { height: node.scrollHeight, top: node.scrollTop }; shouldFollowRef.current = false; setVisibleLimit(n => n + LONG_CHAT_BATCH); }}>Show {Math.min(hiddenLoaded, LONG_CHAT_BATCH)} earlier loaded messages</button></div>}
+            {displayTasks.map((task, index, visibleTasks) => <div key={task.id}>
 				<ProjectAgentTimeMarker timestamp={task.createdAt} previousTimestamp={visibleTasks[index - 1]?.createdAt} />
 				<article className="mx-auto w-full max-w-3xl space-y-5 pb-5">
 				<div className="ml-auto max-w-[90%] rounded-[24px] rounded-br-md bg-slate-100 px-5 py-3.5 text-[15px] leading-7 text-slate-800 dark:bg-slate-800 dark:text-slate-100 sm:max-w-[82%]">
