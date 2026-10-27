@@ -50,8 +50,6 @@ const historical = (size: number) => Array.from({ length: size }, (_, i) =>
   turn(i + 1, i + 1 === 995 ? {
     prompt: "Decision update", userPrompt: "Decision update: design = BLUE",
     resultText: "Decision confirmed: design = BLUE",
-  } : i + 1 % 250 === 0 ? {
-    prompt: "/compact", userPrompt: "/compact", resultText: "Conversation compacted.",
   } : {}));
 
 describe("L1/L2: deterministic long-session history and memory", () => {
@@ -76,7 +74,7 @@ describe("L1/L2: deterministic long-session history and memory", () => {
     expect(new Set(found.map(t => t.id)).size).toBe(size);
     expect(found.every(t => t.ownerEmail === USER && t.projectId === PROJECT)).toBe(true);
     const recap = await buildChatRecap(current());
-    expect(recap.match(/You: Answer/g)).toHaveLength(8);
+    expect(recap.match(/^You: /gm)).toHaveLength(8);
     expect(recap).toContain("Turn " + size);
     expect(recap).not.toContain("other-chat");
     expect(recap.length).toBeLessThanOrEqual(8_000);
