@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ page: vi.fn(), update: vi.fn(), compact: vi.fn() }));
 vi.mock("@/lib/project-agent/task-store", () => ({ listProjectAgentTaskPage: mocks.page, updateProjectAgentTask: mocks.update }));
 vi.mock("@/lib/project-agent/compact", () => ({ compactChat: mocks.compact }));
+vi.mock("@/lib/project-agent/compact-lease", () => ({ withCompactionLease: async (_task: unknown, _source: unknown, fn: () => Promise<string>) => fn() }));
 
 import { autoCompactIfNeeded } from "@/lib/project-agent/auto-compact";
 
