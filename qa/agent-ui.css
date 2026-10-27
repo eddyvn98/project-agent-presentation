@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@source "../components/features/projects";
+@custom-variant dark (&:where(.dark, .dark *));
+:root { color: #0f172a; background: #f8fafc; font-family: system-ui, sans-serif; }
+html.dark { color: #f8fafc; background: #020617; }
+body { margin: 0; min-width: 0; }
+button:not(:disabled), summary { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
