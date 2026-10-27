@@ -9,6 +9,8 @@ const MAX_AGE_MS = 7 * 24 * 60 * 60_000;
 let lastSweep = 0;
 const MAX_READ_CHARS = 7_000;
 const ID = /^out_[a-f0-9]{20}$/;
+const escapeUntrusted = (value: string) => value.replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export interface OutputScope { projectId?: string; chatId: string }
 export interface SavedOutput { id: string; bytes: number; originalBytes: number; complete: boolean }
@@ -83,7 +85,7 @@ export async function readContextOutput(scope: OutputScope, id: string, offset =
   const start = Math.max(0, Math.min(offset, data.length));
   const end = Math.min(data.length, start + Math.max(1, Math.min(length, MAX_READ_CHARS)));
   return { text: "Saved output " + id + ", characters " + start + "-" + end + "/" + data.length
-    + ":\n<tool_output_data>\n" + data.slice(start, end) + "\n</tool_output_data>"
+    + ":\n<tool_output_data>\n" + escapeUntrusted(data.slice(start, end)) + "\n</tool_output_data>"
     + (end < data.length ? "\nRead next with offset=" + end : "\nEnd of saved output."), failed: false };
 }
 
@@ -101,7 +103,7 @@ export async function searchContextOutput(scope: OutputScope, id: string, query:
     at += Math.max(needle.length, 1);
   }
   return { text: hits.length ? "Matches in " + id + " (character offsets for read_output):\n"
-    + hits.map((hit) => "offset=" + hit.offset + "\n" + hit.excerpt).join("\n---\n")
+    + hits.map((hit) => "offset=" + hit.offset + "\n" + escapeUntrusted(hit.excerpt)).join("\n---\n")
     : "No matches found in output " + id + ".", failed: false };
 }
 
