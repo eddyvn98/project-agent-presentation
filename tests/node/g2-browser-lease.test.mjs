@@ -100,3 +100,35 @@ test("crash expiry quarantines; explicit reviewed restart gets a higher epoch", 
   await assert.rejects(assertBrowserLease(db, old, "agent", 130_002), /lost/);
   assert.ok(await assertBrowserLease(db, fresh, "agent", 130_002));
 });
+
+test("thirty-two competing workers never obtain two browser owners", async () => {
+  const db = fakeMongo();
+  const claims = await Promise.all(Array.from({ length: 32 }, (_, i) =>
+    claim(db, "worker-" + i)));
+  const winners = claims.filter(Boolean);
+  assert.equal(winners.length, 1);
+  const winner = winners[0];
+  assert.ok(await assertBrowserLease(db, winner, "agent", 2000));
+  assert.equal(await stopBrowserLease(db, taskId, owner), true);
+  await assert.rejects(assertBrowserLease(db, winner, "agent", 2000), /lost/);
+  assert.equal(await renewBrowserLease(db, winner, 2000), false);
+  assert.equal(await claim(db, "late-worker"), null);
+});
+
+test("sixty-four takeover and handback transitions fence each stale revision", async () => {
+  const db = fakeMongo();
+  const active = await claim(db, "controller");
+  assert.ok(active);
+  let mode = "agent";
+  for (let index = 0; index < 64; index++) {
+    const stale = { ...active };
+    const next = mode === "agent" ? "human" : "agent";
+    const revision = await changeBrowserControl(db, active, mode, next, 2000);
+    assert.equal(revision, stale.revision + 1);
+    await assert.rejects(assertBrowserLease(db, stale, mode, 2000), /lost/);
+    assert.ok(await assertBrowserLease(db, active, next, 2000));
+    mode = next;
+  }
+  assert.equal(await finishBrowserLease(db, active), true);
+  await assert.rejects(assertBrowserLease(db, active, mode, 2000), /lost/);
+});
