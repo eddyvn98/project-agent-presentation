@@ -280,7 +280,6 @@ export async function failStaleProjectAgentTask(task: ProjectAgentTask): Promise
 		logLine: "failed: task stopped before completion",
 	});
 }
-
 // Deletes a conversation and every local artifact (legacy JSON snapshot, files, inputs) so it cannot be re-imported.
 export async function deleteProjectAgentConversation(
 	projectId: string,
@@ -288,11 +287,8 @@ export async function deleteProjectAgentConversation(
 	key: { conversationId?: string; taskId?: string },
 ): Promise<number> {
 	const task = key.taskId ? await readProjectAgentTask(key.taskId).catch(() => null) : null;
-  // Clean checkpoints before removing Mongo task records. If shared checkpoint
-  // cleanup fails, leave the conversation intact so deletion can be retried.
-  const scopes = [...new Set([key.conversationId, task?.conversationId, key.taskId]
-    .filter((id): id is string => Boolean(id)))];
-  await Promise.all(scopes.map(chatId => deleteContextScope({ projectId, chatId })));
+  await Promise.all([...new Set([key.conversationId, task?.conversationId, key.taskId]
+    .filter((id): id is string => Boolean(id)))].map(chatId => deleteContextScope({ projectId, chatId })));
 	const ids = await deleteStoredProjectAgentConversation(projectId, ownerEmail, key);
 	await Promise.all(ids.flatMap((id) => [
 		fs.unlink(taskPath(id)).catch(() => {}),
