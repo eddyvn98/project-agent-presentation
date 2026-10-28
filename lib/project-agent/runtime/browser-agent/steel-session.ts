@@ -32,14 +32,17 @@ function sessionTimeout(): number {
     throw new Error("Invalid Steel session timeout");
   return raw;
 }
-export async function createSteelRemote(): Promise<SteelDescriptor> {
+export async function createSteelRemote(reservedId?: string): Promise<SteelDescriptor> {
   if (process.env.PROJECT_AGENT_STEEL_BROWSER !== "1")
     throw new Error("Shared Steel browser is disabled");
   const timeout = sessionTimeout();
+  if (reservedId && !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(reservedId))
+    throw new Error("Invalid reserved Steel session UUID");
   const response = await fetch(new URL("sessions", apiBase()), {
     method: "POST", cache: "no-store", headers: headers(),
     signal: AbortSignal.timeout(25_000),
-    body: JSON.stringify({ timeout, inactivityTimeout: Math.min(30 * 60_000, timeout - 1000),
+    body: JSON.stringify({ ...(reservedId ? { sessionId: reservedId } : {}),
+      timeout, inactivityTimeout: Math.min(30 * 60_000, timeout - 1000),
       dimensions: { width: 1280, height: 800 },
       headless: false, debugConfig: { interactive: true } }),
   });
