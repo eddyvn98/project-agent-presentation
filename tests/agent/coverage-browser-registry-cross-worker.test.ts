@@ -125,4 +125,75 @@ describe("Project Browser registry survives worker restart without replaying bro
     expect((await findProjectRecord(scope, project, owner))?.steelId)
       .toBe("steel-another-generation");
   });
+
+  it("preserves the remote Steel ID when close fails and retries across workers", async () => {
+    const old = await ensureProjectRecord(scope, project, owner);
+    vi.mocked(releaseSteelRemote)
+      .mockRejectedValueOnce(new Error("synthetic Steel release outage"))
+      .mockResolvedValueOnce(undefined);
+    await expect(closeProjectRecord(scope, project, owner))
+      .rejects.toThrow(/release outage/);
+    expect(row).toMatchObject({ state: "closed",
+      releasePendingSteelId: old.steelId, generation: 2 });
+    expect(row?.steelId).toBeUndefined();
+    await expect(closeProjectRecord(scope, project, owner)).resolves.toBeUndefined();
+    expect(row?.releasePendingSteelId).toBeUndefined();
+    expect(row?.generation).toBe(2); // No extra generation after retry.
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
+    expect(releaseSteelRemote).toHaveBeenNthCalledWith(2, old.steelId);
+  });
+  it("blocks explicit reopen while a prior remote release is still failing", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    vi.mocked(releaseSteelRemote).mockRejectedValue(
+      new Error("synthetic remote cleanup unavailable"));
+    await expect(closeProjectRecord(scope, project, owner)).rejects.toThrow(/cleanup unavailable/);
+    expect(row?.releasePendingSteelId).toBe("steel-original");
+    await expect(ensureProjectRecord(scope, project, owner, undefined, true))
+      .rejects.toThrow(/cleanup unavailable/);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    expect(row).toMatchObject({ state: "closed", generation: 2 });
+    vi.mocked(releaseSteelRemote).mockResolvedValue(undefined);
+    vi.mocked(createSteelRemote).mockResolvedValueOnce({
+      id: "steel-reopened", timeout: 900_000,
+    });
+    const recovered = await ensureProjectRecord(scope, project, owner, undefined, true);
+    expect(recovered).toMatchObject({ state: "active", steelId: "steel-reopened" });
+    expect(recovered.releasePendingSteelId).toBeUndefined();
+    expect(createSteelRemote).toHaveBeenCalledTimes(2);
+  });
+  it("retains an expired active Steel ID when remote cleanup fails before rotation", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    row!.expiresAt = Date.now() - 10;
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
+      new Error("synthetic old Steel unreachable"));
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/old Steel unreachable/);
+    expect(row).toMatchObject({ state: "active", steelId: "steel-original",
+      generation: 1 });
+    expect(createSteelRemote).toHaveBeenCalledOnce();
+    vi.mocked(createSteelRemote).mockResolvedValueOnce({
+      id: "steel-next", timeout: 900_000,
+    });
+    const next = await ensureProjectRecord(scope, project, owner);
+    expect(next).toMatchObject({ state: "active", steelId: "steel-next",
+      generation: 2 });
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
+  });
+  it("retries remote cleanup if Mongo fails after Steel acknowledged its release", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    const originalUpdate = collection.updateOne.getMockImplementation()!;
+    collection.updateOne.mockImplementationOnce(originalUpdate);
+    // On release-confirmation persistence the Mongo write fails; pending ID stays.
+    collection.updateOne.mockImplementationOnce(async (filter: Row, update: Row, opts?: Row) => {
+      if (filter.releasePendingSteelId) throw Error("synthetic Mongo ack lost");
+      return originalUpdate(filter, update, opts);
+    });
+    await expect(closeProjectRecord(scope, project, owner))
+      .rejects.toThrow(/Mongo ack lost/);
+    expect(row).toMatchObject({ state: "closed", releasePendingSteelId: "steel-original" });
+    expect(await closeProjectRecord(scope, project, owner)).toBeUndefined();
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
+    expect(row?.releasePendingSteelId).toBeUndefined();
+  });
+
 });
