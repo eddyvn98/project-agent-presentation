@@ -196,4 +196,50 @@ describe("Project Browser registry survives worker restart without replaying bro
     expect(row?.releasePendingSteelId).toBeUndefined();
   });
 
+  it("does not let another owner retry or clear a pending remote release", async () => {
+    const active = await ensureProjectRecord(scope, project, owner);
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
+      new Error("synthetic release denied"));
+    await expect(closeProjectRecord(scope, project, owner))
+      .rejects.toThrow(/release denied/);
+    await closeProjectRecord(scope, project, "intruder@example.test");
+    await expect(ensureProjectRecord(scope, project, "intruder@example.test",
+      undefined, true)).rejects.toThrow(/not initialized/);
+    expect(row).toMatchObject({ state: "closed",
+      releasePendingSteelId: active.steelId });
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(1);
+    await closeProjectRecord(scope, project, owner);
+    expect(row?.releasePendingSteelId).toBeUndefined();
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the browser closed until a delayed cleanup finishes", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
+      new Error("synthetic first release outage"));
+    await expect(closeProjectRecord(scope, project, owner))
+      .rejects.toThrow(/first release outage/);
+    let entered!: () => void;
+    let complete!: () => void;
+    const enteredCleanup = new Promise<void>(resolve => { entered = resolve; });
+    const cleanup = new Promise<void>(resolve => { complete = resolve; });
+    vi.mocked(releaseSteelRemote).mockImplementationOnce(async () => {
+      entered(); await cleanup;
+    });
+    vi.mocked(createSteelRemote).mockResolvedValueOnce({
+      id: "steel-new-after-cleanup", timeout: 900_000,
+    });
+    const reopen = ensureProjectRecord(scope, project, owner, undefined, true);
+    await enteredCleanup;
+    expect(row).toMatchObject({ state: "closed",
+      releasePendingSteelId: "steel-original" });
+    expect(await findProjectRecord(scope, project, owner)).toBeNull();
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    complete();
+    const recovered = await reopen;
+    expect(recovered.steelId).toBe("steel-new-after-cleanup");
+    expect(recovered.releasePendingSteelId).toBeUndefined();
+    expect(createSteelRemote).toHaveBeenCalledTimes(2);
+  });
+
 });
