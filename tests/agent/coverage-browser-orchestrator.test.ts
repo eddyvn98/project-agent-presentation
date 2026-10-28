@@ -90,6 +90,7 @@ beforeEach(() => {
   m.withOp.mockImplementation(async (_session: unknown, fn: () => Promise<unknown>) => fn());
   m.loop.mockImplementation(async (_id: string, _session: unknown, _action: unknown,
     _step: unknown, fn: () => Promise<unknown>) => fn());
+  m.writeFile.mockResolvedValue(undefined);
   m.health.mockResolvedValue(null);
   m.snapshotAfter.mockResolvedValue("Fresh browser snapshot");
   m.approval.mockResolvedValue({ allowed: false, message: "Approval denied" });
