@@ -63,8 +63,9 @@ async function main() {
       storageState: env.P7_OWNER_STORAGE_STATE });
     outsider = await request.newContext({ baseURL: originB,
       storageState: env.P7_NONMEMBER_STORAGE_STATE });
-    const first = await take(await post(a, originA, { op: "start" }), 200);
+    // A timed-out start may still have created a Steel session: attempt cleanup.
     opened = true;
+    const first = await take(await post(a, originA, { op: "start" }), 200);
     assert.equal(first.connected, true);
     assert.equal(first.viewerUrl, null, "Steel player must not be exposed by QA");
     const second = await take(await post(b, originB, { op: "start" }), 200);
@@ -98,29 +99,35 @@ async function main() {
       "Exactly one new tab must appear after explicit B action");
     await take(await post(b, originB, { op: "release" }), 200);
     proof = { steelLiveQa: "PASS", nextWorkers: 2,
-      differentLauncherPids: true, actualSteelService: true,
-      sessionCountExpected: 1, priorTabs: initial,
+      launcherPids: hosts.map(host => host.child.pid), actualSteelService: true,
+      sharedSessionObserved: true, priorTabs: initial,
       tabsBeforeCrash: countBeforeCrash, tabsAfterCrash: recovered.tabs.length,
       tabsAfterExplicitAction: deliberate.tabs.length,
       noAutomaticReplay: true, nonmemberDenied: true,
       externalWebsiteMutation: false, steelApiOrigin: gate.apiOrigin };
   } catch (caught) { error = caught; }
   finally {
-    if (b && opened && hosts[1]?.child.exitCode === null) {
-      try {
-        const closed = await b.delete(path(), {
-          headers: { Origin: hosts[1].origin }, timeout: 30000,
-          failOnStatusCode: false,
-        });
-        await take(closed, 200);
-        const state = await take(await b.get(path(),
-          { failOnStatusCode: false }), 200);
-        assert.equal(state.connected, false);
-        cleaned = true;
-      } catch (cleanupFailure) {
-        error = new AggregateError([error, cleanupFailure].filter(Boolean),
-          "Steel QA remote browser cleanup failed; inspect QA Steel sessions manually");
+    if (opened) {
+      const candidates = [[b, hosts[1]], [a, hosts[0]]];
+      const failures = [];
+      for (const [ctx, host] of candidates) {
+        if (!ctx || !host ||
+            host.child.exitCode !== null || host.child.signalCode !== null) continue;
+        try {
+          const closed = await ctx.delete(path(), {
+            headers: { Origin: host.origin }, timeout: 30000,
+            failOnStatusCode: false,
+          });
+          await take(closed, 200);
+          const state = await take(await ctx.get(path(),
+            { failOnStatusCode: false }), 200);
+          assert.equal(state.connected, false);
+          cleaned = true;
+          break;
+        } catch (failure) { failures.push(failure); }
       }
+      if (!cleaned) error = new AggregateError([error, ...failures].filter(Boolean),
+        "Steel QA cleanup failed; inspect the isolated Steel account manually");
     }
     for (const ctx of [outsider, a, b]) await ctx?.dispose().catch(() => {});
     for (const host of hosts.reverse())
