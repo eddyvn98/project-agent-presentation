@@ -1,9 +1,11 @@
 const local = new Set(["localhost", "127.0.0.1", "[::1]"]);
 export function steelQaLiveGate(env = process.env) {
-  if (env.NODE_ENV === "production") throw Error("Steel QA refuses production NODE_ENV");
+  if (!["development", "test"].includes(env.NODE_ENV))
+    throw Error("Steel QA requires explicit development or test NODE_ENV");
   if (env.STEEL_QA_ALLOW_LIVE !== "1" ||
-      env.STEEL_QA_DB_ISOLATION_ATTESTED !== "1")
-    throw Error("Explicit live Steel opt-in and isolated QA database attestation required");
+      env.STEEL_QA_DB_ISOLATION_ATTESTED !== "1" ||
+      env.G2_QA_DB_ISOLATION_ATTESTED !== "1")
+    throw Error("Explicit live Steel opt-in and both isolated QA database attestations required");
   if (env.PROJECT_AGENT_RUNTIME !== "sandbox" ||
       env.PROJECT_AGENT_STEEL_BROWSER !== "1")
     throw Error("Steel QA requires sandbox runtime and shared Steel enabled");

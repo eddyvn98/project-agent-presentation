@@ -5,6 +5,7 @@ import { steelQaLiveGate } from "../../scripts/steel-host-qa-guard.mjs";
 
 const valid = () => ({
   NODE_ENV: "test", STEEL_QA_ALLOW_LIVE: "1",
+  G2_QA_DB_ISOLATION_ATTESTED: "1",
   STEEL_QA_DB_ISOLATION_ATTESTED: "1",
   PROJECT_AGENT_RUNTIME: "sandbox", PROJECT_AGENT_STEEL_BROWSER: "1",
   PROJECT_AGENT_STEEL_API_URL: "https://api.steel.dev",
@@ -23,6 +24,7 @@ test("Refuses live Steel without explicit opt-in, scope, or credential", () => {
   const cases = [
     ["STEEL_QA_ALLOW_LIVE", "0"],
     ["STEEL_QA_DB_ISOLATION_ATTESTED", "0"],
+    ["G2_QA_DB_ISOLATION_ATTESTED", "0"],
     ["PROJECT_AGENT_RUNTIME", "dify"],
     ["PROJECT_AGENT_STEEL_BROWSER", "0"],
     ["PROJECT_AGENT_STEEL_API_KEY", ""],
@@ -37,11 +39,20 @@ test("Refuses live Steel without explicit opt-in, scope, or credential", () => {
     ["PROJECT_AGENT_STEEL_PRIVATE_VIEWER", "1"],
     ["PROJECT_AGENT_STEEL_LOCAL_VIEWER", "1"],
     ["NODE_ENV", "production"],
+    ["NODE_ENV", ""],
+    ["NODE_ENV", "staging"],
   ];
   for (const [name, value] of cases) {
     assert.throws(() => steelQaLiveGate({ ...valid(), [name]: value }),
       undefined, name + " must be rejected");
   }
+});
+test("Allows only explicitly identified development or test QA modes", () => {
+  assert.equal(steelQaLiveGate({ ...valid(), NODE_ENV: "development" }).projectId,
+    "qa-project");
+  assert.equal(steelQaLiveGate(valid()).projectId, "qa-project");
+  assert.throws(() => steelQaLiveGate({ ...valid(), NODE_ENV: undefined }),
+    /development or test/);
 });
 test("Supports only pinned trusted self-hosted API or loopback", () => {
   const env = valid();
