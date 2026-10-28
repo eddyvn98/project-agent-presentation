@@ -115,6 +115,79 @@ suite("Project Steel registry against isolated real MongoDB", () => {
     expect(createSteelRemote).toHaveBeenCalledTimes(1);
   });
 
+  it("fences a lost Steel create response even without a returned remote ID", async () => {
+    vi.mocked(createSteelRemote).mockRejectedValueOnce(
+      new Error("synthetic Steel POST timeout"));
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/creation outcome is unknown/);
+    expect(await row()).toMatchObject({
+      state: "creating", generation: 1, claimUntil: 0,
+    });
+    await expect(ensureProjectRecord(scope, project, owner, undefined, true))
+      .rejects.toThrow(/reconcile Steel sessions/);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    expect(releaseSteelRemote).not.toHaveBeenCalled();
+  });
+
+  it("blocks a stale creating claim even when a user explicitly requests reopen", async () => {
+    const stale = { _id: scope, projectId: project, owner,
+      state: "creating", generation: 1, claimToken: "dead-worker",
+      claimUntil: Date.now() - 100, lastUsedAt: Date.now() };
+    await registry().insertOne(stale);
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/creation outcome is unknown/);
+    await expect(ensureProjectRecord(scope, project, owner, undefined, true))
+      .rejects.toThrow(/reconcile Steel sessions/);
+    expect(await row()).toMatchObject(stale);
+    expect(createSteelRemote).not.toHaveBeenCalled();
+    expect(releaseSteelRemote).not.toHaveBeenCalled();
+  });
+
+  it("never takes over an in-flight creation after its lease times out", async () => {
+    let entered!: () => void;
+    let finish!: (value: { id: string; timeout: number }) => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    vi.mocked(createSteelRemote).mockImplementationOnce(() => {
+      entered();
+      return new Promise(resolve => { finish = resolve; });
+    });
+    const first = ensureProjectRecord(scope, project, owner);
+    await started;
+    await registry().updateOne({ _id: scope, state: "creating" },
+      { $set: { claimUntil: Date.now() - 1 } });
+    try {
+      await expect(ensureProjectRecord(scope, project, owner))
+        .rejects.toThrow(/creation outcome is unknown/);
+      expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    } finally {
+      finish({ id: "steel-real-mongo-original", timeout: 900_000 });
+    }
+    const firstSession = await first;
+    expect(firstSession.steelId).toBe("steel-real-mongo-original");
+    expect((await row()).generation).toBe(1);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+  });
+
+  it("still replaces an expired active remote only after confirmed release", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    await registry().updateOne({ _id: scope },
+      { $set: { expiresAt: Date.now() - 500 } });
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
+      new Error("synthetic Steel outage"));
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/Steel outage/);
+    expect(await row()).toMatchObject({ generation: 1, state: "active",
+      steelId: "steel-real-mongo-initial" });
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    vi.mocked(createSteelRemote).mockResolvedValueOnce({
+      id: "steel-real-mongo-rotated", timeout: 900_000,
+    });
+    const rotated = await ensureProjectRecord(scope, project, owner);
+    expect(rotated.steelId).toBe("steel-real-mongo-rotated");
+    expect(rotated.generation).toBe(2);
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
+  });
+
   it("isolates a Project browser session from a different owner or Project", async () => {
     await ensureProjectRecord(scope, project, owner);
     expect(await findProjectRecord(scope, project, "intruder@qa.example.test"))

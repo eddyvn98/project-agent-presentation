@@ -88,3 +88,20 @@ The selected iframe viewer uses Steel's `interactive=false` while the Agent cont
 ### Not yet production-verified
 
 The authenticated WebRTC viewer gateway is still **not implemented** in the repository; never enable a public player endpoint without an authorization-enforcing gateway. Agent actions run through guarded HTTP/CDP; direct remote viewer traffic is a separate security boundary. Multi-worker Steel browser E2E, TypeScript on the real Next host, and actual replay/cancellation races still require QA before release. Do not claim E2E pass from this commit.
+
+## Crash safety: expired remote creation claims
+
+An expired Mongo `creating` claim is an **unknown external outcome**, not proof that
+Steel never created a remote browser. Likewise, a failed or timed-out Steel create
+HTTP response does not prove the POST had no effect: when no remote ID was returned,
+the claim is retained in an immediately review-required state rather than reset
+to `vacant`. The registry now refuses automatic takeover
+(including an explicit right-panel Start) rather than opening an accidental second
+session. A stale-creation failure needs an operator to inspect the isolated Steel
+account and Mongo record, confirm whether a remote session exists, and reconcile
+it before resetting the claim. Do **not** simply delete the Mongo record or retry
+opening repeatedly: that can leave an orphaned Steel session.
+
+This is a deliberate fail-closed availability tradeoff, not automatic recovery.
+The QA job exercises the fence using real Mongo; the external Steel API and live
+two-Next SIGKILL acceptance are still separate requirements.
