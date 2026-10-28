@@ -5,7 +5,8 @@ import { createSteelRemote, releaseSteelRemote } from "./steel-session";
 type State = "vacant" | "creating" | "active" | "closed";
 export interface ProjectBrowserRecord {
   _id: string; projectId: string; owner: string; state: State;
-  generation: number; steelId?: string; releasePendingSteelId?: string;
+  generation: number; steelId?: string; reservedSteelId?: string;
+  releasePendingSteelId?: string;
   expiresAt?: number; activeTabIndex?: number;
   claimToken?: string; claimUntil?: number; lastUsedAt: number;
 }
@@ -61,6 +62,8 @@ export async function ensureProjectRecord(scope: string, projectId: string,
       await finishPendingRelease(coll, identity, row.releasePendingSteelId);
       continue;
     }
+    if (row.reservedSteelId && row.state !== "active" && row.state !== "creating")
+      throw new Error("Reserved Steel creation outcome unknown; reconcile before reopening");
     if (row.state === "closed" && !allowReopen)
       throw new Error("User closed the Project browser. Reopen it from the right panel.");
     if (row.state === "active" && row.expiresAt && row.expiresAt > Date.now() + 1000)
@@ -82,20 +85,27 @@ export async function ensureProjectRecord(scope: string, projectId: string,
     if (row.state === "active" && row.steelId)
       await releaseSteelRemote(row.steelId);
     const claimToken = randomUUID();
+    // Opt in only after confirming that the deployed Steel API honors sessionId.
+    const reservedId = process.env.PROJECT_AGENT_STEEL_RESERVED_SESSION_IDS === "1" ?
+      randomUUID() : undefined;
     const claimed = await coll.updateOne({ ...identity, generation: row.generation,
       state: row.state, ...(row.claimToken ? { claimToken: row.claimToken } : {}) },
     { $set: { state: "creating", claimToken, claimUntil: now + 45_000,
-      lastUsedAt: now, activeTabIndex: 0 }, $inc: { generation: 1 },
+      lastUsedAt: now, activeTabIndex: 0,
+      ...(reservedId ? { reservedSteelId: reservedId } : {}) },
+      $inc: { generation: 1 },
       $unset: { steelId: "", expiresAt: "" } });
     if (claimed.modifiedCount !== 1) continue;
     let steelId: string | undefined;
     try {
-      const created = await createSteelRemote();
+      const created = await createSteelRemote(reservedId);
       steelId = created.id;
+      if (reservedId && steelId !== reservedId)
+        throw new Error("Steel did not honor the reserved session ID");
       const success = await coll.updateOne({ ...identity, state: "creating", claimToken },
         { $set: { state: "active", steelId, expiresAt: Date.now() + created.timeout,
           lastUsedAt: Date.now() },
-          $unset: { claimToken: "", claimUntil: "" } });
+          $unset: { claimToken: "", claimUntil: "", reservedSteelId: "" } });
       if (success.modifiedCount !== 1) throw new Error("Project browser creation was fenced");
       const active = await findProjectRecord(scope, projectId, owner);
       if (!active) throw new Error("New Steel session was not visible");
@@ -111,14 +121,15 @@ export async function ensureProjectRecord(scope: string, projectId: string,
         if (latest?.state === "creating" && latest.claimToken === claimToken) {
           const marked = await coll.updateOne({ ...identity, state: "creating", claimToken },
             { $set: { state: "vacant", releasePendingSteelId: steelId },
-              $unset: { claimToken: "", claimUntil: "" } });
+              $unset: { claimToken: "", claimUntil: "", reservedSteelId: "" } });
           pending = marked.modifiedCount === 1;
         } else if (latest?.state === "closed" && !latest.steelId &&
                    !latest.releasePendingSteelId) {
           // Stop may have won while the Steel creation request was in flight.
           const marked = await coll.updateOne({ ...identity, state: "closed",
             generation: latest.generation, releasePendingSteelId: { $exists: false } },
-          { $set: { releasePendingSteelId: steelId } });
+          { $set: { releasePendingSteelId: steelId },
+            $unset: { reservedSteelId: "" } });
           pending = marked.modifiedCount === 1;
         }
         try {
