@@ -44,7 +44,8 @@ export async function createSteelRemote(reservedId?: string): Promise<SteelDescr
     body: JSON.stringify({ ...(reservedId ? { sessionId: reservedId } : {}),
       timeout, inactivityTimeout: Math.min(30 * 60_000, timeout - 1000),
       dimensions: { width: 1280, height: 800 },
-      headless: false, debugConfig: { interactive: true } }),
+      headless: false, debugConfig: { interactive:
+        process.env.PROJECT_AGENT_STEEL_PRIVATE_VIEWER !== "1" } }),
   });
   if (!response.ok) throw new Error("Steel create failed: HTTP " + response.status);
   const body = await response.json() as { id?: string };
@@ -83,7 +84,9 @@ function securedViewer(steelId: string, raw: unknown): string | null {
       return parsed.toString(); // Explicit private development-only opt-in.
     if (process.env.PROJECT_AGENT_STEEL_PRIVATE_VIEWER !== "1") return null;
     const prefix = process.env.PROJECT_AGENT_STEEL_VIEWER_PREFIX?.trim();
-    if (!prefix || !prefix.startsWith("/") || prefix.startsWith("//") || /[?#]/.test(prefix))
+    // Only the project-scoped, auth_request-backed path is allowed for production.
+    if (prefix !== "/private-steel-viewer" ||
+        (process.env.PROJECT_AGENT_STEEL_VIEWER_GATEWAY_SECRET?.length ?? 0) < 32)
       return null;
     // Production requires a separately deployed auth-enforcing WebRTC reverse proxy.
     return (prefix.endsWith("/") ? prefix.slice(0, -1) : prefix) + "/v1/sessions/" +
