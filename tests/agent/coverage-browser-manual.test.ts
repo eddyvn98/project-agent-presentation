@@ -129,10 +129,10 @@ describe("Manual Browser risk-checked actions", () => {
     });
     expect(wrong.error).toMatch(/Confirm/);
     const approved = await humanBrowserOperation(id, chat, {
-      ...action, approvalTicket: wrong.approvalTicket,
+      ...action, x: 0.26, approvalTicket: wrong.approvalTicket,
     });
     expect(approved).toMatchObject({ ok: true });
-    expect(page.mouse.click).toHaveBeenCalledWith(250, 400);
+    expect(page.mouse.click).toHaveBeenCalledWith(260, 400);
   });
   it("never inserts text into sensitive credential or payment fields", async () => {
     page.evaluate.mockResolvedValueOnce({
