@@ -52,7 +52,7 @@ async function main() {
   let error;
   let proof;
   try {
-    hosts = await startCrashHosts(env);
+    hosts = await startCrashHosts(env, { disableG2Ownership: true });
     assert.notEqual(hosts[0].child.pid, hosts[1].child.pid);
     const [originA, originB] = hosts.map(host => host.origin);
     await Promise.all(hosts.map(host => ready(host.origin, host)));
