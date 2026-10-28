@@ -115,6 +115,20 @@ suite("Project Steel registry against isolated real MongoDB", () => {
     expect(createSteelRemote).toHaveBeenCalledTimes(1);
   });
 
+  it("fences a lost Steel create response even without a returned remote ID", async () => {
+    vi.mocked(createSteelRemote).mockRejectedValueOnce(
+      new Error("synthetic Steel POST timeout"));
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/creation outcome is unknown/);
+    expect(await row()).toMatchObject({
+      state: "creating", generation: 1, claimUntil: 0,
+    });
+    await expect(ensureProjectRecord(scope, project, owner, undefined, true))
+      .rejects.toThrow(/reconcile Steel sessions/);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    expect(releaseSteelRemote).not.toHaveBeenCalled();
+  });
+
   it("blocks a stale creating claim even when a user explicitly requests reopen", async () => {
     const stale = { _id: scope, projectId: project, owner,
       state: "creating", generation: 1, claimToken: "dead-worker",
