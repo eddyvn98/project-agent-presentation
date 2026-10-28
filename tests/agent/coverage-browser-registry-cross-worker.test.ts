@@ -130,7 +130,6 @@ describe("Project Browser registry survives worker restart without replaying bro
     expect((await findProjectRecord(scope, project, owner))?.steelId)
       .toBe("steel-another-generation");
   });
-
   it("preserves the remote Steel ID when close fails and retries across workers", async () => {
     const old = await ensureProjectRecord(scope, project, owner);
     vi.mocked(releaseSteelRemote)
@@ -200,7 +199,6 @@ describe("Project Browser registry survives worker restart without replaying bro
     expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
     expect(row?.releasePendingSteelId).toBeUndefined();
   });
-
   it("does not let another owner retry or clear a pending remote release", async () => {
     const active = await ensureProjectRecord(scope, project, owner);
     vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
@@ -217,7 +215,6 @@ describe("Project Browser registry survives worker restart without replaying bro
     expect(row?.releasePendingSteelId).toBeUndefined();
     expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
   });
-
   it("keeps the browser closed until a delayed cleanup finishes", async () => {
     await ensureProjectRecord(scope, project, owner);
     vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
@@ -232,8 +229,7 @@ describe("Project Browser registry survives worker restart without replaying bro
       entered(); await cleanup;
     });
     vi.mocked(createSteelRemote).mockResolvedValueOnce({
-      id: "steel-new-after-cleanup", timeout: 900_000,
-    });
+      id: "steel-new-after-cleanup", timeout: 900_000 });
     const reopen = ensureProjectRecord(scope, project, owner, undefined, true);
     await enteredCleanup;
     expect(row).toMatchObject({ state: "closed",
@@ -246,16 +242,12 @@ describe("Project Browser registry survives worker restart without replaying bro
     expect(recovered.releasePendingSteelId).toBeUndefined();
     expect(createSteelRemote).toHaveBeenCalledTimes(2);
   });
-
   it("remembers a newly created Steel session when activation and release both fail", async () => {
     const originalUpdate = collection.updateOne.getMockImplementation()!;
     collection.updateOne.mockImplementationOnce(originalUpdate);
     collection.updateOne.mockImplementationOnce(originalUpdate);
-    collection.updateOne.mockImplementationOnce(async () => {
-      throw Error("synthetic Mongo activation failure");
-    });
-    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
-      new Error("synthetic Steel release unavailable"));
+    collection.updateOne.mockImplementationOnce(async () => { throw Error("synthetic Mongo activation failure"); });
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(new Error("synthetic Steel release unavailable"));
     await expect(ensureProjectRecord(scope, project, owner))
       .rejects.toThrow(/cleanup is pending/);
     expect(row).toMatchObject({ state: "vacant", generation: 1,
@@ -270,14 +262,12 @@ describe("Project Browser registry survives worker restart without replaying bro
     expect(recovered.releasePendingSteelId).toBeUndefined();
     expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
   });
-
   it("retains a fenced creation's remote ID when Stop wins but Steel release fails", async () => {
     vi.mocked(createSteelRemote).mockImplementationOnce(async () => {
       await closeProjectRecord(scope, project, owner);
       return { id: "steel-fenced-orphan", timeout: 900_000 };
     });
-    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
-      new Error("synthetic Steel release timeout"));
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(new Error("synthetic Steel release timeout"));
     await expect(ensureProjectRecord(scope, project, owner))
       .rejects.toThrow(/cleanup is pending/);
     expect(row).toMatchObject({ state: "closed", generation: 2,
@@ -288,7 +278,6 @@ describe("Project Browser registry survives worker restart without replaying bro
     await expect(ensureProjectRecord(scope, project, owner))
       .rejects.toThrow(/User closed/);
   });
-
   it("does not release a committed Steel session after losing Mongo's acknowledgement", async () => {
     const originalUpdate = collection.updateOne.getMockImplementation()!;
     collection.updateOne.mockImplementationOnce(originalUpdate);
@@ -306,5 +295,4 @@ describe("Project Browser registry survives worker restart without replaying bro
     expect(recovered.steelId).toBe("steel-original");
     expect(createSteelRemote).toHaveBeenCalledOnce();
   });
-
 });
