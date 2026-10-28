@@ -231,6 +231,8 @@ jobs:
       - run: npm ci
       - name: Install Vitest v5 matching V8 coverage provider
         run: npm install --no-save --package-lock=false @vitest/coverage-v8@5.0.5
+      - name: Verify risk-weighted coverage report logic
+        run: npm run test:coverage-driven:core
       - name: Measure Agent line/branch coverage and rank coverage gaps
         run: npm run test:c1:coverage
       - name: Preserve branch coverage and risk ranking
