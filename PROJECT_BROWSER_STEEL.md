@@ -92,7 +92,10 @@ The authenticated WebRTC viewer gateway is still **not implemented** in the repo
 ## Crash safety: expired remote creation claims
 
 An expired Mongo `creating` claim is an **unknown external outcome**, not proof that
-Steel never created a remote browser. The registry now refuses automatic takeover
+Steel never created a remote browser. Likewise, a failed or timed-out Steel create
+HTTP response does not prove the POST had no effect: when no remote ID was returned,
+the claim is retained in an immediately review-required state rather than reset
+to `vacant`. The registry now refuses automatic takeover
 (including an explicit right-panel Start) rather than opening an accidental second
 session. A stale-creation failure needs an operator to inspect the isolated Steel
 account and Mongo record, confirm whether a remote session exists, and reconcile
