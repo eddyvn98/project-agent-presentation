@@ -52,6 +52,28 @@ PROJECT_AGENT_STEEL_VIEWER_PREFIX=/private-steel-viewer
 
 The selected iframe viewer uses Steel's `interactive=false` while the Agent controls it and `interactive=true` after takeover. This is UI defense-in-depth only; a production deployment still needs transport-level authorization and fencing.
 
+
+### Optional pre-reserved Steel session UUIDs (requires provider compatibility)
+
+Steel Cloud's documented Sessions API can accept a caller-generated UUID as
+`sessionId` on session creation. To improve crash forensics, the Project Browser
+can store the chosen UUID in Mongo **before** sending the create request.
+
+```dotenv
+PROJECT_AGENT_STEEL_RESERVED_SESSION_IDS=1
+```
+
+This flag defaults **off**. Enable it only after confirming the exact deployed
+Steel Cloud or self-hosted server supports and preserves the requested
+`sessionId`. With the flag on, a mismatched returned ID is rejected and the
+unexpected remote ID is released; a response timeout retains the reserved UUID
+and fails closed pending operator reconciliation. An in-flight reservation blocks
+explicit reopen after Stop until the remote outcome is known.
+
+The UUID is an identifier, **not proof a remote session exists**. This change
+improves diagnosis, but it does not make network POST retries automatically safe
+or replace the signed-in two-Next-worker Steel live acceptance.
+
 ## Architecture
 
 - `project-registry.ts`: Mongo-backed session ID, creation CAS, expiry and selected tab.
