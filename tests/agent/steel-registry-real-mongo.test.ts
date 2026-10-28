@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 
@@ -53,6 +53,7 @@ suite("Project Steel registry against isolated real MongoDB", () => {
       }
     } finally { await client?.close(); }
   });
+  afterEach(() => vi.unstubAllEnvs());
   beforeEach(() => {
     scope = "pb_steel_qa_" + randomBytes(12).toString("hex");
     vi.clearAllMocks();
@@ -61,6 +62,84 @@ suite("Project Steel registry against isolated real MongoDB", () => {
       id: "steel-real-mongo-initial", timeout: 900_000,
     });
     vi.mocked(releaseSteelRemote).mockResolvedValue(undefined);
+  });
+
+  it("persists a reserved UUID before requesting a remote Steel session", async () => {
+    vi.stubEnv("PROJECT_AGENT_STEEL_RESERVED_SESSION_IDS", "1");
+    let requested = "";
+    vi.mocked(createSteelRemote).mockImplementationOnce(async id => {
+      requested = id!;
+      expect(id).toMatch(/^[a-f0-9]{8}-[a-f0-9-]{27,}$/);
+      expect(await row()).toMatchObject({
+        state: "creating", reservedSteelId: id,
+      });
+      return { id: id!, timeout: 900_000 };
+    });
+    const active = await ensureProjectRecord(scope, project, owner);
+    expect(active.steelId).toBe(requested);
+    expect(active.reservedSteelId).toBeUndefined();
+    expect((await row()).reservedSteelId).toBeUndefined();
+  });
+
+  it("keeps a known reservation if the create response is lost", async () => {
+    vi.stubEnv("PROJECT_AGENT_STEEL_RESERVED_SESSION_IDS", "1");
+    let reserved = "";
+    vi.mocked(createSteelRemote).mockImplementationOnce(async id => {
+      reserved = id!; throw Error("synthetic timeout after POST");
+    });
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/outcome is unknown/);
+    expect(await row()).toMatchObject({
+      reservedSteelId: reserved, state: "creating", claimUntil: 0,
+    });
+    await expect(ensureProjectRecord(scope, project, owner, undefined, true))
+      .rejects.toThrow(/reconcile Steel sessions/);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+  });
+
+  it("two workers share a single reserved creation rather than racing", async () => {
+    vi.stubEnv("PROJECT_AGENT_STEEL_RESERVED_SESSION_IDS", "1");
+    let arrived!: () => void, finish!: () => void;
+    const entered = new Promise<void>(resolve => { arrived = resolve; });
+    const pending = new Promise<void>(resolve => { finish = resolve; });
+    vi.mocked(createSteelRemote).mockImplementationOnce(async id => {
+      arrived(); await pending; return { id: id!, timeout: 900_000 };
+    });
+    const first = ensureProjectRecord(scope, project, owner);
+    await entered;
+    const second = ensureProjectRecord(scope, project, owner);
+    finish();
+    const [a, z] = await Promise.all([first, second]);
+    expect(a.steelId).toBe(z.steelId);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+  });
+
+  it("fences reopening during Stop of a reserved creation", async () => {
+    vi.stubEnv("PROJECT_AGENT_STEEL_RESERVED_SESSION_IDS", "1");
+    vi.mocked(createSteelRemote).mockImplementationOnce(async id => {
+      await closeProjectRecord(scope, project, owner);
+      expect((await row()).reservedSteelId).toBe(id);
+      await expect(ensureProjectRecord(scope, project, owner, undefined, true))
+        .rejects.toThrow(/Reserved Steel creation outcome unknown/);
+      return { id: id!, timeout: 900_000 };
+    });
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/creation was fenced/);
+    expect((await row()).reservedSteelId).toBeUndefined();
+    expect((await row()).state).toBe("closed");
+    expect(releaseSteelRemote).toHaveBeenCalledOnce();
+  });
+
+  it("releases a mismatched server-created session rather than trusting the reservation", async () => {
+    vi.stubEnv("PROJECT_AGENT_STEEL_RESERVED_SESSION_IDS", "1");
+    vi.mocked(createSteelRemote).mockResolvedValueOnce({
+      id: "steel-unexpected-remote", timeout: 900_000,
+    });
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/did not honor the reserved session ID/);
+    expect(releaseSteelRemote).toHaveBeenCalledWith("steel-unexpected-remote");
+    expect((await row()).reservedSteelId).toBeUndefined();
+    expect((await row()).state).toBe("vacant");
   });
 
   it("two concurrent callers use one CAS-created Steel identity", async () => {
