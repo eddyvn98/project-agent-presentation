@@ -88,13 +88,33 @@ describe("C5 Steel/CDP authentication, session limits and viewer isolation", () 
     expect(m.connect.mock.calls[0][0]).not.toContain("apiKey=");
     await connected.disconnect();
     vi.stubEnv("PROJECT_AGENT_STEEL_PRIVATE_VIEWER", "1");
-    vi.stubEnv("PROJECT_AGENT_STEEL_VIEWER_PREFIX", "/private/steel");
+    vi.stubEnv("PROJECT_AGENT_STEEL_VIEWER_PREFIX", "/private-steel-viewer");
+    vi.stubEnv("PROJECT_AGENT_STEEL_VIEWER_GATEWAY_SECRET",
+      "synthetic-reverse-proxy-test-secret-long-enough");
     vi.mocked(fetch).mockResolvedValueOnce(reply({ id: sid,
       websocketUrl: "wss://127.0.0.1:3333/cdp", debugUrl: viewer }));
     const second = await connectSteelSession(sid);
-    expect(second.viewerUrl).toBe("/private/steel/v1/sessions/" + sid + "/player");
+    expect(second.viewerUrl).toBe("/private-steel-viewer/v1/sessions/" + sid + "/player");
     expect(m.connect.mock.calls[1][0]).toContain("apiKey=synthetic-secret");
     await second.disconnect();
+  });
+  it("forces Steel's server-side viewer input OFF when the protected gateway is enabled", async () => {
+    vi.stubEnv("PROJECT_AGENT_STEEL_PRIVATE_VIEWER", "1");
+    vi.mocked(fetch).mockResolvedValueOnce(reply({ id: sid }));
+    await createSteelRemote();
+    const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
+    expect(body.debugConfig.interactive).toBe(false);
+  });
+  it("refuses an unscoped or unconfigured private viewer prefix", async () => {
+    vi.stubEnv("PROJECT_AGENT_STEEL_PRIVATE_VIEWER", "1");
+    vi.stubEnv("PROJECT_AGENT_STEEL_VIEWER_PREFIX", "/private/steel");
+    vi.stubEnv("PROJECT_AGENT_STEEL_VIEWER_GATEWAY_SECRET", "short");
+    vi.mocked(fetch).mockResolvedValueOnce(reply({ id: sid,
+      websocketUrl: "ws://127.0.0.1:3333/cdp",
+      debugUrl: base + "/v1/sessions/" + sid + "/player" }));
+    const session = await connectSteelSession(sid);
+    expect(session.viewerUrl).toBeNull();
+    await session.disconnect();
   });
   it("closes remote CDP connection if context creation fails", async () => {
     const failed = { close: vi.fn(async () => {}), contexts: () => [] };
