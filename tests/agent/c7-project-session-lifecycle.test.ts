@@ -165,4 +165,44 @@ describe("C7 shared browser sessions lifecycle and owner isolation", () => {
     expect(status.control).toMatchObject({ paused: true });
     expect(m.watch).toHaveBeenCalledWith("https://a.example.test");
   });
+  it("returns the same opaque Steel QA proof across host attachments", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("STEEL_QA_ALLOW_LIVE", "1");
+    vi.stubEnv("STEEL_QA_DB_ISOLATION_ATTESTED", "1");
+    vi.stubEnv("G2_QA_DB_ISOLATION_ATTESTED", "1");
+    const first = await projectBrowserStatus(live.session);
+    expect(first.qaSessionProof).toMatch(/^[a-f0-9]{24}$/);
+    expect(JSON.stringify(first)).not.toContain("steel-c7");
+    const second = makeSession().session;
+    expect((await projectBrowserStatus(second)).qaSessionProof).toBe(first.qaSessionProof);
+    second.steelId = "steel-other";
+    expect((await projectBrowserStatus(second)).qaSessionProof).not.toBe(first.qaSessionProof);
+    second.steelId = "steel-c7";
+    second.owner = "other@project-agent.test";
+    expect((await projectBrowserStatus(second)).qaSessionProof).not.toBe(first.qaSessionProof);
+  });
+  it("hides Steel QA proof outside explicitly attested isolated nonproduction QA", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("STEEL_QA_ALLOW_LIVE", "1");
+    vi.stubEnv("STEEL_QA_DB_ISOLATION_ATTESTED", "1");
+    vi.stubEnv("G2_QA_DB_ISOLATION_ATTESTED", "1");
+    const visible = await projectBrowserStatus(live.session);
+    expect(visible.qaSessionProof).toMatch(/^[a-f0-9]{24}$/);
+    for (const [name, value] of [
+      ["NODE_ENV", "production"],
+      ["STEEL_QA_ALLOW_LIVE", "0"],
+      ["STEEL_QA_DB_ISOLATION_ATTESTED", "0"],
+      ["G2_QA_DB_ISOLATION_ATTESTED", "0"],
+      ["PROJECT_AGENT_STEEL_BROWSER", "0"],
+    ]) {
+      vi.stubEnv(name, value);
+      expect((await projectBrowserStatus(live.session)).qaSessionProof).toBeUndefined();
+      vi.stubEnv(name, name === "NODE_ENV" ? "test" : "1");
+    }
+    live.session.steelId = undefined;
+    expect((await projectBrowserStatus(live.session)).qaSessionProof).toBeUndefined();
+    live.session.steelId = "steel-c7"; live.session.persistent = false;
+    expect((await projectBrowserStatus(live.session)).qaSessionProof).toBeUndefined();
+  });
+
 });

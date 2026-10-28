@@ -68,8 +68,12 @@ async function main() {
     const first = await take(await post(a, originA, { op: "start" }), 200);
     assert.equal(first.connected, true);
     assert.equal(first.viewerUrl, null, "Steel player must not be exposed by QA");
+    assert.match(first.qaSessionProof ?? "", /^[a-f0-9]{24}$/,
+      "No attested shared Steel QA session proof");
     const second = await take(await post(b, originB, { op: "start" }), 200);
     assert.equal(second.connected, true);
+    assert.equal(second.qaSessionProof, first.qaSessionProof,
+      "Workers A/B must attach to the same Steel session identity");
     assert.equal(second.tabs.length, first.tabs.length, "Second worker duplicated browser tabs");
     const initial = first.tabs.length;
     assert.ok(initial > 0 && initial <= 7);
@@ -78,10 +82,12 @@ async function main() {
       "Nonmember must not read shared browser");
     await take(await post(a, originA, { op: "takeover" }), 200);
     const added = await take(await post(a, originA, { op: "new_tab" }), 200);
+    assert.equal(added.qaSessionProof, first.qaSessionProof);
     assert.equal(added.tabs.length, initial + 1);
     await take(await post(a, originA, { op: "release" }), 200);
     const fromB = await take(await b.get(path(), { failOnStatusCode: false }), 200);
     assert.equal(fromB.connected, true);
+    assert.equal(fromB.qaSessionProof, first.qaSessionProof);
     assert.equal(fromB.tabs.length, initial + 1,
       "Worker B did not attach to A's same remote browser");
     const countBeforeCrash = fromB.tabs.length;
@@ -89,18 +95,22 @@ async function main() {
     assert.ok(hosts[0].child.exitCode !== null || hosts[0].child.signalCode !== null);
     const recovered = await take(await b.get(path(), { failOnStatusCode: false }), 200);
     assert.equal(recovered.connected, true, "Worker B could not reattach after A SIGKILL");
+    assert.equal(recovered.qaSessionProof, first.qaSessionProof,
+      "Worker B silently switched to a different Steel session after A SIGKILL");
     assert.equal(recovered.tabs.length, countBeforeCrash,
       "A previously committed browser action was unexpectedly replayed");
     const denied = await post(outsider, originB, { op: "takeover" });
     assert.ok([401, 403, 404].includes(denied.status()));
     await take(await post(b, originB, { op: "takeover" }), 200);
     const deliberate = await take(await post(b, originB, { op: "new_tab" }), 200);
+    assert.equal(deliberate.qaSessionProof, first.qaSessionProof);
     assert.equal(deliberate.tabs.length, countBeforeCrash + 1,
       "Exactly one new tab must appear after explicit B action");
     await take(await post(b, originB, { op: "release" }), 200);
     proof = { steelLiveQa: "PASS", nextWorkers: 2,
       launcherPids: hosts.map(host => host.child.pid), actualSteelService: true,
-      sharedSessionObserved: true, priorTabs: initial,
+      sharedSessionObserved: true, sameSteelIdentityBeforeAfterCrash: true,
+      priorTabs: initial,
       tabsBeforeCrash: countBeforeCrash, tabsAfterCrash: recovered.tabs.length,
       tabsAfterExplicitAction: deliberate.tabs.length,
       noAutomaticReplay: true, nonmemberDenied: true,
