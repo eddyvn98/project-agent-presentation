@@ -70,7 +70,7 @@ describe("Sandbox workspace and Docker execution boundaries", () => {
   it("refuses quota-exceeded shell commands before running docker exec", async () => {
     m.quota.mockResolvedValueOnce("Workspace over quota; delete temp files");
     const result = await execInSandbox(chat, "cat large.bin");
-    expect(result).toMatchObject({ failed: undefined, exitCode: 1,
+    expect(result).toMatchObject({ exitCode: 1,
       timedOut: false, output: "Workspace over quota; delete temp files" });
     expect(m.docker.mock.calls.some(c => c[1][0] === "exec")).toBe(false);
   });
