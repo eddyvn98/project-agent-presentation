@@ -122,8 +122,8 @@ describe("Agent-generated file source, MIME and download boundaries", () => {
     expect(result.files).toHaveLength(2);
     expect(result.files[0]).toMatchObject({ name: "answer.txt", mimeType: "text/plain" });
     expect(result.files[1]).toMatchObject({
-      name: "existing.pdf",
-      resource: { boardId: "board-qa", resourceId: "r-qa", size: 300 },
+      name: "existing.pdf", size: 300,
+      resource: { boardId: "board-qa", resourceId: "r-qa" },
     });
     expect(m.write).toHaveBeenCalledOnce();
     expect(result.resultText).toBe("Ready.");
