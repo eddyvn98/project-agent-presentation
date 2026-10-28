@@ -154,8 +154,13 @@ describe("Browser Agent disconnection and late completion fences", () => {
     const qa = fake();
     const never = vi.fn(async () => new Promise<string>(() => {}));
     const pending = withBrowserOp(qa.session, never);
+    // Attach rejection handling before fake timers can settle the promise.
+    const settled = pending.then(
+      () => ({ error: null as Error | null }),
+      (error: Error) => ({ error }),
+    );
     await vi.advanceTimersByTimeAsync(35_000);
-    await expect(pending).rejects.toThrow(/timed out after 35 seconds/);
+    expect((await settled).error?.message).toMatch(/timed out after 35 seconds/);
     expect(never).toHaveBeenCalledOnce();
     expect(qa.close).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
