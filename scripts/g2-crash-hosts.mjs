@@ -58,7 +58,7 @@ async function assertPortFree(port) {
     server.listen(port, "localhost", () => server.close(done));
   });
 }
-export async function startCrashHosts(env = process.env) {
+export async function startCrashHosts(env = process.env, options = {}) {
   const { a, b, paths } = crashEnvironment(env);
   await assertPortFree(3005);
   await assertPortFree(3006);
@@ -73,6 +73,9 @@ export async function startCrashHosts(env = process.env) {
       PROJECT_AGENT_RUNTIME_DIFY_API_KEY: "g2-fixture-no-provider",
       PROJECT_AGENT_DIFY_API_URL: "http://127.0.0.1:3998",
       PROJECT_AGENT_RUNTIME_DIFY_API_URL: "http://127.0.0.1:3998",
+      // Steel shared Project Browser uses its own Mongo control, not G2 task leases.
+      ...(options.disableG2Ownership === true ?
+        { PROJECT_AGENT_G2_BROWSER_OWNERSHIP: "0" } : {}),
     };
     const binary = join(root, "node_modules", "next", "dist", "bin", "next");
     const child = spawn(process.execPath,
