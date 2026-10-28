@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { steelQaLiveGate } from "../../scripts/steel-host-qa-guard.mjs";
 
 const valid = () => ({
@@ -62,4 +63,14 @@ test("Rejects unsafe session lifetime and malformed project/owner identities", (
   }
   assert.throws(() => steelQaLiveGate({ ...valid(),
     P7_OWNER_EMAIL: "owner-without-at" }), /identities/);
+});
+
+test("Real Steel CLI refuses to spawn anything without explicit QA authorization", () => {
+  const script = new URL("../../scripts/steel-host-two-next-crash.mjs", import.meta.url);
+  const child = spawnSync(process.execPath, [script.pathname], {
+    env: { NODE_ENV: "test", PATH: process.env.PATH ?? "" },
+    encoding: "utf8", timeout: 10000,
+  });
+  assert.notEqual(child.status, 0);
+  assert.match(child.stderr, /Explicit live Steel opt-in/);
 });
