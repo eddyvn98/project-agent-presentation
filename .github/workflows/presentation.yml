@@ -455,6 +455,13 @@ jobs:
           set -o pipefail
           mkdir -p test-results/c7
           npm run test:c7:mongo | tee test-results/c7/mongo-chaos.json
+      - name: Real Mongo Shared Steel registry fault and CAS QA (Steel mocked)
+        env:
+          STEEL_REGISTRY_REAL_MONGO_QA: "1"
+          STEEL_REGISTRY_MONGO_URI: mongodb://127.0.0.1:27019
+        run: |
+          set -o pipefail
+          npx vitest run --config vitest.agent.config.ts tests/agent/steel-registry-real-mongo.test.ts | tee test-results/c7/steel-registry-real-mongo.log
       - name: Preserve C7 fault-injection evidence
         if: always()
         uses: actions/upload-artifact@v4
