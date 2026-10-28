@@ -44,6 +44,8 @@ function fakeSession() {
     bringToFront: vi.fn(async () => {}),
     goto: vi.fn(async () => {}),
     viewportSize: vi.fn(() => ({ width: 1200, height: 900 })),
+    mouse: { click: vi.fn(async () => {}), wheel: vi.fn(async () => {}) },
+    keyboard: { insertText: vi.fn(async () => {}), press: vi.fn(async () => {}) },
   };
   return { scopeId: projectBrowserKey(project, owner), steelId: "steel-new", owner,
     persistent: true, activeAgentTaskId: task, operationCount: 7,
@@ -131,6 +133,31 @@ describe("Project Browser startup, handback and stale attachment races", () => {
     await openProjectBrowser(project, owner);
     expect(obsolete.close).toHaveBeenCalledOnce();
     expect(session.persistent).toBe(true);
+  });
+  it("sends human click, wheel and typing to the live shared browser", async () => {
+    await projectBrowserOperation(session, { op: "click", x: 0.5, y: 0.5 });
+    expect(session.page.mouse.click).toHaveBeenCalledWith(600, 450);
+    await projectBrowserOperation(session, { op: "wheel", deltaY: 450 });
+    expect(session.page.mouse.wheel).toHaveBeenCalledWith(0, 450);
+    await projectBrowserOperation(session, { op: "type", text: "login@example.test" });
+    expect(session.page.keyboard.insertText).toHaveBeenCalledWith("login@example.test");
+    await projectBrowserOperation(session, { op: "key", key: "Enter" });
+    expect(session.page.keyboard.press).toHaveBeenCalledWith("Enter");
+  });
+  it("rejects input without takeover and invalid remote browser coordinates", async () => {
+    m.control.mockResolvedValueOnce({ paused: false });
+    await expect(projectBrowserOperation(session, { op: "click", x: 0.2, y: 0.3 }))
+      .rejects.toThrow(/Take control/);
+    expect(session.page.mouse.click).not.toHaveBeenCalled();
+    for (const x of [-1, 2, Infinity, NaN]) {
+      await expect(projectBrowserOperation(session, { op: "click", x, y: 0.5 }))
+        .rejects.toThrow(/Invalid browser click/);
+    }
+    await expect(projectBrowserOperation(session, { op: "type", text: "x".repeat(1001) }))
+      .rejects.toThrow(/Invalid browser input/);
+    await expect(projectBrowserOperation(session, { op: "key", key: "Alt+F4" }))
+      .rejects.toThrow(/Unsupported remote key/);
+    expect(session.page.keyboard.insertText).not.toHaveBeenCalled();
   });
   it("treats a failed statistics touch as noncritical to an allowed human navigation", async () => {
     m.touch.mockRejectedValueOnce(new Error("synthetic telemetry timeout"));
