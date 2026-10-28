@@ -62,7 +62,7 @@ export async function ensureProjectRecord(scope: string, projectId: string,
       await finishPendingRelease(coll, identity, row.releasePendingSteelId);
       continue;
     }
-    if (row.reservedSteelId && row.state !== "active")
+    if (row.reservedSteelId && row.state !== "active" && row.state !== "creating")
       throw new Error("Reserved Steel creation outcome unknown; reconcile before reopening");
     if (row.state === "closed" && !allowReopen)
       throw new Error("User closed the Project browser. Reopen it from the right panel.");
