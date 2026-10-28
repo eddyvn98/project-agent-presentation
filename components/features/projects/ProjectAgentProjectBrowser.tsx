@@ -29,9 +29,12 @@ function viewerUrl(raw: string, interactive: boolean): string | null {
   const local = ["localhost", "127.0.0.1"].includes(window.location.hostname) &&
     ["localhost", "127.0.0.1"].includes(url.hostname);
   if (!["http:", "https:"].includes(url.protocol) || (url.origin !== window.location.origin && !local)) return null;
-  url.searchParams.set("interactive", String(interactive));
-  url.searchParams.set("hideOverlay", "true");
-  url.searchParams.set("hideInteractionDialog", "true");
+  // The authenticated proxy maps one exact URL; never append player params to it.
+  if (!url.pathname.startsWith("/private-steel-viewer/projects/")) {
+    url.searchParams.set("interactive", String(interactive));
+    url.searchParams.set("hideOverlay", "true");
+    url.searchParams.set("hideInteractionDialog", "true");
+  }
   return url.toString();
 }
 /** One project-level browser panel; the website canvas contains no app controls. */
