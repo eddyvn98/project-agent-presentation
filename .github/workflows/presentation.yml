@@ -462,6 +462,42 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  c8_c11_batch_qa:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27019:27017
+    env:
+      L10_ISOLATED_QA: "1"
+      L10_MONGO_URI: mongodb://127.0.0.1:27019
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false mongodb@6
+      - name: C8-C11 bounded resources, Vault isolation and fault injection
+        run: npm run test:c8c11:unit
+      - name: C8 real Mongo virtual 48-hour concurrent soak
+        run: |
+          set -o pipefail
+          mkdir -p test-results/c8-c11
+          npm run test:l10:soak | tee test-results/c8-c11/mongo-soak.json
+      - name: Preserve C8-C11 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: c8-c11-batch-qa
+          path: test-results/c8-c11/
+          if-no-files-found: ignore
+          retention-days: 14
+
   cross_browser:
     needs: quality
     runs-on: ubuntu-latest
