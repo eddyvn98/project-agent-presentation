@@ -95,16 +95,16 @@ describe("Project Browser registry survives worker restart without replaying bro
       .rejects.toThrow(/User closed/);
     expect(createSteelRemote).toHaveBeenCalledOnce();
   });
-  it("returns to a retryable vacant state when remote creation fails before commit", async () => {
+  it("quarantines a failed Steel creation with no returned remote ID", async () => {
     vi.mocked(createSteelRemote).mockRejectedValueOnce(
-      new Error("synthetic Steel unavailable"));
+      new Error("synthetic lost create response"));
     await expect(ensureProjectRecord(scope, project, owner))
-      .rejects.toThrow("synthetic Steel unavailable");
-    expect(row).toMatchObject({ state: "vacant", generation: 1 });
+      .rejects.toThrow(/creation outcome is unknown/);
+    expect(row).toMatchObject({ state: "creating", generation: 1, claimUntil: 0 });
     expect(row?.steelId).toBeUndefined();
-    await ensureProjectRecord(scope, project, owner);
-    expect(row).toMatchObject({ state: "active", generation: 2 });
-    expect(createSteelRemote).toHaveBeenCalledTimes(2);
+    await expect(ensureProjectRecord(scope, project, owner, undefined, true))
+      .rejects.toThrow(/reconcile Steel sessions/);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
   });
   it("never auto-reopens a user-closed Project browser after another worker restarts", async () => {
     await ensureProjectRecord(scope, project, owner);
