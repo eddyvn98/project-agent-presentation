@@ -5,7 +5,8 @@ import { createSteelRemote, releaseSteelRemote } from "./steel-session";
 type State = "vacant" | "creating" | "active" | "closed";
 export interface ProjectBrowserRecord {
   _id: string; projectId: string; owner: string; state: State;
-  generation: number; steelId?: string; expiresAt?: number; activeTabIndex?: number;
+  generation: number; steelId?: string; releasePendingSteelId?: string;
+  expiresAt?: number; activeTabIndex?: number;
   claimToken?: string; claimUntil?: number; lastUsedAt: number;
 }
 const COLLECTION = "projectAgentSharedBrowsers";
@@ -24,6 +25,15 @@ async function initial(scope: string, projectId: string, owner: string) {
     if (!/E11000|duplicate key/i.test(String(error))) throw error;
   }
   return coll;
+}
+/** Keep the exact remote ID until release succeeds. Safe to retry across workers. */
+async function finishPendingRelease(
+  coll: Awaited<ReturnType<typeof collection>>,
+  identity: { _id: string; projectId: string; owner: string }, steelId: string,
+) {
+  await releaseSteelRemote(steelId);
+  await coll.updateOne({ ...identity, releasePendingSteelId: steelId },
+    { $unset: { releasePendingSteelId: "" } });
 }
 export async function projectRecordByKey(scope: string, owner: string) {
   return (await collection()).findOne({ _id: scope, owner: normalize(owner),
@@ -45,6 +55,12 @@ export async function ensureProjectRecord(scope: string, projectId: string,
     if (signal?.aborted) throw signal.reason ?? new Error("Task stopped");
     const row = await coll.findOne(identity);
     if (!row) throw new Error("Project browser record was not initialized");
+    // A previous close may have committed locally before Steel acknowledged release.
+    // Never create a replacement while the remote session is still pending cleanup.
+    if (row.releasePendingSteelId) {
+      await finishPendingRelease(coll, identity, row.releasePendingSteelId);
+      continue;
+    }
     if (row.state === "closed" && !allowReopen)
       throw new Error("User closed the Project browser. Reopen it from the right panel.");
     if (row.state === "active" && row.expiresAt && row.expiresAt > Date.now() + 1000)
@@ -57,6 +73,10 @@ export async function ensureProjectRecord(scope: string, projectId: string,
       await new Promise(resolve => setTimeout(resolve, 300));
       continue;
     }
+    // Release expired remote session before clearing its ID from the Mongo record.
+    // If Steel is unavailable, the old ID remains retryable and no new session opens.
+    if (row.state === "active" && row.steelId)
+      await releaseSteelRemote(row.steelId);
     const claimToken = randomUUID();
     const claimed = await coll.updateOne({ ...identity, generation: row.generation,
       state: row.state, ...(row.claimToken ? { claimToken: row.claimToken } : {}) },
@@ -64,7 +84,6 @@ export async function ensureProjectRecord(scope: string, projectId: string,
       lastUsedAt: now, activeTabIndex: 0 }, $inc: { generation: 1 },
       $unset: { steelId: "", expiresAt: "" } });
     if (claimed.modifiedCount !== 1) continue;
-    if (row.steelId) await releaseSteelRemote(row.steelId).catch(() => {});
     let steelId: string | undefined;
     try {
       const created = await createSteelRemote();
@@ -105,10 +124,15 @@ export async function closeProjectRecord(scope: string, projectId: string, owner
   const identity = { _id: scope, projectId, owner: normalize(owner) };
   const previous = await coll.findOne(identity);
   if (!previous) return;
+  if (previous.releasePendingSteelId)
+    await finishPendingRelease(coll, identity, previous.releasePendingSteelId);
+  // An already-closed record remains closed even if cleanup is retried.
+  if (previous.state === "closed" && !previous.steelId) return;
   const closed = await coll.updateOne({ ...identity, generation: previous.generation },
-    { $set: { state: "closed", lastUsedAt: Date.now() },
+    { $set: { state: "closed", lastUsedAt: Date.now(),
+        ...(previous.steelId ? { releasePendingSteelId: previous.steelId } : {}) },
       $inc: { generation: 1 },
       $unset: { steelId: "", expiresAt: "", claimToken: "", claimUntil: "" } });
   if (closed.modifiedCount !== 1) throw new Error("Browser close raced with session creation");
-  if (previous.steelId) await releaseSteelRemote(previous.steelId);
+  if (previous.steelId) await finishPendingRelease(coll, identity, previous.steelId);
 }
