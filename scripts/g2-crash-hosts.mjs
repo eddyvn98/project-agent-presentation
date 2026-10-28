@@ -58,6 +58,22 @@ async function assertPortFree(port) {
     server.listen(port, "localhost", () => server.close(done));
   });
 }
+/** Exact QA-only worker config, with an opt-in Steel/G2 ownership separation. */
+export function crashHostLaunchEnvironment(env, origin, options = {}) {
+  if (options.disableG2Ownership !== undefined &&
+      typeof options.disableG2Ownership !== "boolean")
+    throw new Error("Invalid G2 worker override");
+  return {
+    ...env, NEXT_TELEMETRY_DISABLED: "1", NEXTAUTH_URL: origin,
+    P8_QA_ALLOWED_ORIGIN: origin, PROJECT_AGENT_ALLOW_UPLOADS: "0",
+    PROJECT_AGENT_DIFY_API_KEY: "g2-fixture-no-provider",
+    PROJECT_AGENT_RUNTIME_DIFY_API_KEY: "g2-fixture-no-provider",
+    PROJECT_AGENT_DIFY_API_URL: "http://127.0.0.1:3998",
+    PROJECT_AGENT_RUNTIME_DIFY_API_URL: "http://127.0.0.1:3998",
+    ...(options.disableG2Ownership ?
+      { PROJECT_AGENT_G2_BROWSER_OWNERSHIP: "0" } : {}),
+  };
+}
 export async function startCrashHosts(env = process.env, options = {}) {
   const { a, b, paths } = crashEnvironment(env);
   await assertPortFree(3005);
@@ -65,18 +81,7 @@ export async function startCrashHosts(env = process.env, options = {}) {
   const hosts = [];
   for (const [i, origin] of [a, b].entries()) {
     const root = paths[i];
-    const environment = {
-      ...env, NEXT_TELEMETRY_DISABLED: "1", NEXTAUTH_URL: origin,
-      P8_QA_ALLOWED_ORIGIN: origin,
-      PROJECT_AGENT_ALLOW_UPLOADS: "0",
-      PROJECT_AGENT_DIFY_API_KEY: "g2-fixture-no-provider",
-      PROJECT_AGENT_RUNTIME_DIFY_API_KEY: "g2-fixture-no-provider",
-      PROJECT_AGENT_DIFY_API_URL: "http://127.0.0.1:3998",
-      PROJECT_AGENT_RUNTIME_DIFY_API_URL: "http://127.0.0.1:3998",
-      // Steel shared Project Browser uses its own Mongo control, not G2 task leases.
-      ...(options.disableG2Ownership === true ?
-        { PROJECT_AGENT_G2_BROWSER_OWNERSHIP: "0" } : {}),
-    };
+    const environment = crashHostLaunchEnvironment(env, origin, options);
     const binary = join(root, "node_modules", "next", "dist", "bin", "next");
     const child = spawn(process.execPath,
       [binary, "dev", "-H", "localhost", "-p", String(3005 + i)],
