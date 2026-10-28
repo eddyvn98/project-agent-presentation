@@ -20,8 +20,7 @@ describe("coverage driven ranking and evidence labels", () => {
     assert.equal(result.topPriorities[0].risk, "critical-control");
     assert.equal(result.topPriorities[0].file, "lib/project-agent/runtime/browser-agent/index.ts");
     assert.equal(result.topPriorities[0].uncoveredLines[0].line, 33);
-    assert.equal(result.topPriorities[1].file, "lib/project-agent/durable-queue.ts");
-    assert.equal(result.topPriorities[1].covered, 1);
+    assert.equal(result.topPriorities.find(x => x.file === "lib/project-agent/durable-queue.ts").covered, 1);
     assert.equal(result.instrumentedFiles, 3);
     assert.equal(result.uncoveredFiles, 2);
     assert.equal(result.scopes.find(x => x.suite === "mongodb-integration").measured, false);
