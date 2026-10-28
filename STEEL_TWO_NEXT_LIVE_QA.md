@@ -79,3 +79,21 @@ gate and existing mock/integration tests run, not a real Steel host acceptance.
 through the surviving Next worker, then shuts down only its owned child
 processes. An incomplete cleanup is a FAIL; inspect the isolated Steel
 account for an orphaned test session before reusing its QA Project.
+
+## Steel session identity acceptance (post-PR #17)
+
+The owner-only Project Browser status includes an opaque 24-hex `qaSessionProof`
+ONLY when the server is nonproduction, Shared Steel is enabled and all three
+opt-ins are present: `STEEL_QA_ALLOW_LIVE=1`,
+`STEEL_QA_DB_ISOLATION_ATTESTED=1`,
+`G2_QA_DB_ISOLATION_ATTESTED=1`. It is a scoped SHA-256 digest of the
+Project Browser key, normalized owner and remote Steel session ID; it is **not**
+a credential. Raw Steel session IDs, bearer tokens and CDP URLs never appear
+in this field. It is absent by default and in production.
+
+The live harness compares this digest from A and B immediately after attach,
+after the A-created blank tab, after the SIGKILL/reconnect on B and after B's
+fresh deliberate action. A mismatch FAILS acceptance even if tab counts happen
+to match. This proves identity continuity on the host API path; it does not
+prove the external site's actions are transactionally exactly-once or verify
+the unauthenticated Steel WebRTC viewer gateway.

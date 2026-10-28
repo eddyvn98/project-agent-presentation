@@ -110,11 +110,27 @@ export async function stopProjectBrowser(projectId: string, owner: string) {
   await clearProjectControl(id);
   await closeBrowserSession(id);
 }
+/** QA-only opaque proof for comparing the same Steel ID across separate Next workers.
+ * Never return a raw Steel session identifier, websocket URL or bearer token. */
+function steelQaSessionProof(session: BrowserSession): string | undefined {
+  if (!["development", "test"].includes(process.env.NODE_ENV ?? "") ||
+      process.env.STEEL_QA_ALLOW_LIVE !== "1" ||
+      process.env.STEEL_QA_DB_ISOLATION_ATTESTED !== "1" ||
+      process.env.G2_QA_DB_ISOLATION_ATTESTED !== "1" ||
+      process.env.PROJECT_AGENT_STEEL_BROWSER !== "1" ||
+      !session.persistent || !session.steelId || !session.scopeId || !session.owner)
+    return undefined;
+  return createHash("sha256").update(["steel-qa-v1", session.scopeId,
+    session.owner.trim().toLowerCase(), session.steelId].join("\0"))
+    .digest("hex").slice(0, 24);
+}
 export async function projectBrowserStatus(session: BrowserSession) {
   const id = session.scopeId!;
   const pages = session.context.pages().filter(page => !page.isClosed());
   const control = await readProjectControl(id);
+  const qaSessionProof = steelQaSessionProof(session);
   return { connected: true, viewerUrl: session.viewerUrl ?? null, control,
+    ...(qaSessionProof ? { qaSessionProof } : {}),
     tabs: pages.map((page, index) => ({ index, location: publicBrowserWatchLocation(page.url()),
       active: page === session.page })),
     viewport: session.page.viewportSize() ?? { width: 1280, height: 800 },
