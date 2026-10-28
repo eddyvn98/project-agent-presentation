@@ -117,19 +117,28 @@ export async function ensureProjectRecord(scope: string, projectId: string,
         const latest = await coll.findOne(identity);
         if (latest?.state === "active" && latest.steelId === steelId)
           throw error;
+        const mismatched = Boolean(reservedId && steelId !== reservedId);
         let pending = false;
         if (latest?.state === "creating" && latest.claimToken === claimToken) {
           const marked = await coll.updateOne({ ...identity, state: "creating", claimToken },
-            { $set: { state: "vacant", releasePendingSteelId: steelId },
-              $unset: { claimToken: "", claimUntil: "", reservedSteelId: "" } });
+            mismatched ? {
+              // The supplied reservation might also exist remotely. Keep both IDs
+              // until an operator verifies the actual state on this Steel server.
+              $set: { claimUntil: 0, releasePendingSteelId: steelId },
+            } : {
+              $set: { state: "vacant", releasePendingSteelId: steelId },
+              $unset: { claimToken: "", claimUntil: "", reservedSteelId: "" },
+            });
           pending = marked.modifiedCount === 1;
         } else if (latest?.state === "closed" && !latest.steelId &&
                    !latest.releasePendingSteelId) {
           // Stop may have won while the Steel creation request was in flight.
           const marked = await coll.updateOne({ ...identity, state: "closed",
             generation: latest.generation, releasePendingSteelId: { $exists: false } },
-          { $set: { releasePendingSteelId: steelId },
-            $unset: { reservedSteelId: "" } });
+          mismatched ? { $set: { releasePendingSteelId: steelId } } :
+            { $set: { releasePendingSteelId: steelId },
+              $unset: { reservedSteelId: "" } });
+
           pending = marked.modifiedCount === 1;
         }
         try {
@@ -140,6 +149,8 @@ export async function ensureProjectRecord(scope: string, projectId: string,
             pending ? "Project browser creation failed; Steel cleanup is pending" :
               "Project browser creation failed; Steel cleanup was not confirmed");
         }
+        if (mismatched)
+          throw new Error("Steel did not honor the reserved session ID; reconcile Steel sessions before retry");
       } else {
         // An unsuccessful POST response does not prove Steel rejected creation:
         // the remote session might exist even if the ID never reached this worker.
