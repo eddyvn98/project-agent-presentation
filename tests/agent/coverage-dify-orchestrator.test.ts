@@ -26,6 +26,9 @@ vi.mock("../../lib/project-agent/runtime/run-agent", () => ({
   isRuntimeEnabled: m.runtimeEnabled, runRuntimeAgent: vi.fn(),
 }));
 vi.mock("../../lib/project-agent/auto-compact", () => ({ autoCompactIfNeeded: m.compact }));
+vi.mock("../../lib/project-agent/visual-review", () => ({
+  buildVisualReviewContactSheet: vi.fn(), renderProjectAgentFile: vi.fn(),
+}));
 vi.mock("../../lib/project-agent/deliverable-review", () => ({
   buildVisualReviewFiles: vi.fn(), buildVisualReviewQuery: vi.fn(),
   getReviewDecision: vi.fn(),
