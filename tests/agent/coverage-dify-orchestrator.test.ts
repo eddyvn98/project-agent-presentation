@@ -26,6 +26,17 @@ vi.mock("../../lib/project-agent/runtime/run-agent", () => ({
   isRuntimeEnabled: m.runtimeEnabled, runRuntimeAgent: vi.fn(),
 }));
 vi.mock("../../lib/project-agent/auto-compact", () => ({ autoCompactIfNeeded: m.compact }));
+vi.mock("../../lib/project-agent/deliverable-review", () => ({
+  buildVisualReviewFiles: vi.fn(), buildVisualReviewQuery: vi.fn(),
+  getReviewDecision: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/reference-review", () => ({
+  buildReferenceReview: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/deterministic-review", () => ({
+  buildLintFixQuery: vi.fn(), lintDeliverables: vi.fn(),
+  uploadLintSheets: vi.fn(), MAX_LOCAL_FIX_ROUNDS: 2,
+}));
 import { getEndpoint, isProjectAgentDifyConfigured, projectAgentDifyUser,
   runProjectAgentTask } from "../../lib/project-agent/dify-agent";
 const id = "pat_012345abcdef";
