@@ -67,7 +67,9 @@
     "test:c7:mongo": "node scripts/g2-multiworker-browser-qa.mjs",
     "test:c8c11:unit": "vitest run --config vitest.agent.config.ts tests/agent/c8-admission-soak.test.ts tests/agent/c9-watch-retention-soak.test.ts tests/agent/c10-vault-soak-security.test.ts tests/agent/c11-browser-fault-budget.test.ts",
     "test:coverage-driven:core": "node --test tests/coverage-driven-core.test.mjs",
-    "test:coverage-driven:queue": "vitest run --config vitest.agent.config.ts tests/agent/coverage-durable-queue.test.ts"
+    "test:coverage-driven:queue": "vitest run --config vitest.agent.config.ts tests/agent/coverage-durable-queue.test.ts",
+    "test:steel:guard": "node --test tests/node/steel-host-qa-guard.test.mjs",
+    "test:host:steel:crash": "node scripts/steel-host-two-next-crash.mjs"
   },
   "peerDependencies": {
     "next": ">=14",
