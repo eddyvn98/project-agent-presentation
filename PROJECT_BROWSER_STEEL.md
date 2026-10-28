@@ -65,8 +65,10 @@ PROJECT_AGENT_STEEL_RESERVED_SESSION_IDS=1
 
 This flag defaults **off**. Enable it only after confirming the exact deployed
 Steel Cloud or self-hosted server supports and preserves the requested
-`sessionId`. With the flag on, a mismatched returned ID is rejected and the
-unexpected remote ID is released; a response timeout retains the reserved UUID
+`sessionId`. With the flag on, a mismatched returned ID is rejected:
+the unexpected remote ID is released (or stored for retry if release fails), while
+the **original reserved UUID remains in Mongo** until an operator checks whether
+it also exists remotely. A response timeout likewise retains the reserved UUID
 and fails closed pending operator reconciliation. An in-flight reservation blocks
 explicit reopen after Stop until the remote outcome is known.
 
