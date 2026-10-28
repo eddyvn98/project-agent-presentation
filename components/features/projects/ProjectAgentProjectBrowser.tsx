@@ -99,7 +99,7 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
     sendHumanInput("wheel", { deltaY: Math.max(-1200, Math.min(1200, event.deltaY)) });
   };
   const viewerKey = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!paused || event.isComposing) return;
+    if (!paused || event.nativeEvent.isComposing) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
       event.preventDefault(); sendHumanInput("key", { key: "ControlOrMeta+A" });
     } else if (!event.altKey && !event.ctrlKey && !event.metaKey &&
