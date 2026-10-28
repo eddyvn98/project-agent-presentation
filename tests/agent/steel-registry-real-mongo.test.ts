@@ -1,0 +1,131 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { randomBytes } from "node:crypto";
+import { createRequire } from "node:module";
+
+vi.mock("@/services/mongodb/client", () => ({ getMongoAiDb: vi.fn() }));
+vi.mock("../../lib/project-agent/runtime/browser-agent/steel-session", () => ({
+  createSteelRemote: vi.fn(), releaseSteelRemote: vi.fn(),
+}));
+import { getMongoAiDb } from "@/services/mongodb/client";
+import { createSteelRemote, releaseSteelRemote }
+  from "../../lib/project-agent/runtime/browser-agent/steel-session";
+import {
+  ensureProjectRecord, findProjectRecord, closeProjectRecord,
+} from "../../lib/project-agent/runtime/browser-agent/project-registry";
+
+// Normal unit/coverage CI does not require the optional Mongo driver or a live database.
+// A dedicated container-backed CI job opts into the tests explicitly.
+const enabled = process.env.STEEL_REGISTRY_REAL_MONGO_QA === "1";
+const suite = enabled ? describe : describe.skip;
+const project = "steel_registry_isolated_qa", owner = "owner@qa.example.test";
+let client: any, db: any, dbName = "", scope = "", marker = "";
+const registry = () => db.collection("projectAgentSharedBrowsers");
+const row = () => registry().findOne({ _id: scope });
+
+suite("Project Steel registry against isolated real MongoDB", () => {
+  beforeAll(async () => {
+    const raw = process.env.STEEL_REGISTRY_MONGO_URI ?? "";
+    let url: URL;
+    try { url = new URL(raw); }
+    catch { throw Error("Real-Mongo Steel QA requires an explicit local URI"); }
+    if (url.protocol !== "mongodb:" || url.hostname !== "127.0.0.1" ||
+        url.port !== "27019" || !["", "/"].includes(url.pathname) ||
+        url.username || url.password || url.search || url.hash)
+      throw Error("Steel registry QA permits only bare mongodb://127.0.0.1:27019");
+    const MongoClient = createRequire(import.meta.url)("mongodb").MongoClient;
+    marker = randomBytes(16).toString("hex");
+    dbName = "steel_registry_qa_" + marker;
+    client = new MongoClient(raw, { directConnection: true, serverSelectionTimeoutMS: 5000 });
+    await client.connect();
+    db = client.db(dbName);
+    expect(await db.listCollections().toArray()).toHaveLength(0);
+    await db.collection("qa_run_marker").insertOne({
+      _id: "created-by-qa", marker, purpose: "steel-registry-real-mongo",
+    });
+  });
+  afterAll(async () => {
+    try {
+      if (db && marker) {
+        const stored = await db.collection("qa_run_marker").findOne({ _id: "created-by-qa" });
+        if (stored?.marker !== marker || stored?.purpose !== "steel-registry-real-mongo")
+          throw Error("QA cleanup refused: invalid database ownership marker");
+        await db.dropDatabase();
+      }
+    } finally { await client?.close(); }
+  });
+  beforeEach(() => {
+    scope = "pb_steel_qa_" + randomBytes(12).toString("hex");
+    vi.clearAllMocks();
+    vi.mocked(getMongoAiDb).mockResolvedValue(db);
+    vi.mocked(createSteelRemote).mockResolvedValue({
+      id: "steel-real-mongo-initial", timeout: 900_000,
+    });
+    vi.mocked(releaseSteelRemote).mockResolvedValue(undefined);
+  });
+
+  it("two concurrent callers use one CAS-created Steel identity", async () => {
+    const [first, second] = await Promise.all([
+      ensureProjectRecord(scope, project, owner),
+      ensureProjectRecord(scope, project, owner),
+    ]);
+    expect(first.steelId).toBe("steel-real-mongo-initial");
+    expect(second.steelId).toBe(first.steelId);
+    expect(await row()).toMatchObject({ state: "active", generation: 1,
+      steelId: first.steelId });
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    expect(releaseSteelRemote).not.toHaveBeenCalled();
+  });
+
+  it("persists release after an outage and does not reopen prematurely", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    vi.mocked(releaseSteelRemote).mockRejectedValue(
+      new Error("synthetic remote service offline"));
+    await expect(closeProjectRecord(scope, project, owner))
+      .rejects.toThrow(/offline/);
+    expect(await row()).toMatchObject({ state: "closed", generation: 2,
+      releasePendingSteelId: "steel-real-mongo-initial" });
+    await expect(ensureProjectRecord(scope, project, owner, undefined, true))
+      .rejects.toThrow(/offline/);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    vi.mocked(releaseSteelRemote).mockResolvedValue(undefined);
+    vi.mocked(createSteelRemote).mockResolvedValueOnce({
+      id: "steel-real-mongo-reopened", timeout: 900_000,
+    });
+    const reopened = await ensureProjectRecord(scope, project, owner, undefined, true);
+    expect(reopened.steelId).toBe("steel-real-mongo-reopened");
+    expect((await row()).releasePendingSteelId).toBeUndefined();
+    expect(createSteelRemote).toHaveBeenCalledTimes(2);
+  });
+
+  it("persists an orphaned late creation when Stop wins and release fails", async () => {
+    vi.mocked(createSteelRemote).mockImplementationOnce(async () => {
+      await closeProjectRecord(scope, project, owner);
+      return { id: "steel-real-mongo-late", timeout: 900_000 };
+    });
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
+      new Error("synthetic release failed"));
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/cleanup is pending/);
+    expect(await row()).toMatchObject({ state: "closed", generation: 2,
+      releasePendingSteelId: "steel-real-mongo-late" });
+    await closeProjectRecord(scope, project, owner);
+    expect((await row()).releasePendingSteelId).toBeUndefined();
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/User closed/);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+  });
+
+  it("isolates a Project browser session from a different owner or Project", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    expect(await findProjectRecord(scope, project, "intruder@qa.example.test"))
+      .toBeNull();
+    expect(await findProjectRecord(scope, "other-project", owner)).toBeNull();
+    await closeProjectRecord(scope, project, "intruder@qa.example.test");
+    expect(await row()).toMatchObject({ state: "active",
+      steelId: "steel-real-mongo-initial" });
+    await expect(ensureProjectRecord(scope, project,
+      "intruder@qa.example.test", undefined, true))
+      .rejects.toThrow(/not initialized/);
+    expect(releaseSteelRemote).not.toHaveBeenCalled();
+  });
+});
