@@ -4,6 +4,7 @@ import { activeBrowserSession, closeBrowserSession, getBrowserSession,
 import { notifyBrowserIntervention } from "./control";
 import { publicBrowserWatchLocation } from "./watch";
 import { assertPublicHttpUrl } from "../web-security";
+import { privateProjectViewerUrl } from "./viewer-gateway";
 import { closeProjectRecord, ensureProjectRecord, findProjectRecord,
   projectRecordByKey, touchProjectRecord, updateProjectActiveTab } from "./project-registry";
 import { claimProjectAgent, clearProjectControl, handbackProjectControl,
@@ -124,12 +125,16 @@ function steelQaSessionProof(session: BrowserSession): string | undefined {
     session.owner.trim().toLowerCase(), session.steelId].join("\0"))
     .digest("hex").slice(0, 24);
 }
-export async function projectBrowserStatus(session: BrowserSession) {
+export async function projectBrowserStatus(session: BrowserSession, projectId?: string) {
   const id = session.scopeId!;
   const pages = session.context.pages().filter(page => !page.isClosed());
   const control = await readProjectControl(id);
   const qaSessionProof = steelQaSessionProof(session);
-  return { connected: true, viewerUrl: session.viewerUrl ?? null, control,
+  const privateViewer = process.env.PROJECT_AGENT_STEEL_PRIVATE_VIEWER === "1";
+  const viewerUrl = privateViewer ?
+    (session.viewerUrl && projectId ? privateProjectViewerUrl(projectId) : null) :
+    session.viewerUrl ?? null;
+  return { connected: true, viewerUrl, control,
     ...(qaSessionProof ? { qaSessionProof } : {}),
     tabs: pages.map((page, index) => ({ index, location: publicBrowserWatchLocation(page.url()),
       active: page === session.page })),
