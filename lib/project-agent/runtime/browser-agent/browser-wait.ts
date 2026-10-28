@@ -5,6 +5,7 @@ import { browserControlState, waitForBrowserIntervention } from "./control";
 export async function waitForPageOrIntervention(
   page: Page, action: BrowserAction, taskId: string, signal?: AbortSignal,
 ): Promise<{ interrupted: boolean; text: string }> {
+  if (signal?.aborted) throw signal.reason ?? new Error("Task was cancelled");
   const timeout = (action.seconds ?? 10) * 1000;
   const settlePage = async () => {
     if (action.find) {
@@ -24,6 +25,7 @@ export async function waitForPageOrIntervention(
   const revision = browserControlState(taskId).revision;
   const relayAbort = () => interrupt.abort(signal?.reason ?? new Error("Task was cancelled"));
   signal?.addEventListener("abort", relayAbort, { once: true });
+  if (signal?.aborted) relayAbort();
   try {
     const result = await Promise.race([
       settlePage().then(text => ({ interrupted: false, text })),
