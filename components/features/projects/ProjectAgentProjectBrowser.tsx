@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type WheelEvent } from "react";
 import { Globe, Monitor, Plus, Smartphone, X } from "lucide-react";
 import { CANVAS_LAYOUT_STYLE } from "./ProjectAgentFilePreview";
 import type { ActivityLanguage } from "@/lib/project-agent/activity-language";
@@ -29,9 +29,12 @@ function viewerUrl(raw: string, interactive: boolean): string | null {
   const local = ["localhost", "127.0.0.1"].includes(window.location.hostname) &&
     ["localhost", "127.0.0.1"].includes(url.hostname);
   if (!["http:", "https:"].includes(url.protocol) || (url.origin !== window.location.origin && !local)) return null;
-  url.searchParams.set("interactive", String(interactive));
-  url.searchParams.set("hideOverlay", "true");
-  url.searchParams.set("hideInteractionDialog", "true");
+  // The authenticated proxy maps one exact URL; never append player params to it.
+  if (!url.pathname.startsWith("/private-steel-viewer/projects/")) {
+    url.searchParams.set("interactive", String(interactive));
+    url.searchParams.set("hideOverlay", "true");
+    url.searchParams.set("hideInteractionDialog", "true");
+  }
   return url.toString();
 }
 /** One project-level browser panel; the website canvas contains no app controls. */
@@ -51,6 +54,8 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
   const canvas = useRef<HTMLDivElement>(null);
   const resized = useRef<number | null>(null);
   const dismissed = useRef(false);
+  const inputQueue = useRef<Promise<void>>(Promise.resolve());
+  const inputBusy = useRef(0);
   const refresh = useCallback(async (signal?: AbortSignal) => {
     const res = await fetch(base, { cache: "no-store", signal });
     if (!res.ok) throw new Error(ui.error + " (" + res.status + ")");
@@ -66,6 +71,47 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
     setStatus(value);
     return value;
   }, [base, ui.error]);
+  const sendHumanInput = (op: string, fields: Record<string, unknown>) => {
+    // Serializing preserves click-before-type order across remote CDP requests.
+    if (inputBusy.current >= 50) return;
+    inputBusy.current++;
+    inputQueue.current = inputQueue.current.catch(() => {}).then(async () => {
+      const res = await fetch(base, { method: "POST", cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op, ...fields }) });
+      if (!res.ok) throw new Error(ui.error + " (" + res.status + ")");
+    }).catch(cause => {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }).finally(() => { inputBusy.current--; });
+  };
+  const viewerClick = (event: PointerEvent<HTMLDivElement>) => {
+    if (!paused) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    event.currentTarget.focus();
+    const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    sendHumanInput("click", { x, y });
+  };
+  const viewerWheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (!paused) return;
+    event.preventDefault();
+    sendHumanInput("wheel", { deltaY: Math.max(-1200, Math.min(1200, event.deltaY)) });
+  };
+  const viewerKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!paused || event.nativeEvent.isComposing) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+      event.preventDefault(); sendHumanInput("key", { key: "ControlOrMeta+A" });
+    } else if (!event.altKey && !event.ctrlKey && !event.metaKey &&
+               event.key.length === 1) {
+      event.preventDefault(); sendHumanInput("type", { text: event.key });
+    } else if (["Enter", "Tab", "Backspace", "Delete", "Escape",
+      "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End",
+      "PageUp", "PageDown", " "].includes(event.key)) {
+      event.preventDefault();
+      sendHumanInput("key", { key: event.key === " " ? "Space" : event.key });
+    }
+  };
   const act = async (op: string, fields: Record<string, unknown> = {}) => {
     setBusy(true); setError("");
     try { await perform(op, fields); }
@@ -188,11 +234,20 @@ export function ProjectAgentProjectBrowser({ projectId, language = "en" }: {
         </nav>
         <div ref={canvas} className="relative min-h-0 flex-1 overflow-hidden bg-white dark:bg-slate-950">
           {status.connected && playerUrl ?
-            <iframe title="Shared live browser" referrerPolicy="no-referrer"
-              src={playerUrl}
-              allow="autoplay; clipboard-read; clipboard-write"
-              style={{ pointerEvents: paused ? "auto" : "none" }}
-              className="h-full w-full border-0" /> :
+            <>
+              <iframe title="Shared live browser" referrerPolicy="no-referrer"
+                src={playerUrl} allow="autoplay"
+                style={{ pointerEvents: "none" }}
+                className="h-full w-full border-0" />
+              {paused && <div tabIndex={0} role="application"
+                aria-label="Control the shared browser: click to focus, then type or scroll"
+                onPointerDown={viewerClick} onWheel={viewerWheel} onKeyDown={viewerKey}
+                onPaste={event => { event.preventDefault();
+                  const value = event.clipboardData.getData("text");
+                  if (value) sendHumanInput("type", { text: value.slice(0, 1000) });
+                }}
+                className="absolute inset-0 cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-orange-500" />}
+            </> :
             <div role="status" className="flex h-full items-center justify-center p-6 text-center text-sm text-slate-500">
               {busy ? ui.waiting : status.connected ? ui.protected : error || ui.waiting}
             </div>}

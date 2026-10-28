@@ -129,3 +129,64 @@ opening repeatedly: that can leave an orphaned Steel session.
 This is a deliberate fail-closed availability tradeoff, not automatic recovery.
 The QA job exercises the fence using real Mongo; the external Steel API and live
 two-Next SIGKILL acceptance are still separate requirements.
+
+## Protected Live Browser Viewer — host integration foundation (2026-10-28)
+
+The Project Browser panel now supports an **access-checked, project-scoped** live
+player URL, with manual input delivered over the existing authenticated Next API
+and distributed browser-operation lease. This is a foundation, **not a production
+deployment or a completed live WebRTC acceptance**.
+
+The iframe address is `/private-steel-viewer/projects/<projectId>/player`.
+It never embeds the raw Steel session ID in the public path. Nginx must check
+every player document request using an internal `auth_request` against
+`/api/project-agent/steel-viewer/authorize`, which validates the authenticated
+Project caller and the exact live Mongo Steel record. The endpoint requires a
+separate long random `PROJECT_AGENT_STEEL_VIEWER_GATEWAY_SECRET` supplied only
+by Nginx. A public request without the secret is denied.
+
+The implementation template is
+`deploy/steel-viewer-nginx.conf.example`. It is **not automatically installed**.
+Review the deployment port, TLS/server configuration and actual Steel origin;
+inject the same long random secret into Nginx and Next via the deployment's
+secret management. Do not commit that value.
+
+```dotenv
+PROJECT_AGENT_STEEL_PRIVATE_VIEWER=1
+PROJECT_AGENT_STEEL_VIEWER_PREFIX=/private-steel-viewer
+PROJECT_AGENT_STEEL_VIEWER_GATEWAY_SECRET=<private-32-plus-character-secret>
+```
+
+The server requests `debugConfig.interactive=false` whenever private viewer
+mode is enabled. This prevents unauthenticated Steel's input transport from
+bypassing the Project takeover lease, even if a player token leaks. The panel
+uses an overlay: after **Take control** succeeds, clicks, scrolling and keyboard
+input are forwarded to the same CDP-connected page through the Project API.
+This is not a second browser. Input is refused while the Agent owns the session.
+The current first pass supports click, vertical wheel, printable typing/paste,
+and basic navigation keys; drag-and-drop, file uploads, advanced IME and full
+pointer gesture parity are **not yet supported**.
+
+**Do not turn on this feature flag on a production host until these are verified:**
+
+1. Re-deploy code to the real Next.js host and enable its Project Agent feature;
+   confirm the auth endpoint is not accidentally public without the gateway secret.
+2. Configure the HTTPS reverse proxy with `auth_request`, test 204 for the
+   authenticated owner, 403 for nonmember/no-session/missing-secret, and ensure
+   player cookies/Steel API keys are not forwarded.
+3. Confirm the real Steel player successfully negotiates WebRTC video, ICE/TURN
+   and websocket signaling through the browser's CSP/network policy.
+4. Confirm the Cloud/self-hosted provider honors `debugConfig.interactive=false`;
+   input must only work via the authenticated Next takeover route.
+5. Run the real two-Next-host SIGKILL test, owner/nonmember isolation, manual
+   takeover/handback, session release, and token/connection revocation.
+6. Audit Steel WebRTC player tokens: the upstream player may still expose a
+   session-scoped video token to the browser. Initial HTML authentication alone
+   **does not guarantee immediate revocation of an already-open WebRTC stream**.
+   A stronger transport gateway or short-lived/revocable provider tokens must
+   be verified before production.
+
+The Nginx example proxies only the player HTML; live WebRTC media/signaling
+still uses the provider endpoints from the player. This is distinct from a full
+network-level authorization proxy for every WebRTC channel. Do not claim secure
+production viewer status until the transport audit and real-host tests pass.

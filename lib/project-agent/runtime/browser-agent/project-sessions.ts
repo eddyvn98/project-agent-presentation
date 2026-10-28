@@ -4,6 +4,7 @@ import { activeBrowserSession, closeBrowserSession, getBrowserSession,
 import { notifyBrowserIntervention } from "./control";
 import { publicBrowserWatchLocation } from "./watch";
 import { assertPublicHttpUrl } from "../web-security";
+import { privateProjectViewerUrl } from "./viewer-gateway";
 import { closeProjectRecord, ensureProjectRecord, findProjectRecord,
   projectRecordByKey, touchProjectRecord, updateProjectActiveTab } from "./project-registry";
 import { claimProjectAgent, clearProjectControl, handbackProjectControl,
@@ -124,12 +125,16 @@ function steelQaSessionProof(session: BrowserSession): string | undefined {
     session.owner.trim().toLowerCase(), session.steelId].join("\0"))
     .digest("hex").slice(0, 24);
 }
-export async function projectBrowserStatus(session: BrowserSession) {
+export async function projectBrowserStatus(session: BrowserSession, projectId?: string) {
   const id = session.scopeId!;
   const pages = session.context.pages().filter(page => !page.isClosed());
   const control = await readProjectControl(id);
   const qaSessionProof = steelQaSessionProof(session);
-  return { connected: true, viewerUrl: session.viewerUrl ?? null, control,
+  const privateViewer = process.env.PROJECT_AGENT_STEEL_PRIVATE_VIEWER === "1";
+  const viewerUrl = privateViewer ?
+    (session.viewerUrl && projectId ? privateProjectViewerUrl(projectId) : null) :
+    session.viewerUrl ?? null;
+  return { connected: true, viewerUrl, control,
     ...(qaSessionProof ? { qaSessionProof } : {}),
     tabs: pages.map((page, index) => ({ index, location: publicBrowserWatchLocation(page.url()),
       active: page === session.page })),
@@ -143,7 +148,8 @@ function noteUserAction(session: BrowserSession) {
   if (session.activeAgentTaskId) notifyBrowserIntervention(session.activeAgentTaskId);
 }
 export async function projectBrowserOperation(session: BrowserSession,
-  input: { op: string; url?: string; tabIndex?: number; width?: number; height?: number }) {
+  input: { op: string; url?: string; tabIndex?: number; width?: number; height?: number;
+    x?: number; y?: number; deltaY?: number; text?: string; key?: string }) {
   const id = session.scopeId!;
   if (input.op === "heartbeat") {
     if (!await keepProjectControl(id)) throw new Error("Browser takeover expired");
@@ -160,7 +166,31 @@ export async function projectBrowserOperation(session: BrowserSession,
     throw new Error("Take control before changing the browser");
   await withBrowserOp(session, async () => {
     const pages = session.context.pages().filter(page => !page.isClosed());
-    if (input.op === "navigate") {
+    if (input.op === "click") {
+      if (typeof input.x !== "number" || typeof input.y !== "number" ||
+          !Number.isFinite(input.x) || !Number.isFinite(input.y) ||
+          input.x < 0 || input.x > 1 || input.y < 0 || input.y > 1)
+        throw new Error("Invalid browser click coordinates");
+      const viewport = session.page.viewportSize();
+      if (!viewport) throw new Error("Browser viewport unavailable");
+      await session.page.mouse.click(Math.round(input.x * (viewport.width - 1)),
+        Math.round(input.y * (viewport.height - 1)));
+    } else if (input.op === "wheel") {
+      if (typeof input.deltaY !== "number" || !Number.isFinite(input.deltaY) ||
+          Math.abs(input.deltaY) > 1200) throw new Error("Invalid browser wheel delta");
+      await session.page.mouse.wheel(0, input.deltaY);
+    } else if (input.op === "type") {
+      if (typeof input.text !== "string" || !input.text ||
+          input.text.length > 1000) throw new Error("Invalid browser input");
+      await session.page.keyboard.insertText(input.text);
+    } else if (input.op === "key") {
+      const allowed = new Set(["Enter", "Tab", "Backspace", "Delete", "Escape",
+        "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End",
+        "PageUp", "PageDown", "Space", "ControlOrMeta+A"]);
+      if (!input.key || !allowed.has(input.key))
+        throw new Error("Unsupported remote key");
+      await session.page.keyboard.press(input.key);
+    } else if (input.op === "navigate") {
       if (!input.url) throw new Error("Website URL required");
       await assertPublicHttpUrl(input.url);
       await session.page.goto(input.url, { waitUntil: "domcontentloaded", timeout: 20_000 });
