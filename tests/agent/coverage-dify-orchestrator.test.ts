@@ -40,6 +40,106 @@ vi.mock("../../lib/project-agent/deterministic-review", () => ({
   buildLintFixQuery: vi.fn(), lintDeliverables: vi.fn(),
   uploadLintSheets: vi.fn(), MAX_LOCAL_FIX_ROUNDS: 2,
 }));
+// Keep startup/Stop tests focused on the real Dify orchestrator without
+// loading optional Office, PDF, search, model or storage implementations.
+vi.mock("../../lib/project-agent/auto-skills/worker", () => ({
+  reconcileAutoSkillSources: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/auto-skills/context", () => ({
+  loadAutoSkillSet: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/files", () => ({
+  cacheDifyGeneratedFiles: vi.fn(), findDifyGeneratedFileLinks: vi.fn(), hasUnreachableDifySandboxFileLink: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/dify-input-files", () => ({
+  uploadProjectAgentTaskInputFiles: vi.fn(), uploadProjectKnowledgeFiles: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/intent", () => ({
+  requiresProjectAgentFileOutput: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/input-file-context", () => ({
+  buildProjectAgentInputReadback: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/dify-stream", () => ({
+  readDifyAgentMessage: vi.fn(), readDifyAgentAnswer: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/dify-query", () => ({
+  buildProjectAgentQuery: vi.fn(), getProjectAgentKnowledgeText: vi.fn(),
+  PROJECT_AGENT_DELIVERABLE_QUALITY_GATE: "synthetic",
+}));
+vi.mock("../../lib/project-agent/large-source-agent-loop", () => ({
+  fulfillLargeProjectSourceRequests: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/large-source-reader", () => ({
+  stripProjectSourceReadRequests: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/project-chat-context", () => ({
+  loadDefaultMemoryContext: vi.fn(), loadProjectChatContext: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/task-context", () => ({
+  loadProjectAgentTaskContext: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/memory-coordination", () => ({
+  coordinateMemorySources: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/chat-recap", () => ({
+  buildChatRecap: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/runtime/usage-pricing", () => ({
+  routeModelSelector: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/runtime/g1-goal-check", () => ({
+  isG1QaTask: vi.fn(), formatG1Receipt: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/dify-calculator-bridge", () => ({
+  callDifyWithCalculator: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/retry-context", () => ({
+  retryContext: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/agent-sources", () => ({
+  extractAgentSideEffects: vi.fn(), hideAgentTags: vi.fn(), describeTaskWork: vi.fn(), loadRunbookPrompt: vi.fn(), removeAgentWebSources: vi.fn(), saveAgentWebSources: vi.fn(), saveRunbookNotes: vi.fn(), saveTaskWorkLog: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/project-skills", () => ({
+  loadProjectSkillSet: vi.fn(), stripProjectSkillReadRequests: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/personal-agent-memory", () => ({
+  personalMemoryPrompt: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/personal-agent-skills", () => ({
+  personalSkillsPrompt: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/harness-lab/attach", () => ({
+  attachHarnessToQuery: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/runtime/policy", () => ({
+  redactSecrets: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/runtime/workspace-direct-apply", () => ({
+  newDirectState: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/runtime/workspace-task-progress", () => ({
+  workspaceSaveReporter: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/runtime/prepare", () => ({
+  describeWorkspace: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/runtime/stage", () => ({
+  stageInputs: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/rich-files", () => ({
+  hideRichFileBlocks: vi.fn(), stripUnverifiedDisclaimers: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/learning/global-lessons", () => ({
+  lessonsForTask: vi.fn(), lessonsPrompt: vi.fn(), recordLessonCandidates: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/hindsight/memory", () => ({
+  retainProjectHindsight: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/xerj/agent-context", () => ({
+  loadAgentSearchContext: vi.fn(),
+}));
+vi.mock("../../lib/project-agent/boot", () => ({ PROJECT_AGENT_BOOT_ID: "qa-boot" }));
 import { getEndpoint, isProjectAgentDifyConfigured, projectAgentDifyUser,
   runProjectAgentTask } from "../../lib/project-agent/dify-agent";
 const id = "pat_012345abcdef";
