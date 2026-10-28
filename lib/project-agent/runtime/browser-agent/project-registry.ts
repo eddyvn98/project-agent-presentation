@@ -97,9 +97,38 @@ export async function ensureProjectRecord(scope: string, projectId: string,
       if (!active) throw new Error("New Steel session was not visible");
       return active;
     } catch (error) {
-      if (steelId) await releaseSteelRemote(steelId).catch(() => {});
-      await coll.updateOne({ ...identity, state: "creating", claimToken },
-        { $set: { state: "vacant" }, $unset: { claimToken: "", claimUntil: "" } });
+      if (steelId) {
+        // A lost Mongo acknowledgement may mean the active ID was committed.
+        // Never release a session that another worker can already reattach to.
+        const latest = await coll.findOne(identity);
+        if (latest?.state === "active" && latest.steelId === steelId)
+          throw error;
+        let pending = false;
+        if (latest?.state === "creating" && latest.claimToken === claimToken) {
+          const marked = await coll.updateOne({ ...identity, state: "creating", claimToken },
+            { $set: { state: "vacant", releasePendingSteelId: steelId },
+              $unset: { claimToken: "", claimUntil: "" } });
+          pending = marked.modifiedCount === 1;
+        } else if (latest?.state === "closed" && !latest.steelId &&
+                   !latest.releasePendingSteelId) {
+          // Stop may have won while the Steel creation request was in flight.
+          const marked = await coll.updateOne({ ...identity, state: "closed",
+            generation: latest.generation, releasePendingSteelId: { $exists: false } },
+          { $set: { releasePendingSteelId: steelId } });
+          pending = marked.modifiedCount === 1;
+        }
+        try {
+          if (pending) await finishPendingRelease(coll, identity, steelId);
+          else await releaseSteelRemote(steelId);
+        } catch (cleanupError) {
+          throw new AggregateError([error, cleanupError],
+            pending ? "Project browser creation failed; Steel cleanup is pending" :
+              "Project browser creation failed; Steel cleanup was not confirmed");
+        }
+      } else {
+        await coll.updateOne({ ...identity, state: "creating", claimToken },
+          { $set: { state: "vacant" }, $unset: { claimToken: "", claimUntil: "" } });
+      }
       throw error;
     }
   }
