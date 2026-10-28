@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { crashEnvironment } from "../../scripts/g2-crash-hosts.mjs";
+import { crashEnvironment, crashHostLaunchEnvironment } from "../../scripts/g2-crash-hosts.mjs";
 
 function synthetic() {
   const dir = mkdtempSync(join(tmpdir(), "g2-crash-fixture-"));
@@ -55,4 +55,25 @@ test("rejects missing consent, mismatched marker and reused build dir", () => {
     symlinkSync(join(qa.roots[0], ".next"), join(qa.roots[1], ".next"));
     assert.throws(() => crashEnvironment(qa.vars), /cannot share .next/);
   } finally { rmSync(qa.dir, { recursive: true, force: true }); }
+});
+
+test("Steel host launch disables only G2 task ownership, preserving isolated QA gates", () => {
+  const base = {
+    PROJECT_AGENT_G2_BROWSER_OWNERSHIP: "1",
+    PROJECT_AGENT_STEEL_BROWSER: "1", G2_QA_DB_ISOLATION_ATTESTED: "1",
+    PROJECT_AGENT_RUNTIME: "sandbox",
+  };
+  const origin = "http://localhost:3005";
+  const g2 = crashHostLaunchEnvironment(base, origin);
+  const steel = crashHostLaunchEnvironment(base, origin, { disableG2Ownership: true });
+  assert.equal(g2.PROJECT_AGENT_G2_BROWSER_OWNERSHIP, "1");
+  assert.equal(steel.PROJECT_AGENT_G2_BROWSER_OWNERSHIP, "0");
+  for (const key of ["G2_QA_DB_ISOLATION_ATTESTED",
+    "PROJECT_AGENT_STEEL_BROWSER", "PROJECT_AGENT_RUNTIME"]) {
+    assert.equal(steel[key], base[key]);
+  }
+  assert.equal(steel.NEXTAUTH_URL, origin);
+  assert.equal(steel.PROJECT_AGENT_ALLOW_UPLOADS, "0");
+  assert.throws(() => crashHostLaunchEnvironment(base, origin,
+    { disableG2Ownership: "yes" }), /Invalid G2 worker override/);
 });
