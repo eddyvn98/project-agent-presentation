@@ -138,8 +138,13 @@ suite("Project Steel registry against isolated real MongoDB", () => {
     await expect(ensureProjectRecord(scope, project, owner))
       .rejects.toThrow(/did not honor the reserved session ID/);
     expect(releaseSteelRemote).toHaveBeenCalledWith("steel-unexpected-remote");
-    expect((await row()).reservedSteelId).toBeUndefined();
-    expect((await row()).state).toBe("vacant");
+    const fenced = await row();
+    expect(fenced.reservedSteelId).toMatch(/^[a-f0-9-]{36}$/);
+    expect(fenced).toMatchObject({ state: "creating", claimUntil: 0 });
+    expect(fenced.releasePendingSteelId).toBeUndefined();
+    await expect(ensureProjectRecord(scope, project, owner, undefined, true))
+      .rejects.toThrow(/reconcile Steel sessions/);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
   });
 
   it("two concurrent callers use one CAS-created Steel identity", async () => {
