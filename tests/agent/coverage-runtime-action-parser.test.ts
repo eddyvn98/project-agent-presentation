@@ -59,7 +59,7 @@ describe("Runtime action parsing and bounded model replies", () => {
     [{ action: "shell", command: "echo x", timeout: "12" }, "timeout"],
     [{ action: "read_output", id: "out_" + "a".repeat(20), offset: 8_500_001 }, "offset"],
     [{ action: "read_output", id: "out_" + "a".repeat(20), length: 7_001 }, "length"],
-    [{ action: "search_output", id: "out_" + "b".repeat(20), query: "a", limit: 9 }, "limit"],
+    [{ action: "search_output", id: "out_" + "b".repeat(20), query: "ab", limit: 9 }, "limit"],
     [{ action: "web_fetch", url: "https://example.test", offset: 1.5 }, "offset"],
     [{ action: "render", path: "outputs/report.pdf", pages: [0, 1] }, "pages"],
     [{ action: "render", path: "outputs/report.pdf", region:
@@ -101,7 +101,7 @@ describe("Runtime action parsing and bounded model replies", () => {
     const narrative = "The requested analysis is complete. " +
       "All evidence has been checked against the source. ".repeat(6);
     expect(plainAnswerAsFinal(narrative)).toMatchObject({
-      action: "final", answer: narrative,
+      action: "final", answer: narrative.trim(),
     });
   });
 });
