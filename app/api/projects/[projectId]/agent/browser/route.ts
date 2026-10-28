@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const data = await req.json().catch(() => null) as Record<string, unknown> | null;
   if (!data || typeof data.op !== "string")
     return NextResponse.json({ error: "Browser action required" }, { status: 400, headers: HEADERS });
-  const allowed = ["start","takeover","release","heartbeat","navigate","new_tab","switch_tab","close_tab","viewport"];
+  const allowed = ["start","takeover","release","heartbeat","navigate","new_tab","switch_tab","close_tab","viewport","click","wheel","type","key"];
   if (!allowed.includes(data.op)) return NextResponse.json({ error: "Unsupported browser action" },
     { status: 400, headers: HEADERS });
   if (data.op === "navigate" && (typeof data.url !== "string" || data.url.length > 2048))
@@ -63,6 +63,11 @@ export async function POST(req: NextRequest, { params }: Params) {
         tabIndex: typeof data.tabIndex === "number" ? data.tabIndex : undefined,
         width: typeof data.width === "number" ? data.width : undefined,
         height: typeof data.height === "number" ? data.height : undefined,
+        x: typeof data.x === "number" ? data.x : undefined,
+        y: typeof data.y === "number" ? data.y : undefined,
+        deltaY: typeof data.deltaY === "number" ? data.deltaY : undefined,
+        text: typeof data.text === "string" ? data.text : undefined,
+        key: typeof data.key === "string" ? data.key : undefined,
       });
     return NextResponse.json(await projectBrowserStatus(session, params.projectId), { headers: HEADERS });
   } catch (error) {
