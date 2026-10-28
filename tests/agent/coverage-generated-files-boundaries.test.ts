@@ -113,16 +113,20 @@ describe("Agent-generated file source, MIME and download boundaries", () => {
   });
   it("persists inline files separately from already-stored board resources", async () => {
     const result = await cacheDifyGeneratedFiles(
-      "I cannot provide a download link.", task, project, origin + "/v1",
+      "I cannot provide a download link. Ready.", task, project, origin + "/v1",
       "test-api", [
         { name: "nested/answer.txt", bytes: new TextEncoder().encode("safe output") },
         { name: "existing.pdf", bytes: new Uint8Array(),
           resource: { boardId: "board-qa", resourceId: "r-qa", size: 300 } },
       ]);
     expect(result.files).toHaveLength(2);
+    expect(result.files[0]).toMatchObject({ name: "answer.txt", mimeType: "text/plain" });
+    expect(result.files[1]).toMatchObject({
+      name: "existing.pdf",
+      resource: { boardId: "board-qa", resourceId: "r-qa", size: 300 },
+    });
     expect(m.write).toHaveBeenCalledOnce();
-    expect(result.resultText).toContain("/api/workspaces/board-qa/resources/r-qa");
-    expect(result.resultText).not.toContain("cannot provide");
+    expect(result.resultText).toBe("Ready.");
     expect(stripNoLinkClaims("I cannot provide a download link. Ready.")).toBe("Ready.");
   });
 });
