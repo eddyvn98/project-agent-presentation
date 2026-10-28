@@ -56,6 +56,9 @@ beforeEach(() => {
   m.conversation.mockResolvedValue(undefined);
   m.access.mockResolvedValue(null);
   m.terminal.mockResolvedValue(true);
+  m.cancelTurns.mockResolvedValue(undefined);
+  m.reflect.mockResolvedValue(undefined);
+  m.log.mockResolvedValue(undefined);
 });
 afterEach(() => vi.unstubAllEnvs());
 describe("Dify orchestration startup, owner and terminal fencing", () => {
