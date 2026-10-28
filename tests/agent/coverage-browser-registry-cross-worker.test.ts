@@ -15,9 +15,14 @@ type Row = Record<string, any>;
 const scope = "pb_cross_worker_qa", project = "qa_project";
 const owner = "owner@example.test";
 let row: Row | null;
-const matches = (item: Row, filter: Row) => Object.entries(filter).every(([key, expected]) =>
-  expected && typeof expected === "object" && "$gt" in expected ?
-    item[key] > expected.$gt : item[key] === expected);
+const matches = (item: Row, filter: Row) => Object.entries(filter).every(([key, expected]) => {
+  if (expected && typeof expected === "object") {
+    if ("$gt" in expected) return item[key] > expected.$gt;
+    if ("$exists" in expected)
+      return Object.prototype.hasOwnProperty.call(item, key) === expected.$exists;
+  }
+  return item[key] === expected;
+});
 const collection = {
   findOne: vi.fn(async (filter: Row) => row && matches(row, filter) ? { ...row } : null),
   updateOne: vi.fn(async (filter: Row, patch: Row, options?: { upsert?: boolean }) => {
@@ -124,5 +129,170 @@ describe("Project Browser registry survives worker restart without replaying bro
       .rejects.toThrow(/stale/i);
     expect((await findProjectRecord(scope, project, owner))?.steelId)
       .toBe("steel-another-generation");
+  });
+  it("preserves the remote Steel ID when close fails and retries across workers", async () => {
+    const old = await ensureProjectRecord(scope, project, owner);
+    vi.mocked(releaseSteelRemote)
+      .mockRejectedValueOnce(new Error("synthetic Steel release outage"))
+      .mockResolvedValueOnce(undefined);
+    await expect(closeProjectRecord(scope, project, owner))
+      .rejects.toThrow(/release outage/);
+    expect(row).toMatchObject({ state: "closed",
+      releasePendingSteelId: old.steelId, generation: 2 });
+    expect(row?.steelId).toBeUndefined();
+    await expect(closeProjectRecord(scope, project, owner)).resolves.toBeUndefined();
+    expect(row?.releasePendingSteelId).toBeUndefined();
+    expect(row?.generation).toBe(2); // No extra generation after retry.
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
+    expect(releaseSteelRemote).toHaveBeenNthCalledWith(2, old.steelId);
+  });
+  it("blocks explicit reopen while a prior remote release is still failing", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    vi.mocked(releaseSteelRemote).mockRejectedValue(
+      new Error("synthetic remote cleanup unavailable"));
+    await expect(closeProjectRecord(scope, project, owner)).rejects.toThrow(/cleanup unavailable/);
+    expect(row?.releasePendingSteelId).toBe("steel-original");
+    await expect(ensureProjectRecord(scope, project, owner, undefined, true))
+      .rejects.toThrow(/cleanup unavailable/);
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    expect(row).toMatchObject({ state: "closed", generation: 2 });
+    vi.mocked(releaseSteelRemote).mockResolvedValue(undefined);
+    vi.mocked(createSteelRemote).mockResolvedValueOnce({
+      id: "steel-reopened", timeout: 900_000,
+    });
+    const recovered = await ensureProjectRecord(scope, project, owner, undefined, true);
+    expect(recovered).toMatchObject({ state: "active", steelId: "steel-reopened" });
+    expect(recovered.releasePendingSteelId).toBeUndefined();
+    expect(createSteelRemote).toHaveBeenCalledTimes(2);
+  });
+  it("retains an expired active Steel ID when remote cleanup fails before rotation", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    row!.expiresAt = Date.now() - 10;
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
+      new Error("synthetic old Steel unreachable"));
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/old Steel unreachable/);
+    expect(row).toMatchObject({ state: "active", steelId: "steel-original",
+      generation: 1 });
+    expect(createSteelRemote).toHaveBeenCalledOnce();
+    vi.mocked(createSteelRemote).mockResolvedValueOnce({
+      id: "steel-next", timeout: 900_000,
+    });
+    const next = await ensureProjectRecord(scope, project, owner);
+    expect(next).toMatchObject({ state: "active", steelId: "steel-next",
+      generation: 2 });
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
+  });
+  it("retries remote cleanup if Mongo fails after Steel acknowledged its release", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    const originalUpdate = collection.updateOne.getMockImplementation()!;
+    collection.updateOne.mockImplementationOnce(originalUpdate);
+    // On release-confirmation persistence the Mongo write fails; pending ID stays.
+    collection.updateOne.mockImplementationOnce(async (filter: Row, update: Row, opts?: Row) => {
+      if (filter.releasePendingSteelId) throw Error("synthetic Mongo ack lost");
+      return originalUpdate(filter, update, opts);
+    });
+    await expect(closeProjectRecord(scope, project, owner))
+      .rejects.toThrow(/Mongo ack lost/);
+    expect(row).toMatchObject({ state: "closed", releasePendingSteelId: "steel-original" });
+    expect(await closeProjectRecord(scope, project, owner)).toBeUndefined();
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
+    expect(row?.releasePendingSteelId).toBeUndefined();
+  });
+  it("does not let another owner retry or clear a pending remote release", async () => {
+    const active = await ensureProjectRecord(scope, project, owner);
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
+      new Error("synthetic release denied"));
+    await expect(closeProjectRecord(scope, project, owner))
+      .rejects.toThrow(/release denied/);
+    await closeProjectRecord(scope, project, "intruder@example.test");
+    await expect(ensureProjectRecord(scope, project, "intruder@example.test",
+      undefined, true)).rejects.toThrow(/not initialized/);
+    expect(row).toMatchObject({ state: "closed",
+      releasePendingSteelId: active.steelId });
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(1);
+    await closeProjectRecord(scope, project, owner);
+    expect(row?.releasePendingSteelId).toBeUndefined();
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
+  });
+  it("keeps the browser closed until a delayed cleanup finishes", async () => {
+    await ensureProjectRecord(scope, project, owner);
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(
+      new Error("synthetic first release outage"));
+    await expect(closeProjectRecord(scope, project, owner))
+      .rejects.toThrow(/first release outage/);
+    let entered!: () => void;
+    let complete!: () => void;
+    const enteredCleanup = new Promise<void>(resolve => { entered = resolve; });
+    const cleanup = new Promise<void>(resolve => { complete = resolve; });
+    vi.mocked(releaseSteelRemote).mockImplementationOnce(async () => {
+      entered(); await cleanup;
+    });
+    vi.mocked(createSteelRemote).mockResolvedValueOnce({
+      id: "steel-new-after-cleanup", timeout: 900_000 });
+    const reopen = ensureProjectRecord(scope, project, owner, undefined, true);
+    await enteredCleanup;
+    expect(row).toMatchObject({ state: "closed",
+      releasePendingSteelId: "steel-original" });
+    expect(await findProjectRecord(scope, project, owner)).toBeNull();
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    complete();
+    const recovered = await reopen;
+    expect(recovered.steelId).toBe("steel-new-after-cleanup");
+    expect(recovered.releasePendingSteelId).toBeUndefined();
+    expect(createSteelRemote).toHaveBeenCalledTimes(2);
+  });
+  it("remembers a newly created Steel session when activation and release both fail", async () => {
+    const originalUpdate = collection.updateOne.getMockImplementation()!;
+    collection.updateOne.mockImplementationOnce(originalUpdate);
+    collection.updateOne.mockImplementationOnce(originalUpdate);
+    collection.updateOne.mockImplementationOnce(async () => { throw Error("synthetic Mongo activation failure"); });
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(new Error("synthetic Steel release unavailable"));
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/cleanup is pending/);
+    expect(row).toMatchObject({ state: "vacant", generation: 1,
+      releasePendingSteelId: "steel-original" });
+    expect(row?.steelId).toBeUndefined();
+    expect(createSteelRemote).toHaveBeenCalledTimes(1);
+    vi.mocked(createSteelRemote).mockResolvedValueOnce({
+      id: "steel-new-after-cleanup", timeout: 900_000,
+    });
+    const recovered = await ensureProjectRecord(scope, project, owner);
+    expect(recovered.steelId).toBe("steel-new-after-cleanup");
+    expect(recovered.releasePendingSteelId).toBeUndefined();
+    expect(releaseSteelRemote).toHaveBeenCalledTimes(2);
+  });
+  it("retains a fenced creation's remote ID when Stop wins but Steel release fails", async () => {
+    vi.mocked(createSteelRemote).mockImplementationOnce(async () => {
+      await closeProjectRecord(scope, project, owner);
+      return { id: "steel-fenced-orphan", timeout: 900_000 };
+    });
+    vi.mocked(releaseSteelRemote).mockRejectedValueOnce(new Error("synthetic Steel release timeout"));
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/cleanup is pending/);
+    expect(row).toMatchObject({ state: "closed", generation: 2,
+      releasePendingSteelId: "steel-fenced-orphan" });
+    await closeProjectRecord(scope, project, owner);
+    expect(row?.releasePendingSteelId).toBeUndefined();
+    expect(createSteelRemote).toHaveBeenCalledOnce();
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/User closed/);
+  });
+  it("does not release a committed Steel session after losing Mongo's acknowledgement", async () => {
+    const originalUpdate = collection.updateOne.getMockImplementation()!;
+    collection.updateOne.mockImplementationOnce(originalUpdate);
+    collection.updateOne.mockImplementationOnce(originalUpdate);
+    collection.updateOne.mockImplementationOnce(async (filter: Row, patch: Row, opts?: Row) => {
+      await originalUpdate(filter, patch, opts);
+      throw Error("synthetic successful Mongo commit acknowledgement lost");
+    });
+    await expect(ensureProjectRecord(scope, project, owner))
+      .rejects.toThrow(/acknowledgement lost/);
+    expect(row).toMatchObject({ state: "active", steelId: "steel-original",
+      generation: 1 });
+    expect(releaseSteelRemote).not.toHaveBeenCalled();
+    const recovered = await ensureProjectRecord(scope, project, owner);
+    expect(recovered.steelId).toBe("steel-original");
+    expect(createSteelRemote).toHaveBeenCalledOnce();
   });
 });
