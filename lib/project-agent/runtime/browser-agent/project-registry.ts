@@ -66,8 +66,12 @@ export async function ensureProjectRecord(scope: string, projectId: string,
     if (row.state === "active" && row.expiresAt && row.expiresAt > Date.now() + 1000)
       return row;
     const now = Date.now();
+    // An expired claim does NOT prove the remote create request failed.
+    // After SIGKILL, Steel may have created a browser before Mongo received its ID.
+    // Reclaiming would silently create a second remote browser for this owner.
+    if (row.state === "creating" && (row.claimUntil ?? 0) <= now)
+      throw new Error("Project browser creation outcome is unknown; reconcile Steel sessions before retry");
     const canClaim = row.state === "vacant" || row.state === "closed" ||
-      (row.state === "creating" && (row.claimUntil ?? 0) <= now) ||
       (row.state === "active" && (row.expiresAt ?? 0) <= now + 1000);
     if (!canClaim) {
       await new Promise(resolve => setTimeout(resolve, 300));
