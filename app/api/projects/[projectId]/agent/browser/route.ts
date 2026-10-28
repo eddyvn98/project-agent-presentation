@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const checked = await authorize(req, params.projectId);
   if (checked.response) return checked.response;
   const session = await findProjectBrowser(params.projectId, checked.owner!);
-  return NextResponse.json(session ? await projectBrowserStatus(session) : { connected: false },
+  return NextResponse.json(session ? await projectBrowserStatus(session, params.projectId) : { connected: false },
     { headers: HEADERS });
 }
 export async function POST(req: NextRequest, { params }: Params) {
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         width: typeof data.width === "number" ? data.width : undefined,
         height: typeof data.height === "number" ? data.height : undefined,
       });
-    return NextResponse.json(await projectBrowserStatus(session), { headers: HEADERS });
+    return NextResponse.json(await projectBrowserStatus(session, params.projectId), { headers: HEADERS });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message.slice(0, 180) :
       "Browser operation failed" }, { status: 409, headers: HEADERS });
