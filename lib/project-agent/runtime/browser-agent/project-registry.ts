@@ -130,8 +130,13 @@ export async function ensureProjectRecord(scope: string, projectId: string,
               "Project browser creation failed; Steel cleanup was not confirmed");
         }
       } else {
+        // An unsuccessful POST response does not prove Steel rejected creation:
+        // the remote session might exist even if the ID never reached this worker.
+        // Fence subsequent opens until an operator reconciles the external outcome.
         await coll.updateOne({ ...identity, state: "creating", claimToken },
-          { $set: { state: "vacant" }, $unset: { claimToken: "", claimUntil: "" } });
+          { $set: { claimUntil: 0, lastUsedAt: Date.now() } });
+        throw new AggregateError([error],
+          "Project browser creation outcome is unknown; reconcile Steel sessions before retry");
       }
       throw error;
     }
