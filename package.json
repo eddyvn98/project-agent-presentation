@@ -15,7 +15,7 @@
     "test:agent-ui:cross": "playwright test --config playwright.agent-ui.cross.config.ts",
     "check:lines": "node tests/check-lines.mjs",
     "test:agent": "vitest run --config vitest.agent.config.ts",
-    "test:c1:coverage": "vitest run --config vitest.agent.config.ts --coverage && node scripts/c1-coverage-report.mjs",
+    "test:c1:coverage": "vitest run --config vitest.agent.config.ts --coverage && node scripts/c1-coverage-report.mjs && node scripts/coverage-driven-report.mjs",
     "test:c2:mutation": "node scripts/c2-mutation-qa.mjs",
     "test:c3:model-fuzz": "node scripts/c3-model-state-fuzz-mongo.mjs",
     "test:long-session": "vitest run --config vitest.agent.config.ts tests/agent/long-session-l1-l2.test.ts tests/agent/runtime-compact-continuity.test.ts",
@@ -65,7 +65,9 @@
     "test:inspiration:presentation": "vitest run tests/presentation-scene3d.test.tsx",
     "test:browser:binary-integrity": "vitest run --config vitest.agent.config.ts tests/agent/browser-binary-integrity.test.ts",
     "test:c7:mongo": "node scripts/g2-multiworker-browser-qa.mjs",
-    "test:c8c11:unit": "vitest run --config vitest.agent.config.ts tests/agent/c8-admission-soak.test.ts tests/agent/c9-watch-retention-soak.test.ts tests/agent/c10-vault-soak-security.test.ts tests/agent/c11-browser-fault-budget.test.ts"
+    "test:c8c11:unit": "vitest run --config vitest.agent.config.ts tests/agent/c8-admission-soak.test.ts tests/agent/c9-watch-retention-soak.test.ts tests/agent/c10-vault-soak-security.test.ts tests/agent/c11-browser-fault-budget.test.ts",
+    "test:coverage-driven:core": "node --test tests/coverage-driven-core.test.mjs",
+    "test:coverage-driven:queue": "vitest run --config vitest.agent.config.ts tests/agent/coverage-durable-queue.test.ts"
   },
   "peerDependencies": {
     "next": ">=14",
