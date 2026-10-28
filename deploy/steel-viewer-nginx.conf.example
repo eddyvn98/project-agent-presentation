@@ -1,0 +1,33 @@
+# Include inside the existing HTTPS server{} serving the Next.js host.
+# TEMPLATE ONLY: replace REPLACE_WITH_LONG_RANDOM_SECRET using private deployment config.
+# Never expose Steel's original player/debug endpoint from the app.
+# Cloud player uses WebRTC on Steel-owned origins; transport requires separate acceptance.
+location = /_project_steel_viewer_auth {
+  internal;
+  proxy_pass http://127.0.0.1:3004/api/project-agent/steel-viewer/authorize;
+  proxy_pass_request_body off;
+  proxy_set_header Content-Length "";
+  proxy_set_header Cookie $http_cookie;
+  proxy_set_header X-Original-URI $request_uri;
+  proxy_set_header X-Viewer-Gateway-Secret "REPLACE_WITH_LONG_RANDOM_SECRET";
+}
+location ~ ^/private-steel-viewer/projects/[A-Za-z0-9_-]{4,128}/player$ {
+  limit_except GET { deny all; }
+  auth_request /_project_steel_viewer_auth;
+  auth_request_set $steel_player_path $upstream_http_x_steel_upstream_path;
+  proxy_pass https://api.steel.dev$steel_player_path;
+  proxy_ssl_server_name on;
+  proxy_ssl_name api.steel.dev;
+  proxy_set_header Host api.steel.dev;
+  proxy_set_header Cookie "";
+  proxy_set_header Authorization "";
+  proxy_set_header X-Viewer-Gateway-Secret "";
+  proxy_hide_header Set-Cookie;
+  proxy_hide_header Access-Control-Allow-Origin;
+  proxy_buffering off;
+  add_header Cache-Control "private, no-store" always;
+  add_header X-Frame-Options "SAMEORIGIN" always;
+  add_header Content-Security-Policy "frame-ancestors 'self'" always;
+}
+# No wildcard proxy to /v1, /input, /cdp, session admin APIs, or unknown Steel URLs.
+# Verify player signaling and TURN topology with the exact provider before production.
