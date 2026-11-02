@@ -244,7 +244,7 @@ put("pdf",make_pdf(),True)
 model3d=make_glb()
 put("glb",model3d,True)
 put("web.html",make_viewer(model3d))
-""" + DESIGN_PREVIEW_SCRIPT + """
+${DESIGN_PREVIEW_SCRIPT}
 put("preview.png",make_preview(model3d),True)
 print(json.dumps({"files":files,"warnings":warnings[:12],"conceptOnly":True}))
 `;
