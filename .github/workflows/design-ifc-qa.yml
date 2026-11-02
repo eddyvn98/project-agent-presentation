@@ -1,0 +1,27 @@
+name: Design IFC handoff QA
+on:
+  push:
+    branches: [feat/headless-design-engine-20261102]
+  pull_request:
+    paths:
+      - "lib/project-agent/runtime/design-*.ts"
+      - "scripts/qa-design-ifc.mjs"
+      - ".github/workflows/design-ifc-qa.yml"
+permissions:
+  contents: read
+jobs:
+  ifc_roundtrip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install IFC geometry reader
+        run: python -m pip install --disable-pip-version-check "ifcopenshell==0.8.4" "numpy<2.4"
+      - name: Validate editable IFC4 handoff geometry
+        run: node scripts/qa-design-ifc.mjs
