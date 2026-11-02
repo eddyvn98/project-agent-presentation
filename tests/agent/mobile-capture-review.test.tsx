@@ -18,6 +18,7 @@ it("ignores accidental taps when drawing on a PDF with a finger", () => {
   const onSubmit = vi.fn();
   render(<div style={{ width: 350, height: 350, position: "relative" }}><ProjectAgentRegionSelect onSubmit={onSubmit}/></div>);
   const field = screen.getByLabelText("Drag to mark the area to change");
+  Object.defineProperty(field, "setPointerCapture", { value: vi.fn() });
   Object.defineProperty(field, "getBoundingClientRect", { value: () => ({ left: 0, top: 0, width: 350, height: 350 }) });
   fireEvent.pointerDown(field, { clientX: 20, clientY: 20, pointerId: 1 });
   fireEvent.pointerUp(field, { clientX: 20, clientY: 20, pointerId: 1 });
