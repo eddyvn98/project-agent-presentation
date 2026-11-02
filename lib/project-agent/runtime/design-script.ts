@@ -208,7 +208,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;
 scene.add(new THREE.HemisphereLight(0xffffff,0x738292,2));
 const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(9,16,10);scene.add(sun);
-const raw=atob("""" + data + """");
+const raw=atob('""" + data + """');
 const bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));
 new GLTFLoader().parse(bytes.buffer,"",gltf=>{
  scene.add(gltf.scene);const bounds=new THREE.Box3().setFromObject(gltf.scene);
