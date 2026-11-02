@@ -1,3 +1,4 @@
+import { DESIGN_PREVIEW_SCRIPT } from "./design-preview-script";
 /** Python standard-library-only headless exporter; intentionally no Blender, AutoCAD or LibreOffice dependency. */
 export const DESIGN_SCRIPT = String.raw`import base64, html, json, math, os, struct, sys, unicodedata
 
@@ -243,5 +244,7 @@ put("pdf",make_pdf(),True)
 model3d=make_glb()
 put("glb",model3d,True)
 put("web.html",make_viewer(model3d))
+""" + DESIGN_PREVIEW_SCRIPT + """
+put("preview.png",make_preview(model3d),True)
 print(json.dumps({"files":files,"warnings":warnings[:12],"conceptOnly":True}))
 `;
