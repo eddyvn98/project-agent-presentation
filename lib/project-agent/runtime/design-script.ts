@@ -244,4 +244,4 @@ model3d=make_glb()
 put("glb",model3d,True)
 put("web.html",make_viewer(model3d))
 print(json.dumps({"files":files,"warnings":warnings[:12],"conceptOnly":True}))
-`;\n
+`;
