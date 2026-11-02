@@ -45,7 +45,7 @@ describe("Headless design concept", () => {
     const run = spawnSync("python3", [script, model, "sample"], { timeout: 15000, encoding: "utf8" });
     expect(run.status, run.stderr).toBe(0);
     const receipt = JSON.parse(run.stdout);
-    expect(receipt.files).toHaveLength(5);
+    expect(receipt.files).toHaveLength(6);
     const dxf = readFileSync(path.join(dir, "sample.dxf"), "utf8");
     expect(dxf).toContain("0\nSECTION\n");
     expect(dxf).toContain("0\nEOF\n");
@@ -60,6 +60,9 @@ describe("Headless design concept", () => {
     expect(gltf.asset.version).toBe("2.0");
     expect(gltf.nodes.length).toBeGreaterThan(1);
     expect(glb.toString("ascii", 24 + jsonLength, 28 + jsonLength)).toBe("BIN\u0000");
+    const png = readFileSync(path.join(dir, "sample.preview.png"));
+    expect(png.subarray(0, 8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
+    expect(png.readUInt32BE(16)).toBe(1280);
     const viewer = readFileSync(path.join(dir, "sample.web.html"), "utf8");
     expect(viewer).toContain("OrbitControls");
     expect(viewer).toContain("GLTFLoader");
