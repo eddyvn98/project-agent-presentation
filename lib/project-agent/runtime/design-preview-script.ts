@@ -1,5 +1,5 @@
 /** Cheap, deterministic PNG contact sheet: floor plan and actual exported GLB boxes. Python stdlib only. */
-export const DESIGN_PREVIEW_SCRIPT = String.raw\`
+export const DESIGN_PREVIEW_SCRIPT = String.raw`
 import zlib
 
 def make_preview(glb):
@@ -102,6 +102,6 @@ def make_preview(glb):
                     line(*a,*b,(90,104,118),1)
     def chunk(kind,data):
         return struct.pack(">I",len(data))+kind+data+struct.pack(">I",zlib.crc32(kind+data)&0xffffffff)
-    rows=b"".join(b"\\x00"+pixels[y*iw*3:(y+1)*iw*3] for y in range(ih))
-    return b"\\x89PNG\\r\\n\\x1a\\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",iw,ih,8,2,0,0,0))+chunk(b"IDAT",zlib.compress(rows,6))+chunk(b"IEND",b"")
-\`;
+    rows=b"".join(b"\x00"+pixels[y*iw*3:(y+1)*iw*3] for y in range(ih))
+    return b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",iw,ih,8,2,0,0,0))+chunk(b"IDAT",zlib.compress(rows,6))+chunk(b"IEND",b"")
+`;
