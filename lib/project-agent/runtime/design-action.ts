@@ -1,4 +1,6 @@
 import fs from "node:fs/promises";
+import type { DifyChatFile } from "../dify-input-files";
+import { uploadRuntimeImage } from "./model";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { RuntimeInput } from "./run-agent-types";
@@ -6,9 +8,9 @@ import type { DesignSpec } from "./design-model";
 import { DESIGN_SCRIPT } from "./design-script";
 import { execInSandbox, resolveWorkspacePath, workspaceDir } from "./sandbox";
 
-/** Generates five artifacts in one bounded sandbox command. No model-provided shell text. */
+/** Generates six artifacts in one bounded sandbox command. No model-provided shell text. */
 export async function runDesignAction(input: RuntimeInput, model: DesignSpec):
-  Promise<{ text: string; failed?: boolean }> {
+  Promise<{ text: string; failed?: boolean; image?: DifyChatFile }> {
   if (input.readOnly) return { text: "Reviewers cannot create designs.", failed: true };
   const name = "design-" + randomUUID().slice(0, 12);
   const root = workspaceDir(input.chatId);
@@ -28,7 +30,7 @@ export async function runDesignAction(input: RuntimeInput, model: DesignSpec):
     let receipt: { files: string[]; warnings?: string[]; conceptOnly: boolean };
     try { receipt = JSON.parse(result.output) as typeof receipt; }
     catch { return { text: "Headless exporter returned an invalid receipt.", failed: true }; }
-    const expected = ["design.json", "dxf", "pdf", "glb", "web.html"].map(ext => "outputs/" + name + "." + ext);
+    const expected = ["design.json", "dxf", "pdf", "glb", "web.html", "preview.png"].map(ext => "outputs/" + name + "." + ext);
     if (!Array.isArray(receipt.files) || receipt.files.length !== expected.length ||
         !expected.every(file => receipt.files.includes(file)))
       return { text: "Headless exporter returned unexpected file names.", failed: true };
@@ -41,11 +43,15 @@ export async function runDesignAction(input: RuntimeInput, model: DesignSpec):
       if (file.endsWith(".glb") && bytes.toString("ascii", 0, 4) !== "glTF")
         return { text: "GLB signature check failed.", failed: true };
     }
+    const preview = await fs.readFile(resolveWorkspacePath(input.chatId, "outputs/" + name + ".preview.png"));
+    if (!preview.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])))
+      return { text: "PNG preview signature check failed.", failed: true };
+    const image = await uploadRuntimeImage(name + "-preview", preview, input.user);
     const cautions = (receipt.warnings ?? []).slice(0, 10).join("; ");
     return { text: "Generated headless interior concept: " + expected.join(", ") +
       ". Return these paths in final.files and use render on the PDF before final. The .web.html viewer uses an HTTPS CDN for Three.js. " +
       "Concept only, not a construction-ready or Revit/BIM deliverable." +
-      (cautions ? " Geometry warnings: " + cautions : "") };
+      (cautions ? " Geometry warnings: " + cautions : ""), image };
   } catch (error) {
     return { text: "Design export failed: " + (error instanceof Error ? error.message : "error"), failed: true };
   } finally {
