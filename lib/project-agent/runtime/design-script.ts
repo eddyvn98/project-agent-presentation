@@ -1,5 +1,5 @@
 /** Python standard-library-only headless exporter; intentionally no Blender, AutoCAD or LibreOffice dependency. */
-export const DESIGN_SCRIPT = String.raw\`import base64, html, json, math, os, struct, sys, unicodedata
+export const DESIGN_SCRIPT = String.raw`import base64, html, json, math, os, struct, sys, unicodedata
 
 spec = json.load(open(sys.argv[1], encoding="utf-8"))
 prefix = sys.argv[2]
@@ -244,4 +244,4 @@ model3d=make_glb()
 put("glb",model3d,True)
 put("web.html",make_viewer(model3d))
 print(json.dumps({"files":files,"warnings":warnings[:12],"conceptOnly":True}))
-\`;\n
+`;\n
