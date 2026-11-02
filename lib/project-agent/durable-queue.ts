@@ -32,6 +32,13 @@ async function persist(item: QueueReceipt) {
     await fs.rename(tmp, dest);
   } finally { await fs.unlink(tmp).catch(() => {}); }
 }
+async function createOnce(item: QueueReceipt) {
+  const dest = fileOf(item.taskId), tmp = dest + "." + randomUUID() + ".tmp";
+  try {
+    await fs.writeFile(tmp, JSON.stringify(item), { flag: "wx", mode: 0o600 });
+    await fs.link(tmp, dest);
+  } finally { await fs.unlink(tmp).catch(() => {}); }
+}
 export async function readQueueReceipt(id: string): Promise<QueueReceipt | null> {
   try {
     const item = JSON.parse(await fs.readFile(fileOf(id), "utf8")) as QueueReceipt;
@@ -47,7 +54,7 @@ export async function enqueueDurableTask(id: string): Promise<QueueReceipt> {
   if (!await readProjectAgentTask(id)) throw new Error("Cannot queue a task that does not exist");
   await privateRoot();
   const receipt: QueueReceipt = { taskId: id, state: "queued", queuedAt: new Date().toISOString(), attempt: 0 };
-  try { await fs.writeFile(fileOf(id), JSON.stringify(receipt), { flag: "wx", mode: 0o600 }); }
+  try { await createOnce(receipt); }
   catch (e) { if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e; }
   return (await readQueueReceipt(id))!;
 }

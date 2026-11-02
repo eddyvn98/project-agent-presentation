@@ -1,6 +1,9 @@
 import { uploadProjectAgentReviewFile, type DifyChatFile } from "../dify-input-files";
 import { setTimeout as delay } from "node:timers/promises";
 import { ModelStreamGuard } from "./model-stream-guard";
+import { runtimeTaskInstructions } from "./instructions";
+import { trimRepeatedRuntimeInstructions } from "./model-query";
+import { RICH_UI_INSTRUCTIONS } from "../rich-ui";
 
 export interface RuntimeModelReply { answer: string; conversationId?: string; promptTokens?: number; completionTokens?: number }
 
@@ -15,7 +18,7 @@ export async function uploadRuntimeImage(name: string, bytes: Buffer, user: stri
 const RETRY_STATUSES = new Set([502, 503, 504]);
 const MAX_ATTEMPTS = 3;
 
-export interface RuntimeModelInput { query: string; user: string; conversationId?: string; images?: DifyChatFile[]; signal?: AbortSignal; /** Model-step selector; empty or absent runs the app's default model. */ modelSelector?: string }
+export interface RuntimeModelInput { query: string; user: string; conversationId?: string; projectId?: string; images?: DifyChatFile[]; signal?: AbortSignal; /** Model-step selector; empty or absent runs the app's default model. */ modelSelector?: string }
 
 /** Dify answers 404 "Conversation Not Exists" for a conversation id the model-step app does not hold (for example one from a previous app). */
 export function isConversationLostError(cause: unknown): boolean {
@@ -25,10 +28,12 @@ export function isConversationLostError(cause: unknown): boolean {
 
 async function streamStep(input: RuntimeModelInput): Promise<RuntimeModelReply> {
   const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(600_000)]) : AbortSignal.timeout(600_000);
+  const query = process.env.PROJECT_AGENT_TRIM_REPEATED_INSTRUCTIONS === "1" && input.conversationId && input.projectId
+    ? trimRepeatedRuntimeInstructions(input.query, runtimeTaskInstructions(input.projectId), [RICH_UI_INSTRUCTIONS]) : input.query;
   const response = await fetch(`${base()}/chat-messages`, {
     method: "POST",
     headers: { Authorization: `Bearer ${key()}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ inputs: { model_selector: input.modelSelector ?? "" }, query: input.query,
+    body: JSON.stringify({ inputs: { model_selector: input.modelSelector ?? "" }, query,
       response_mode: "streaming", user: input.user, files: input.images ?? [],
       ...(input.conversationId ? { conversation_id: input.conversationId } : {}) }),
     cache: "no-store", signal,

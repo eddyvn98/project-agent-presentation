@@ -4,6 +4,7 @@ import { commitTaskTerminalIfActive } from "./task-terminal-guard";
 import { autoTitleProjectAgentConversation } from "./chat-title";
 import { afterTaskForGoal } from "./goal-hook";
 import { enqueueDurableTask, withDurableTaskLease, scanDurableQueue } from "./durable-mongo-queue";
+import { withConversationLease } from "./conversation-lease";
 
 import { PROJECT_AGENT_BOOT_ID, runningProjectAgentTasks as runningTasks } from "./boot";
 
@@ -17,10 +18,11 @@ export function startProjectAgentTask(taskId: string): void {
 	controllers.set(taskId, controller);
 	let actuallyRan = false;
 	const run = (async () => {
-		if (process.env.PROJECT_AGENT_DURABLE_QUEUE === "0") { actuallyRan = true; return runProjectAgentTask(taskId, controller.signal); }
+		const execute = async () => { const task = await readProjectAgentTask(taskId); if (!task) throw new Error("Task disappeared before startup"); return withConversationLease(task, controller, () => runProjectAgentTask(taskId, controller.signal)); };
+		if (process.env.PROJECT_AGENT_DURABLE_QUEUE === "0") { actuallyRan = true; return execute(); }
 		await enqueueDurableTask(taskId);
 		actuallyRan = await withDurableTaskLease(taskId, async () => {
-			await runProjectAgentTask(taskId, controller.signal);
+			await execute();
 		}, () => controller.abort(new Error("MongoDB worker lease was lost")));
 	})()
 		.then(() => { void autoTitleProjectAgentConversation(taskId); })

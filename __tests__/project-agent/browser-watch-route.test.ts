@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   access: vi.fn(), task: vi.fn(), status: vi.fn(), image: vi.fn(),
   watch: vi.fn(), active: vi.fn(), capture: vi.fn(),
+  sharedAllowed: vi.fn(), setSharedAllowed: vi.fn(), clearFrame: vi.fn(),
 }));
 vi.mock("@/lib/projects/api-access", () => ({ resolveProjectRequestAccess: mocks.access }));
 vi.mock("@/lib/project-agent/task-store", () => ({ readProjectAgentTask: mocks.task }));
@@ -11,6 +12,8 @@ vi.mock("@/lib/project-agent/runtime/browser-agent/watch", () => ({
   setBrowserWatch: mocks.watch, captureBrowserWatch: mocks.capture,
 }));
 vi.mock("@/lib/project-agent/runtime/browser-agent/session", () => ({ activeBrowserSession: mocks.active }));
+vi.mock("@/lib/project-agent/runtime/browser-agent/watch-access-db", () => ({ sharedBrowserWatchAllowed: mocks.sharedAllowed, setSharedBrowserWatch: mocks.setSharedAllowed }));
+vi.mock("@/lib/project-agent/runtime/browser-agent/shared-frame", () => ({ clearSharedFrame: mocks.clearFrame }));
 import { GET, POST } from "../../app/api/projects/[projectId]/agent/tasks/[taskId]/browser/route";
 
 const params = { params: { projectId: "project-a", taskId: "pat_123456789abc" } };
@@ -20,6 +23,9 @@ function authorized(email = "owner@example.test") {
   mocks.access.mockResolvedValue({ callerEmail: email, ownerEmail: email });
   mocks.task.mockResolvedValue({ projectId: "project-a", ownerEmail: "owner@example.test", status: "running" });
   mocks.active.mockReturnValue(null);
+  mocks.sharedAllowed.mockResolvedValue(true);
+  mocks.setSharedAllowed.mockResolvedValue(undefined);
+  mocks.clearFrame.mockResolvedValue(undefined);
   mocks.status.mockReturnValue({ watching: true, sequence: 1, hasImage: true, action: "click" });
 }
 function request(method = "GET", data?: unknown, origin = "http://localhost") {

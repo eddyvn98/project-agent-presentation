@@ -1,16 +1,12 @@
 import { activeBrowserSession, withBrowserOp } from "./session";
-import { projectBrowserOperation } from "./project-sessions";
-import { resolveTaskBrowser, taskBrowserControlStatus } from "./task-browser";
 import { randomUUID } from "node:crypto";
 import type { Page } from "playwright-core";
-import { beginBrowserIntervention, completeBrowserIntervention, notifyBrowserIntervention, claimHumanBrowserAction, takeBrowserControl, releaseBrowserControl, keepBrowserControl } from "./control";
-import { noteBrowserLoopTakeover, noteBrowserLoopHandback } from "./loop-state";
+import { beginBrowserIntervention, completeBrowserIntervention, notifyBrowserIntervention, claimHumanBrowserAction } from "./control";
 import { browserWatchStatus, captureBrowserWatch, setBrowserWatch } from "./watch";
-import { assertSharedFrame, clearSharedFrame, sharedActivePage } from "./shared-frame";
 
 export type HumanBrowserAction =
-  | { op: "takeover" | "release" | "heartbeat" }
-  | { op: "click"; x: number; y: number; frame: number; frameId?: string; approvalTicket?: string }
+  | { op: "takeover" | "release" }
+  | { op: "click"; x: number; y: number; frame: number; approvalTicket?: string }
   | { op: "scroll"; direction: "up" | "down" }
   | { op: "type"; text: string }
   | { op: "key"; key: "Tab" | "Escape" | "Backspace" | "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight" | "Enter" };
@@ -21,11 +17,10 @@ class RiskChallenge extends Error { constructor(readonly ticket: string) { super
 export function parseHumanBrowserAction(value: unknown): HumanBrowserAction | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const raw = value as Record<string, unknown>;
-  if (raw.op === "takeover" || raw.op === "release" || raw.op === "heartbeat") return { op: raw.op };
+  if (raw.op === "takeover" || raw.op === "release") return { op: raw.op };
   if (raw.op === "click" && typeof raw.x === "number" && typeof raw.y === "number" &&
     Number.isFinite(raw.x) && Number.isFinite(raw.y) && raw.x >= 0 && raw.x <= 1 && raw.y >= 0 && raw.y <= 1 && typeof raw.frame === "number" && Number.isSafeInteger(raw.frame) && raw.frame > 0)
     return { op: "click", x: raw.x, y: raw.y, frame: raw.frame,
-      frameId: typeof raw.frameId === "string" && /^[a-f0-9-]{36}$/.test(raw.frameId) ? raw.frameId : undefined,
       approvalTicket: typeof raw.approvalTicket === "string" && /^[a-f0-9-]{36}$/.test(raw.approvalTicket) ? raw.approvalTicket : undefined };
   if (raw.op === "scroll" && (raw.direction === "up" || raw.direction === "down")) return { op: "scroll", direction: raw.direction };
   if (raw.op === "type" && typeof raw.text === "string" && raw.text.length >= 1 && raw.text.length <= 600 && !/[\x00-\x08\x0b-\x1f]/.test(raw.text)) return { op: "type", text: raw.text };
@@ -54,59 +49,28 @@ async function privateLoginHasFocus(page: Page): Promise<boolean> {
     }
   }
 }
-export async function humanBrowserOperation(taskId: string, chatId: string, action: HumanBrowserAction,
-  project?: { projectId: string; owner: string }) {
-  const session = project ?
-    await resolveTaskBrowser(taskId, project.projectId, project.owner) : activeBrowserSession(chatId);
-  if (!session) return { error: "Agent has not opened a browser session or task control expired" };
-  if (project && session.owner && session.owner !== project.owner.trim().toLowerCase())
-    return { error: "Browser owner mismatch" };
-  if (action.op === "heartbeat") {
-    try {
-      const renewed = session.persistent ?
-        (await projectBrowserOperation(session, { op: "heartbeat" }), true) : keepBrowserControl(taskId);
-      if (!renewed) return { error: "Browser takeover expired" };
-      return { ok: true, paused: true };
-    } catch { return { error: "Browser takeover expired" }; }
-  }
-  if (action.op === "release" || action.op === "takeover") {
+export async function humanBrowserOperation(taskId: string, chatId: string, action: HumanBrowserAction) {
+  const session = activeBrowserSession(chatId);
+  if (!session) return { error: "Agent has not opened a browser session yet" };
+  if (action.op === "release") {
     challenges.delete(taskId);
-    try {
-      if (session.persistent) {
-        await projectBrowserOperation(session, { op: action.op });
-        if (action.op === "takeover") noteBrowserLoopTakeover(taskId);
-        else noteBrowserLoopHandback(taskId);
-      } else if (action.op === "takeover") {
-        takeBrowserControl(taskId);
-        try { await withBrowserOp(session, async () => {}, false, "system"); }
-        catch (cause) { releaseBrowserControl(taskId); throw cause; }
-      } else releaseBrowserControl(taskId);
-      if (action.op === "release") await clearSharedFrame(taskId);
-      if (action.op === "takeover") {
-        if (!browserWatchStatus(taskId)?.watching) setBrowserWatch(taskId, true);
-        await captureBrowserWatch(taskId, session.page, "human_takeover");
-        notifyBrowserIntervention(taskId);
-      }
-      return { ok: true, paused: action.op === "takeover" };
-    } catch (cause) {
-      return { error: cause instanceof Error ? cause.message.slice(0, 180) : "Browser control failed" };
-    }
+    return { ok: true, paused: false };
   }
-  if (!(await taskBrowserControlStatus(taskId, project?.projectId, project?.owner)).paused)
-    return { error: "Take control before interacting with the browser" };
+  if (action.op === "takeover") {
+    challenges.delete(taskId);
+    if (!browserWatchStatus(taskId)?.watching) setBrowserWatch(taskId, true);
+    notifyBrowserIntervention(taskId);
+    return { ok: true, paused: false };
+  }
   if (!claimHumanBrowserAction(taskId)) return { error: "Manual browser action limit reached; try again in a few minutes." };
   beginBrowserIntervention(taskId);
   let marker: { x: number; y: number; kind: "human" } | undefined;
   let privateLoginRequired = false;
   try {
     await withBrowserOp(session, async () => {
-      const page = session.persistent ? (await sharedActivePage(session))?.page : session.page;
-      if (!page) throw new Error("Active browser tab unavailable");
+      const page = session.page;
       if (action.op === "click") {
-        if (session.persistent) {
-          if (!action.frameId || !project) throw new Error("Verified browser frame required");
-          await assertSharedFrame(session, taskId, project.owner, action.frameId, page);
-        } else if (!browserWatchStatus(taskId)?.watching || browserWatchStatus(taskId)?.sequence !== action.frame)
+        if (!browserWatchStatus(taskId)?.watching || browserWatchStatus(taskId)?.sequence !== action.frame)
           throw new Error("The screenshot is stale; refresh the live Browser Watch frame");
         const viewport = page.viewportSize() ?? { width: 1280, height: 800 };
         const x = Math.round(action.x * viewport.width), y = Math.round(action.y * viewport.height);
@@ -126,7 +90,6 @@ export async function humanBrowserOperation(taskId: string, chatId: string, acti
           }
           challenges.delete(taskId);
         }
-        if (session.persistent) await clearSharedFrame(taskId);
         await page.mouse.click(x, y);
         privateLoginRequired = await privateLoginHasFocus(page);
         marker = { x: action.x, y: action.y, kind: "human" };

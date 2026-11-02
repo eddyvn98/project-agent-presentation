@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Folder, Loader2 } from "lucide-react";
+import { FlaskConical, Folder, Loader2, ShieldCheck, Sparkles, Workflow } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useProjectStore, type ProjectMemoryMode } from "@/stores/useProjectStore";
 import { ProjectSkillsSection } from "@/components/features/projects/ProjectSkillsSection";
@@ -112,6 +112,15 @@ export function ProjectModal({ open, onClose, projectId, initialTab }: ProjectMo
               <span className="text-xs font-normal text-slate-500">{shared || project.hasShared ? "Shared projects always use project-only memory." : MEMORY_HINTS[memoryMode]}</span>
             </label>
             <div className="-mx-1"><ProjectSkillsSection projectId={project.id} skillIds={project.skillIds ?? []} canEdit={!readOnly} onManage={onClose} /></div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-800/40">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Project Agent Management</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <a href="/account/agent-control" className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-2 font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><ShieldCheck className="h-4 w-4 text-slate-500" />Control Center</a>
+                <a href="/account/agent-skills" className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-2 font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><Sparkles className="h-4 w-4 text-slate-500" />Skill Registry</a>
+                <a href="/account/agent-workflows" className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-2 font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><Workflow className="h-4 w-4 text-slate-500" />Workflow Builder</a>
+                <a href="/account/agent-harness" className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white p-2 font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><FlaskConical className="h-4 w-4 text-slate-500" />Harness Lab</a>
+              </div>
+            </div>
           </div>
             {error ? <p role="alert" className="text-sm text-red-600">{error}</p> : null}
             <div className="flex items-center justify-between gap-3">

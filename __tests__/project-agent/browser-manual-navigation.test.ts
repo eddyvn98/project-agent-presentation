@@ -9,6 +9,7 @@ vi.mock("@/lib/project-agent/runtime/browser-agent/session", () => ({
   activeBrowserSession: mock.session, withBrowserOp: mock.withBrowserOp,
 }));
 vi.mock("@/lib/project-agent/runtime/browser-agent/control", () => ({
+  browserControlState: () => ({ paused: true, revision: 0 }),
   beginBrowserIntervention: mock.begin, completeBrowserIntervention: mock.complete,
   notifyBrowserIntervention: vi.fn(), claimHumanBrowserAction: mock.claim,
 }));
@@ -47,4 +48,24 @@ it("keeps a successful human click successful when navigation destroys the old p
   expect(page.waitForLoadState).toHaveBeenCalledWith("domcontentloaded", { timeout: 5_000 });
   expect(mock.capture).toHaveBeenCalledWith("task-1", page, "human_click", { x: 0.2, y: 0.4, kind: "human" });
   expect(mock.complete).toHaveBeenCalledWith("task-1");
+});
+
+it("keeps a search Enter successful when navigation replaces the page context", async () => {
+  const page = {
+    evaluate: vi.fn().mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(new Error("Execution context was destroyed, most likely because of a navigation"))
+      .mockResolvedValueOnce(false),
+    waitForLoadState: vi.fn().mockResolvedValue(undefined),
+    keyboard: { press: vi.fn().mockResolvedValue(undefined) },
+  } as unknown as Page;
+  mock.session.mockReturnValue({ page });
+  mock.withBrowserOp.mockImplementation(async (_session: unknown, operation: () => Promise<unknown>) => operation());
+  mock.claim.mockReturnValue(true);
+
+  const result = await humanBrowserOperation("task-1", "chat-1", { op: "key", key: "Enter" });
+
+  expect(result).toMatchObject({ ok: true, paused: false });
+  expect(page.keyboard.press).toHaveBeenCalledOnce();
+  expect(page.waitForLoadState).toHaveBeenCalledWith("domcontentloaded", { timeout: 5_000 });
+  expect(mock.capture).toHaveBeenCalledWith("task-1", page, "human_key", undefined);
 });

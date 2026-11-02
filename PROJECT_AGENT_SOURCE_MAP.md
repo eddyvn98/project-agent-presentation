@@ -26,6 +26,8 @@ Review and improve the complete agent experience: project chat lifecycle, task s
 
 See `FULL_AGENT_UPGRADE.md` for the reviewed defects, implemented changes, exact neutral test results, compatibility notes, and original-host verification still required. Run `npm run test:agent` for the separate full-agent regression suite; `npm test` retains the presentation suite.
 
+See `SOURCE_SYNC_2026-11-02.md` for the selective sync from the AI-WEB-CHAT source branch, including the exact base/source SHAs and preserved GPT-specific divergences.
+
 For the arithmetic and optional model-selector compatibility follow-up, see `CALCULATION_RELIABILITY.md`. Exact arithmetic is a runtime action; ordinary Dify receives guidance for tools that actually exist, and no UI reasoning verifier is introduced.
 
 See `ACTION_TRANSPORT_REVIEW.md` for the historical standard-Dify/runtime distinction and runtime transport review. `DIFY_CALCULATOR_BRIDGE.md` describes the later app-hosted ordinary Dify calculator bridge and its remote workflow requirement.

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ProjectAgentAnswer } from "../src/components/ProjectAgentAnswer";
+import { ProjectAgentTaskAnswer } from "../components/features/projects/ProjectAgentTaskAnswer";
 import { LONG_CHAT_BATCH, longChatWindow } from "../lib/project-agent/long-chat-window";
 import "./style.css";
 
@@ -36,7 +36,8 @@ function LongChatQa() {
       {visible.map(message => <article data-testid="qa-message" data-id={message.id}
         key={message.id} className="mb-5 rounded-lg border p-3">
         <p className="mb-2 text-sm font-medium">{message.prompt}</p>
-        <ProjectAgentAnswer markdown={message.markdown}/>
+        <ProjectAgentTaskAnswer markdown={message.markdown} sources={[]}
+          resolveImage={() => null}/>
       </article>)}
     </div>
   </main>;

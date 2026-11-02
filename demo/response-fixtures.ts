@@ -28,10 +28,10 @@ export const responseShowcase = [
   chart("stacked", ["Q1", "Q2", "Q3"],
     [{ name: "Core", values: [40, 55, 70] },
      { name: "Support", values: [20, 25, 30] }]),
-  "## Đa ngôn ngữ / Multilingual QA",
-  "Tiếng Việt: đây là dữ liệu **minh họa**. English: all metrics below are synthetic.",
+  "## Đa ngôn ngữ / Multilingual QA", // vi-allow: localized demo fixture
+  "Tiếng Việt: đây là dữ liệu **minh họa**. English: all metrics below are synthetic.", // vi-allow: localized demo fixture
   fence("agent-ui", JSON.stringify({ type: "kpis", items: [
-    { label: "Người dùng", value: "1.250", hint: "Dữ liệu giả lập", tone: "info" },
+    { label: "Người dùng", value: "1.250", hint: "Dữ liệu giả lập", tone: "info" }, // vi-allow: localized demo fixture
     { label: "Active accounts", value: "850", hint: "Synthetic only", tone: "success" },
   ] })),
   "## Process diagram QA",

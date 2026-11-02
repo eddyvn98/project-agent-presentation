@@ -27,7 +27,8 @@ for (const href of routes) {
 const mainPage = fs.readFileSync(path.join(root, "app/(tools)/projects/page.tsx"), "utf8");
 if (!mainPage.includes('href="/account/agent-control"'))
   throw new Error("Projects UI has no account-wide Agent settings entry.");
-const composer = fs.readFileSync(path.join(root, "components/features/projects/ProjectAgentComposer.tsx"), "utf8");
-if (!composer.includes('"/account/agent-control"') || !composer.includes('"/account/agent-workflows"'))
-  throw new Error("Composer menu must expose Agent Control Center and workflows.");
+const projectMgmt = fs.readFileSync(path.join(root, "components/features/projects/ProjectAgentHeaderMenu.tsx"), "utf8") +
+  fs.readFileSync(path.join(root, "components/features/projects/ProjectModal.tsx"), "utf8");
+if (!projectMgmt.includes('"/account/agent-control"') || !projectMgmt.includes('"/account/agent-workflows"'))
+  throw new Error("Project Agent management must expose Agent Control Center and workflows.");
 console.log("Agent account navigation and routes: OK (" + routes.length + " protected pages)");
