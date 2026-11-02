@@ -58,7 +58,7 @@ def draw_lines():
             yield (a, b, "FURNITURE")
 
 def dxf_pair(code, value):
-    return str(code) + "\\n" + str(value) + "\\n"
+    return str(code) + "\n" + str(value) + "\n"
 
 def make_dxf():
     out = [dxf_pair(0, "SECTION"), dxf_pair(2, "HEADER"), dxf_pair(9, "$ACADVER"),
@@ -93,24 +93,24 @@ def make_pdf():
     label(x0-85, y0 + D*scale/2, str(round(D))+" mm", 11)
     for item in spec["furniture"]:
         label(x0 + item["x"]*scale - 12, y0 + item["y"]*scale, item["kind"][:9], 8)
-    stream = "\\n".join(content).encode("latin-1", "replace")
+    stream = "\n".join(content).encode("latin-1", "replace")
     objects = [
       b"<< /Type /Catalog /Pages 2 0 R >>",
       b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
       b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 1190 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
-      b"<< /Length " + str(len(stream)).encode() + b" >>\\nstream\\n" + stream + b"\\nendstream",
+      b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
       b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
-    pdf = bytearray(b"%PDF-1.4\\n%\\xe2\\xe3\\xcf\\xd3\\n")
+    pdf = bytearray(b"%PDF-1.4\n%\\xe2\\xe3\\xcf\\xd3\n")
     offsets = [0]
     for idx, obj in enumerate(objects, 1):
         offsets.append(len(pdf))
-        pdf.extend(("%d 0 obj\\n" % idx).encode() + obj + b"\\nendobj\\n")
+        pdf.extend(("%d 0 obj\n" % idx).encode() + obj + b"\nendobj\n")
     xref = len(pdf)
-    pdf.extend(("xref\\n0 %d\\n0000000000 65535 f \\n" % (len(objects)+1)).encode())
+    pdf.extend(("xref\n0 %d\n0000000000 65535 f \n" % (len(objects)+1)).encode())
     for off in offsets[1:]:
-        pdf.extend(("%010d 00000 n \\n" % off).encode())
-    pdf.extend(("trailer\\n<< /Size %d /Root 1 0 R >>\\nstartxref\\n%d\\n%%%%EOF\\n" % (len(objects)+1, xref)).encode())
+        pdf.extend(("%010d 00000 n \n" % off).encode())
+    pdf.extend(("trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects)+1, xref)).encode())
     return bytes(pdf)
 
 # One instanced cuboid per object, per-class materials. glTF 2.0 uses Y-up and metres.
@@ -158,7 +158,7 @@ def make_glb():
     n = struct.pack("<%df" % len(normal), *normal)
     indices = struct.pack("<%dH" % len(idx), *idx)
     binary = p + n + indices
-    while len(binary) % 4: binary += b"\\x00"
+    while len(binary) % 4: binary += b"\x00"
     views = [{"buffer":0,"byteOffset":0,"byteLength":len(p)},
              {"buffer":0,"byteOffset":len(p),"byteLength":len(n)},
              {"buffer":0,"byteOffset":len(p)+len(n),"byteLength":len(indices)}]
@@ -181,7 +181,7 @@ def make_glb():
             "bufferViews":views,"accessors":accessors}
     encoded = json.dumps(gltf,separators=(",",":")).encode()
     while len(encoded) % 4: encoded += b" "
-    return struct.pack("<4sII",b"glTF",2,12+8+len(encoded)+8+len(binary)) + struct.pack("<I4s",len(encoded),b"JSON") + encoded + struct.pack("<I4s",len(binary),b"BIN\\x00") + binary
+    return struct.pack("<4sII",b"glTF",2,12+8+len(encoded)+8+len(binary)) + struct.pack("<I4s",len(encoded),b"JSON") + encoded + struct.pack("<I4s",len(binary),b"BIN\x00") + binary
 
 def make_viewer(glb):
     data = base64.b64encode(glb).decode()
