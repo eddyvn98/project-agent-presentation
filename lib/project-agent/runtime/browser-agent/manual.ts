@@ -1,7 +1,9 @@
 import { activeBrowserSession, withBrowserOp } from "./session";
 import { randomUUID } from "node:crypto";
 import type { Page } from "playwright-core";
-import { beginBrowserIntervention, completeBrowserIntervention, notifyBrowserIntervention, claimHumanBrowserAction } from "./control";
+import { beginBrowserIntervention, completeBrowserIntervention, notifyBrowserIntervention, claimHumanBrowserAction, takeBrowserControl, releaseBrowserControl } from "./control";
+import { taskBrowserControlStatus } from "./task-browser";
+import { clearSharedFrame } from "./shared-frame";
 import { browserWatchStatus, captureBrowserWatch, setBrowserWatch } from "./watch";
 
 export type HumanBrowserAction =
@@ -49,19 +51,35 @@ async function privateLoginHasFocus(page: Page): Promise<boolean> {
     }
   }
 }
-export async function humanBrowserOperation(taskId: string, chatId: string, action: HumanBrowserAction) {
+export async function humanBrowserOperation(taskId: string, chatId: string, action: HumanBrowserAction,
+  identity?: { projectId: string; owner: string }) {
   const session = activeBrowserSession(chatId);
   if (!session) return { error: "Agent has not opened a browser session yet" };
+  if (identity && session.owner?.toLowerCase() !== identity.owner.trim().toLowerCase())
+    return { error: "Browser session owner mismatch" };
   if (action.op === "release") {
     challenges.delete(taskId);
+    releaseBrowserControl(taskId);
+    await clearSharedFrame(taskId).catch(() => undefined);
     return { ok: true, paused: false };
   }
   if (action.op === "takeover") {
     challenges.delete(taskId);
-    if (!browserWatchStatus(taskId)?.watching) setBrowserWatch(taskId, true);
-    notifyBrowserIntervention(taskId);
-    return { ok: true, paused: false };
+    takeBrowserControl(taskId);
+    try {
+      await withBrowserOp(session, async () => {
+        if (!browserWatchStatus(taskId)?.watching) setBrowserWatch(taskId, true);
+        await captureBrowserWatch(taskId, session.page, "human_takeover");
+      }, false, "human");
+      notifyBrowserIntervention(taskId);
+      return { ok: true, paused: true };
+    } catch (cause) {
+      releaseBrowserControl(taskId);
+      return { error: cause instanceof Error ? cause.message.slice(0, 180) : "Browser takeover failed" };
+    }
   }
+  const control = await taskBrowserControlStatus(taskId, identity?.projectId, identity?.owner);
+  if (!control.paused) return { error: "Take control before sending manual browser input." };
   if (!claimHumanBrowserAction(taskId)) return { error: "Manual browser action limit reached; try again in a few minutes." };
   beginBrowserIntervention(taskId);
   let marker: { x: number; y: number; kind: "human" } | undefined;
