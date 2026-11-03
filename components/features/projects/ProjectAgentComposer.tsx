@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from "react";
-import { ArrowUp, CalendarClock, ShieldCheck, Check, Globe, Loader2, Mic, Paperclip, Plus, X } from "lucide-react";
+import { ArrowUp, CalendarClock, ShieldCheck, Check, Camera, Globe, Loader2, Mic, Paperclip, Plus, X } from "lucide-react";
 import { useAgentComposerStore } from "@/stores/useAgentComposerStore";
 import { useDictation } from "./useDictation";
 import { ProjectAgentModelPicker } from "./ProjectAgentModelPicker";
@@ -11,6 +11,8 @@ type Props = {
 	onChange: (value: string) => void;
 	onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 	onAttach: () => void;
+	/** Opens the native rear-camera capture picker on mobile. */
+	onCamera?: () => void;
 	/** Files pasted (screenshots) or dropped on the box. */
 	onFiles?: (files: File[]) => void;
 	placeholder: string;
@@ -30,7 +32,7 @@ type Props = {
 
 const menuItem = "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-slate-800 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800";
 
-export function ProjectAgentComposer({ value, onChange, onSubmit, onAttach, onFiles, placeholder, ariaLabel, formRef, attachments, meter, footnote, attachLabel = "Add files and images", sendLabel = "Send to Project Agent", disabled = false, busy = false, allowEmptyValue = false }: Props) {
+export function ProjectAgentComposer({ value, onChange, onSubmit, onAttach, onCamera, onFiles, placeholder, ariaLabel, formRef, attachments, meter, footnote, attachLabel = "Add files and images", sendLabel = "Send to Project Agent", disabled = false, busy = false, allowEmptyValue = false }: Props) {
 	const menuId = useId();
 	const menuButtonRef = useRef<HTMLButtonElement>(null);
 	const menuRef = useRef<HTMLDivElement>(null);
@@ -94,12 +96,13 @@ export function ProjectAgentComposer({ value, onChange, onSubmit, onAttach, onFi
 			<div ref={wrapRef} className="relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-1">
 			<textarea ref={textareaRef} value={value} onChange={(event) => onChange(event.target.value)} onKeyDown={handleKeyDown} onPaste={handlePaste} rows={1} maxLength={12000} aria-label={ariaLabel} placeholder={placeholder} disabled={disabled} className={`max-h-60 min-h-11 w-full resize-none border-0 bg-transparent px-3 py-2.5 text-[15px] leading-6 text-slate-900 !outline-none focus:!outline-none focus-visible:!outline-none focus-visible:!ring-0 placeholder:text-slate-400 disabled:opacity-60 dark:text-slate-100 dark:placeholder:text-slate-500 ${expanded ? "col-span-3 row-start-1" : "col-start-2 row-start-1"}`} />
 				<div className={`flex min-w-0 items-center gap-2 col-start-1 ${expanded ? "row-start-2" : "row-start-1"}`}>
-					<button ref={menuButtonRef} type="button" aria-controls={menu === "plus" ? menuId : undefined} onClick={() => setMenu(menu === "plus" ? null : "plus")} disabled={disabled} aria-label="Add to message" aria-haspopup="menu" aria-expanded={menu === "plus"} title="Add to message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800"><Plus className="h-5 w-5" /></button>
+					<button ref={menuButtonRef} type="button" aria-controls={menu === "plus" ? menuId : undefined} onClick={() => setMenu(menu === "plus" ? null : "plus")} disabled={disabled} aria-label="Add to message" aria-haspopup="menu" aria-expanded={menu === "plus"} title="Add to message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11 dark:text-slate-300 dark:hover:bg-slate-800"><Plus className="h-5 w-5" /></button>
+					{onCamera ? <button type="button" onClick={onCamera} disabled={disabled} aria-label="Take photo" title="Take photo" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-600 transition hover:bg-slate-100 disabled:opacity-50 md:hidden dark:text-slate-300 dark:hover:bg-slate-800"><Camera className="h-5 w-5" /></button> : null}
 					{webSearch ? <button type="button" onClick={() => setWebSearch(false)} aria-label="Turn off web search" className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1.5 text-[13px] font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-950/40 dark:text-sky-300"><Globe className="h-4 w-4" />Search<X className="h-3.5 w-3.5" /></button> : null}
 				</div>
 				<div className={`flex shrink-0 items-center gap-1 col-start-3 ${expanded ? "row-start-2" : "row-start-1"}`}>
-					{dictation.supported ? <button type="button" onClick={dictation.toggle} disabled={disabled} aria-label={dictation.listening ? "Stop dictation" : "Dictate"} aria-pressed={dictation.listening} title={dictation.listening ? "Stop dictation" : "Dictate"} className={`flex h-9 w-9 items-center justify-center rounded-full transition ${dictation.listening ? "animate-pulse bg-red-50 text-red-600 dark:bg-red-950/40" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}`}><Mic className="h-5 w-5" /></button> : null}
-					<button type="submit" aria-label={sendLabel} disabled={!canSend} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white transition hover:bg-slate-700 disabled:bg-slate-200 disabled:text-slate-400 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 dark:disabled:bg-slate-700 dark:disabled:text-slate-500">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-5 w-5" />}</button>
+					{dictation.supported ? <button type="button" onClick={dictation.toggle} disabled={disabled} aria-label={dictation.listening ? "Stop dictation" : "Dictate"} aria-pressed={dictation.listening} title={dictation.listening ? "Stop dictation" : "Dictate"} className={`flex h-9 w-9 items-center justify-center rounded-full transition [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11 ${dictation.listening ? "animate-pulse bg-red-50 text-red-600 dark:bg-red-950/40" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}`}><Mic className="h-5 w-5" /></button> : null}
+					<button type="submit" aria-label={sendLabel} disabled={!canSend} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11 bg-slate-900 text-white transition hover:bg-slate-700 disabled:bg-slate-200 disabled:text-slate-400 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 dark:disabled:bg-slate-700 dark:disabled:text-slate-500">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-5 w-5" />}</button>
 				</div>
 				{menu === "plus" ? <div ref={menuRef} id={menuId} role="menu" aria-label="Message options" onKeyDown={(event) => {
 					if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
