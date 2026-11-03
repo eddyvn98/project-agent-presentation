@@ -94,7 +94,7 @@ export async function saveAgentWorkflow(owner: string, input: {
   // Locking only the generated UUID allowed duplicate drafts under simultaneous requests.
   const key = input.id ? file(owner, input.id, "awf") :
     path.join(ownerDir(owner), ".create-" + hash(input.projectId + "\0" + title));
-  return locked(key, async () => {
+  const perform = async () => {
     const existing = input.id ? await getAgentWorkflow(owner, input.id) :
       (await listAgentWorkflows(owner)).find(item =>
         item.projectId === input.projectId && item.title.toLowerCase() === title.toLowerCase()) ?? null;
@@ -107,7 +107,18 @@ export async function saveAgentWorkflow(owner: string, input: {
       createdAt: existing?.createdAt ?? now, updatedAt: now };
     await write(file(owner, record.id, "awf"), record);
     return record;
-  });
+  };
+  // Identical concurrent creations are serialized and all obtain the persisted id.
+  // Do not weaken the exclusive update lock used for existing workflow revisions.
+  if (input.id) return locked(key, perform);
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try { return await locked(key, perform); }
+    catch (error) {
+      if (!(error instanceof Error) || error.message !== "Workflow busy; retry" || attempt === 19) throw error;
+      await new Promise(resolve => setTimeout(resolve, 10 + attempt * 5));
+    }
+  }
+  throw new Error("Workflow busy; retry");
 }
 export async function changeAgentWorkflow(owner: string, id: string, action: "enable" | "disable" | "delete") {
   await init(owner);
