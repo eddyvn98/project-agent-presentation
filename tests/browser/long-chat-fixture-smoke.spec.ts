@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test("host long-chat fixture resolves and mounts the bounded real answer renderer", async ({ page }) => {
   const problems: string[] = [];
-  page.on("pageerror", error => problems.push("JS: " + error.message));
+  page.on("pageerror", error => problems.push("JS: " + (error.stack ?? error.message).slice(0, 650)));
   page.on("console", message => {
     if (message.type() === "error") problems.push("CONSOLE: " + message.text().slice(0, 350));
   });
