@@ -1,4 +1,5 @@
 import { parseDesignSpec, type DesignSpec } from "./design-model";
+import { parseDesignEdits, type DesignEdit } from "./design-edit";
 import { MAX_CALCULATION_CHARS } from "./calculate";
 import { parseSubAgentTier, type SubAgentTier } from "./sub-agent-model";
 import { parseBrowserAction, type BrowserAction } from "./browser-agent/action-parser";
@@ -23,6 +24,7 @@ export type RuntimeAction =
 	| { action: "progress"; message: string; note?: string }
 	| { action: "calculate"; expression: string; note?: string }
 	| { action: "design"; model: DesignSpec; note?: string }
+	| { action: "design_edit"; source: string; edits: DesignEdit[]; note?: string }
 	| { action: "shell"; command: string; timeout?: number; note?: string }
 	| { action: "search_output"; id: string; query: string; limit?: number; note?: string }
 	| { action: "xerj_search"; query: string; count?: number; note?: string }
@@ -128,6 +130,12 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
 		case "design": {
 			const parsed = parseDesignSpec(raw.model);
 			return "error" in parsed ? parsed : { action: "design", model: parsed.spec, note };
+		}
+		case "design_edit": {
+			if (typeof raw.source !== "string" || !/^outputs\/design-[a-f0-9]{12}\.design\.json$/.test(raw.source))
+				return { error: "design_edit.source must be a saved outputs/design-<id>.design.json file" };
+			const parsed = parseDesignEdits(raw.edits);
+			return "error" in parsed ? parsed : { action: "design_edit", source: raw.source, edits: parsed.edits, note };
 		}
 		case "shell":
 			return typeof raw.command === "string" && raw.command.trim() ? { action: "shell", command: raw.command, timeout: typeof raw.timeout === "number" ? raw.timeout : undefined, note } : { error: "shell needs a command" };
