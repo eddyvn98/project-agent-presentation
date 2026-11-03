@@ -1,3 +1,4 @@
+import { runDesignEditAction } from "./design-edit-action";
 import { runDesignAction } from "./design-action";
 import { assertActiveTaskLease } from "../lease-fence"; import { runCalculationStep } from "./calculate"; import { auditFinalAnswer } from "./final-audit"; import { checkG1SyntheticGoal, formatG1Receipt, g1QaActionAllowed } from "./g1-goal-check"; import { enforceTaskBudget, estimatedModelCost } from "./usage-pricing";
 import { agentScheduleAction } from "../scheduled-agent-tool"; import { agentWorkflowAction } from "../workflow-agent-tool";
@@ -49,6 +50,7 @@ async function runAction(input: RuntimeInput, action: Exclude<RuntimeAction, { a
 	if (action.action === "calculate") return runCalculationStep(action.expression, input.onStep); if (action.action === "schedule") return agentScheduleAction(input, action); if (action.action === "workflow") return agentWorkflowAction(input, action);
 	if (action.action === "search_output" || action.action === "read_output") return contextOutputAction(input, action); if (action.action === "xerj_search" || action.action === "xerj_read") return runXerjAction(input, action);
 	if (action.action === "design") return runDesignAction(input, action.model);
+	if (action.action === "design_edit") return runDesignEditAction(input, action.source, action.edits);
 	if (action.action === "shell") {
 		input.onStep?.({ tool: "sandbox_shell", detail: action.note || action.command });
 		const result = await execInSandbox(input.chatId, action.command, action.timeout, input.readOnly);
@@ -290,7 +292,7 @@ async function loop(input: RuntimeInput, metrics: RunMetrics): Promise<DifyAgent
 			if (outcome.failed) { metrics.failed += 1; input.onStep?.({ tool: "tool_failed", detail: `${action.action}: ${outcome.text.replace(/\s+/g, " ").slice(0, 150)}` }); }
 			if (outcome.sources?.length) recordSources(input.sources!, outcome.sources);
 			if (action.action === "render" && !outcome.failed) gate.noteRender(action.path);
-			else if (action.action === "shell" || action.action === "write_file" || action.action === "design") gate.noteMutation();
+			else if (action.action === "shell" || action.action === "write_file" || action.action === "design" || action.action === "design_edit") gate.noteMutation();
 			results.push(actions.length > 1 ? `[${index + 1}/${actions.length}] ${outcome.text}` : outcome.text);
 			if (outcome.image) images = [outcome.image];
 			if (outcome.images?.length) images = outcome.images;
