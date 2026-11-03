@@ -9,6 +9,7 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
 const INLINE_PREVIEW_TYPES = new Set(["application/pdf", "text/plain", "text/markdown", "text/csv", "text/tab-separated-values", "application/json", "application/x-ndjson", "application/xml", "application/yaml", "image/png", "image/jpeg", "image/webp", "image/gif"]);
 const GENERATED_FILE_MIME_TYPES: Record<string, string> = {
+	"ifc": "application/x-step", "dxf": "image/vnd.dxf", "glb": "model/gltf-binary",
 	"html": "text/html", "htm": "text/html", "pdf": "application/pdf",
 	"eml": "message/rfc822", "msg": "application/vnd.ms-outlook",
 	"doc": "application/msword", "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
