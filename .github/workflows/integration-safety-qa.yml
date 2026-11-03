@@ -1,0 +1,21 @@
+name: Integration safety regression QA
+on:
+  push:
+    branches:
+      - qa/integrate-headless-mobile-20261103
+permissions:
+  contents: read
+jobs:
+  legacy_safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Verify affected browser, permission, workflow and chat regressions
+        run: npx vitest run --config vitest.agent.config.ts tests/agent/composer.test.tsx tests/agent/coverage-browser-manual.test.ts tests/agent/l8b-inflight-project-delete.test.ts tests/agent/workflow-lifecycle-integration.test.ts tests/agent/workflow-regression.test.ts
