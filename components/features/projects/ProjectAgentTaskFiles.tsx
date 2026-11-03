@@ -2,7 +2,9 @@
 
 import type { PublicProjectAgentTask } from "@/lib/project-agent/public-task";
 import type { ProjectAgentTaskFile } from "@/lib/project-agent/types";
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { collectDesignHandoffs } from "@/lib/project-agent/design-handoff";
+import { ProjectAgentDesignHandoff } from "./ProjectAgentDesignHandoff";
 import { ProjectAgentFilePreview, isPreviewableFile } from "./ProjectAgentFilePreview";
 import { ProjectAgentFileCard } from "./ProjectAgentFileCard";
 import { ProjectAgentWordEdit } from "./ProjectAgentWordEdit";
@@ -18,6 +20,7 @@ interface Props {
 	viewId?: string | null;
 	busy: boolean;
 	onRedo: (marked: File, instruction: string, original: ProjectAgentTaskFile) => void;
+	onDesignEdit?: (prompt: string) => void;
 	fileHref: (task: PublicProjectAgentTask, file: ProjectAgentTaskFile) => string;
 	/** The chat's tasks in order, to find earlier versions of each file. */
 	chatTasks?: PublicProjectAgentTask[];
@@ -26,9 +29,12 @@ interface Props {
 }
 
 /** What the agent made in one turn: images inline (with mark-and-redo), other files as small download chips with a preview eye. */
-export function ProjectAgentTaskFiles({ projectId, task, viewId, busy, onRedo, fileHref, chatTasks = [], inlined }: Props) {
+export function ProjectAgentTaskFiles({ projectId, task, viewId, busy, onRedo, onDesignEdit, fileHref, chatTasks = [], inlined }: Props) {
 	const files = task.files ?? [];
-	const others = files.filter((file) => !file.mimeType.startsWith("image/"));
+	const { handoffs, groupedIds } = task.status === "done" ? collectDesignHandoffs(files) : { handoffs: [], groupedIds: new Set<string>() };
+	const others = files.filter((file) => !groupedIds.has(file.id) && !file.mimeType.startsWith("image/"));
+	const [selectedDesign, setSelectedDesign] = useState<{ file: ProjectAgentTaskFile; serial: number } | null>(null);
+	const previewDesign = (file: ProjectAgentTaskFile) => setSelectedDesign((current) => ({ file, serial: (current?.serial ?? 0) + 1 }));
 	const live = task.status === "running" || task.status === "queued";
 	const sawLive = useRef(live);
 	if (live) sawLive.current = true;
@@ -38,7 +44,13 @@ export function ProjectAgentTaskFiles({ projectId, task, viewId, busy, onRedo, f
 	return <>
 		{latest && <ProjectAgentLivePreview projectId={projectId} taskId={task.id} running={live} />}
 		{task.workspaceBoardId && <ProjectAgentWorkspaceCard boardId={task.workspaceBoardId} refreshKey={`${task.status}:${task.updatedAt}`} />}
-		<ProjectAgentImageGallery files={inlined?.size ? files.filter((file) => !inlined.has(file.name.toLowerCase())) : files} disabled={busy} onRedo={onRedo} fileUrl={(file) => fileHref(task, file)} />
+		<ProjectAgentImageGallery files={files.filter((file) => !groupedIds.has(file.id) && !inlined?.has(file.name.toLowerCase()))} disabled={busy} onRedo={onRedo} fileUrl={(file) => fileHref(task, file)} />
+		{handoffs.map((design) => <ProjectAgentDesignHandoff key={design.id} design={design}
+			fileHref={(file) => fileHref(task, file)} onPreview={previewDesign}
+			onEdit={task.canContinue && !busy ? onDesignEdit : undefined} />)}
+		{selectedDesign && <ProjectAgentFilePreview key={`${selectedDesign.file.id}-${selectedDesign.serial}`}
+			projectId={projectId} taskId={task.id} file={selectedDesign.file} conversationId={task.conversationId ?? viewId ?? undefined}
+			persistInConversation autoOpen renderTrigger={() => null} />}
 		{others.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{others.map((file) => isPreviewableFile(file.name)
 			? <ProjectAgentFilePreview key={file.id} projectId={projectId} taskId={task.id} file={file} conversationId={task.conversationId ?? viewId ?? undefined} persistInConversation autoOpen={file.id === autoOpenId} renderTrigger={(open) => <ProjectAgentFileCard file={file} href={fileHref(task, file)} onOpen={open} extra={task.canContinue && /\.docx$/i.test(file.name) ? <ProjectAgentWordEdit projectId={projectId} taskId={task.id} file={file} /> : undefined} />} />
 			: <ProjectAgentFileCard key={file.id} file={file} href={fileHref(task, file)} />)}</div>}
