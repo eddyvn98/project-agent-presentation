@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { DESIGN_SCRIPT } from "../../lib/project-agent/runtime/design-script";
 import { applyDesignEdits, parseDesignEdits } from "../../lib/project-agent/runtime/design-edit";
 import { parseRuntimeAction } from "../../lib/project-agent/runtime/actions";
 import { denyReason } from "../../lib/project-agent/runtime/policy";
@@ -77,6 +82,35 @@ describe("headless design revisions", () => {
     ]) expect("error" in parseRuntimeAction(JSON.stringify({
       action: "design_edit", source: path, edits: [{ type: "remove_furniture", index: 0 }],
     }))).toBe(true);
+  });
+
+  it("exports a fresh PDF/DXF/GLB set from a door revision while preserving all previous artifacts", () => {
+    const revision = applyDesignEdits(source, edits([{ type: "move_opening", index: 0, offset: 1000 }]));
+    expect("spec" in revision).toBe(true);
+    if (!("spec" in revision)) return;
+    const dir = mkdtempSync(path.join(tmpdir(), "design-revision-"));
+    try {
+      const script = path.join(dir, "export.py");
+      const src = path.join(dir, "source.json");
+      const next = path.join(dir, "revision.json");
+      writeFileSync(script, DESIGN_SCRIPT.replace('output = "/work/outputs"', "output = " + JSON.stringify(dir)));
+      writeFileSync(src, JSON.stringify(source));
+      writeFileSync(next, JSON.stringify(revision.spec));
+      for (const [model, name] of [[src, "original"], [next, "revised"]]) {
+        const exported = spawnSync("python3", [script, model, name], { timeout: 15000, encoding: "utf8" });
+        expect(exported.status, exported.stderr).toBe(0);
+        expect(JSON.parse(exported.stdout).files).toHaveLength(6);
+      }
+      for (const ext of ["dxf", "pdf", "glb", "preview.png"]) {
+        const before = readFileSync(path.join(dir, "original." + ext));
+        const after = readFileSync(path.join(dir, "revised." + ext));
+        expect(after.equals(before), "Expected changed artifact " + ext).toBe(false);
+        expect(readFileSync(path.join(dir, "original." + ext)).equals(before)).toBe(true);
+      }
+      expect(JSON.parse(readFileSync(path.join(dir, "revised.design.json"), "utf8")).openings[0].offset).toBe(1000);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
   it("allows removal and addition with full model validation", () => {
     const changed = applyDesignEdits(source, edits([
