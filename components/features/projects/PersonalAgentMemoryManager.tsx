@@ -42,7 +42,7 @@ export function PersonalAgentMemoryManager() {
         rows={2} maxLength={400} value={draft} onChange={e => setDraft(e.target.value)}
         placeholder="Add a useful preference, workflow rule or fact (review before saving)"/>
       <div className="flex items-center gap-2">
-        <select value={category} onChange={e => setCategory(e.target.value as typeof category)}
+        <select aria-label="Memory category" value={category} onChange={e => setCategory(e.target.value as typeof category)}
           className="rounded-lg border p-2 text-sm dark:bg-slate-900">
           <option value="preference">Preference</option><option value="workflow">Workflow</option>
           <option value="context">Context</option>
