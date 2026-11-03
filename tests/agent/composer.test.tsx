@@ -28,11 +28,13 @@ it("navigates message options by keyboard and restores trigger focus", () => {
   const menu = screen.getByRole("menu", { name: "Message options" });
   expect(menu).toBeTruthy();
   for (const label of ["Scheduled tasks", "Agent Control Center", "Skill Registry", "Workflow Builder"]) {
-    expect(screen.queryByRole("menuitem", { name: label })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: label })).toBeTruthy();
   }
   const attach = screen.getByRole("menuitem", { name: /Add files and images/i });
   expect(document.activeElement).toBe(attach);
   fireEvent.keyDown(attach, { key: "ArrowDown" });
+  expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Scheduled tasks" }));
+  fireEvent.keyDown(document.activeElement!, { key: "End" });
   expect(document.activeElement).toBe(screen.getByRole("menuitemcheckbox", { name: /Web search/i }));
   fireEvent.keyDown(document.activeElement!, { key: "Escape" });
   expect(screen.queryByRole("menu")).toBeNull();
