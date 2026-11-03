@@ -56,7 +56,7 @@ export function ProjectAgentDocumentViewer(props: DocumentViewerProps) {
 	const pageWidth = (index: number) => {
 		const info = pages[index];
 		if (!info) return 0;
-		return zoom === "fit" ? Math.max(200, width - 72) : (info.width * zoom) / 100;
+		return zoom === "fit" ? Math.max(140, width - (width < 640 ? 24 : 72)) : (info.width * zoom) / 100;
 	};
 	const goTo = (page: number) => { setView("list"); requestAnimationFrame(() => refs.current.get(page)?.scrollIntoView({ behavior: "smooth", block: "start" })); };
 	const openEditor = props.editUrl ? async () => {
@@ -80,13 +80,13 @@ export function ProjectAgentDocumentViewer(props: DocumentViewerProps) {
 			<div ref={scroller} className="min-h-0 flex-1 overflow-auto bg-slate-100 dark:bg-slate-900">
 				{error && <p role="alert" className="mx-auto max-w-lg py-10 text-center text-sm text-slate-500">Could not render this file. Download it to view in a compatible application.</p>}
 				{!error && !doc && <p role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Preparing preview…</p>}
-				{doc && view === "list" && <div className="flex flex-col items-center gap-4 px-9 py-6">
+				{doc && view === "list" && <div className="flex flex-col items-center gap-4 px-3 py-4 sm:px-9 sm:py-6">
 					{pages.map((info, index) => {
 						const page = index + 1, w = pageWidth(index);
 						return <div key={page} data-page={page} ref={(element) => { if (element) refs.current.set(page, element); else refs.current.delete(page); }} className="group relative shrink-0 bg-white shadow-sm ring-1 ring-slate-200 dark:ring-slate-700" style={{ width: w, height: (w * info.height) / info.width }}>
 							{visible.has(page) && w > 0 && <PdfPageCanvas doc={doc} page={page} width={w} />}
 							{editing && <ProjectAgentRegionSelect onSubmit={(region, note) => { props.onRequestEdit(page, region, note); setEditing(false); setNotice(`Sent your change for the marked area of ${props.kind === "slides" ? "slide" : "page"} ${page} to the agent.`); }} />}
-							{!editing && <button type="button" onClick={() => props.onDiscussPage(page)} className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[11px] text-slate-600 opacity-0 shadow ring-1 ring-slate-200 transition-opacity group-hover:opacity-100 dark:bg-slate-900/90 dark:text-slate-300">Ask about {props.kind === "slides" ? "slide" : "page"} {page}</button>}
+							{!editing && <button type="button" onClick={() => props.onDiscussPage(page)} className="absolute right-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[11px] text-slate-600 opacity-0 shadow ring-1 ring-slate-200 transition-opacity group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:px-3 dark:bg-slate-900/90 dark:text-slate-300">Ask about {props.kind === "slides" ? "slide" : "page"} {page}</button>}
 						</div>;
 					})}
 				</div>}

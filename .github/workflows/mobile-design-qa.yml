@@ -1,0 +1,35 @@
+name: Mobile design handoff QA
+on:
+  push:
+    branches: [feat/mobile-agent-capture-review-20261102]
+  pull_request:
+    paths:
+      - "components/features/projects/ProjectAgentDesignHandoff.tsx"
+      - "components/features/projects/ProjectAgentTaskFiles.tsx"
+      - "components/features/projects/ProjectAgentConversationPane.tsx"
+      - "lib/project-agent/design-handoff.ts"
+      - "lib/project-agent/files.ts"
+      - "qa/agent-ui.tsx"
+      - "tests/agent/mobile-design-handoff.test.ts"
+      - "tests/agent-ui-browser/design-handoff.spec.mjs"
+permissions:
+  contents: read
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: TypeScript check
+        run: npm run typecheck
+      - name: Focused design handoff, camera and touch tests
+        run: npx vitest run --config vitest.agent.config.ts tests/agent/mobile-design-handoff.test.ts tests/agent/mobile-capture-review.test.tsx
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Pixel 7 and desktop handoff journey
+        run: npx playwright test --config playwright.agent-ui.config.ts tests/agent-ui-browser/design-handoff.spec.mjs

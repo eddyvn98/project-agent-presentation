@@ -80,6 +80,9 @@ export interface ProjectAgentTask {
   filesExpireAt?: string;
   error?: string;
   log: string[];
+  /** Explicit continuation signal from a completed workflow task. */
+  requestedInput?: string;
+  workflowOutcome?: "complete" | "needs_input";
   resultText?: string;
   sources?: ProjectAgentTaskSource[];
   files?: ProjectAgentTaskFile[];
