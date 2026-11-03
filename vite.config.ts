@@ -8,6 +8,9 @@ const root = fileURLToPath(new URL("./", import.meta.url));
 const srcRoot = path.join(root, "src") + path.sep;
 
 export default defineConfig({
+  // Next.js replaces process.env at build time; the isolated Vite browser QA must not
+  // expose real server secrets or crash while rendering host components.
+  define: { "process.env": JSON.stringify({ NODE_ENV: "development" }) },
   plugins: [{
     name: "host-root-alias-for-long-chat-qa",
     enforce: "pre",
