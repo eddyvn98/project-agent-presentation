@@ -1,0 +1,21 @@
+name: Long-chat browser fixture QA
+on:
+  push:
+    branches:
+      - qa/integrate-headless-mobile-20261103
+permissions:
+  contents: read
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Confirm host long-chat fixture mounts in mobile and desktop
+        run: npx playwright test tests/browser/long-chat-fixture-smoke.spec.ts
