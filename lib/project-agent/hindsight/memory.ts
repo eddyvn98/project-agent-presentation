@@ -77,6 +77,17 @@ export async function retainProjectHindsight(task: ProjectAgentTask): Promise<bo
       }],
       async: false,
     }, 20_000);
+    // A Project can be deleted or access revoked while the remote POST is in flight.
+    // Do not retain data that was committed after permission was lost.
+    let stillAuthorized = false;
+    try { stillAuthorized = Boolean(await getProjectAccess(task.projectId, task.ownerEmail)); }
+    catch { stillAuthorized = false; }
+    if (!stillAuthorized) {
+      await hindsightRequest(task.projectId,
+        "/documents/" + encodeURIComponent(hindsightDocumentId(task.id)),
+        "DELETE", undefined, 8_000, undefined, true).catch(() => undefined);
+      return false;
+    }
     return true;
   } catch { return false; }
 }
