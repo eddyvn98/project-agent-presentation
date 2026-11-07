@@ -32,6 +32,14 @@ test("real model viewer loads GLB into WebGL, changes perspective and toggles wa
   await handoff.getByRole("button", { name: "View 3D" }).click();
   const frame = page.frameLocator('iframe[title="Real 3D concept preview"]');
   await expect(frame.getByRole("status")).toContainText("Model loaded", { timeout: 25_000 });
+  const canvas = frame.locator("#scene");
+  await expect(canvas).toBeVisible();
+  const bounds = await canvas.boundingBox();
+  expect(bounds?.width).toBeGreaterThan(200);
+  expect(bounds?.height).toBeGreaterThan(200);
+  await canvas.click({ position: { x: bounds.width / 2, y: bounds.height / 2 } });
+  await expect(frame.locator("#detail")).not.toContainText("Tap an element");
+  await page.screenshot({ path: test.info().outputPath("actual-babylon-viewer.png"), fullPage: true });
   await frame.getByRole("button", { name: "Plan 2D" }).click();
   await expect(frame.getByRole("button", { name: "Plan 2D" })).toHaveAttribute("aria-pressed", "true");
   await frame.getByRole("button", { name: "3D", exact: true }).click();
