@@ -40,6 +40,8 @@ for (const seed of seeds) {
     if (await editor.getByRole("button", { name: "Prepare new revision in chat" }).isDisabled()) {
       await editor.getByRole("button", { name: "Move right", exact: true }).click();
     }
+    await expect(editor.getByRole("button", { name: "Prepare new revision in chat" })).toBeDisabled();
+    await editor.getByRole("checkbox", { name: "I reviewed the design draft" }).check();
     await editor.getByRole("button", { name: "Prepare new revision in chat" }).click();
     const textarea = page.getByRole("textbox", { name: "Design change draft" });
     await expect(textarea).toContainText('"action":"design_edit"');
