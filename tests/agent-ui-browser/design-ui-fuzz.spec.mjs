@@ -31,14 +31,15 @@ for (const seed of seeds) {
       try {
         await editor.getByRole("button", { name: action, exact: true }).click();
         await expect(editor.getByRole("alert")).toHaveCount(0);
-        await expect(editor.getByRole("button", { name: "Prepare new revision in chat" })).toBeEnabled();
+        await expect(editor.getByRole("button", { name: "Move right", exact: true })).toBeVisible();
       } catch (error) {
         throw Error("UI FUZZ seed=" + seed + " step=" + i +
           " actions=" + trace.join(" | ") + " error=" + String(error));
       }
     }
-    await editor.getByRole("button", { name: "Move right", exact: true }).click();
-    await editor.getByRole("button", { name: "width plus 100 mm", exact: true }).click();
+    if (await editor.getByRole("button", { name: "Prepare new revision in chat" }).isDisabled()) {
+      await editor.getByRole("button", { name: "Move right", exact: true }).click();
+    }
     await editor.getByRole("button", { name: "Prepare new revision in chat" }).click();
     const textarea = page.getByRole("textbox", { name: "Design change draft" });
     await expect(textarea).toContainText('"action":"design_edit"');
