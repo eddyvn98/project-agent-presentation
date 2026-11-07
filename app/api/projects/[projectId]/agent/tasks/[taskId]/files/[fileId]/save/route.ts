@@ -12,6 +12,8 @@ import { listProjectConversationMembers } from "@/lib/capabilities/project-shari
 import { canAccessProjectAgentTask } from "@/lib/project-agent/access";
 import { inferProjectAgentFileMetadata } from "@/lib/project-agent/files";
 import { canReleaseDesign, designFileFamily } from "@/lib/project-agent/design-approval-store";
+import { archiveApprovedDesign } from "@/lib/project-agent/design-archive-store";
+import { collectDesignHandoffs } from "@/lib/project-agent/design-handoff";
 
 export const runtime = "nodejs";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -62,6 +64,29 @@ export async function POST(
 	if (!bytes) return NextResponse.json({ error: "Generated file is no longer available" }, { status: 410 });
 	if (bytes.byteLength > MAX_FILE_BYTES) return NextResponse.json({ error: "Generated file exceeds the 20 MiB Project limit" }, { status: 413 });
 	const normalizedFile = { ...file, ...inferProjectAgentFileMetadata(file.name, file.mimeType, bytes), size: bytes.byteLength };
+  if (designMatch) {
+    const bundle = collectDesignHandoffs(task.files ?? []).handoffs.find(item => item.id === designMatch[1]);
+    if (!bundle) return NextResponse.json({ error: "Incomplete CAD/BIM design bundle" }, { status: 409 });
+    try {
+      const sourceBytes = await readProjectAgentFile(task.id, bundle.source.id);
+      const files = await Promise.all(bundle.files.map(async item => ({
+        name: item.name, mimeType: item.mimeType, bytes: await readProjectAgentFile(task.id, item.id),
+      })));
+      const saved = await archiveApprovedDesign({
+        projectId: params.projectId, ownerEmail, taskId: task.id,
+        sourceFileId: bundle.source.id, sourceName: bundle.source.name, sourceBytes, files,
+      });
+      const nextFiles = task.files!.map(item => bundle.files.some(part => part.id === item.id)
+        ? { ...item, savedToProjectFileId: saved.id, savedAt: saved.createdAt } : item);
+      await updateProjectAgentTask(task.id, { files: nextFiles });
+      return NextResponse.json({ fileId: saved.id, archiveId: saved.id, files: saved.files.length,
+        sourceSha256: saved.sourceSha256 }, { headers: { "Cache-Control": "private, no-store" } });
+    } catch (error) {
+      console.error("[project agent CAD archive] error:", error);
+      return NextResponse.json({ error: "Could not persist the approved CAD/BIM bundle" },
+        { status: 503, headers: { "Cache-Control": "private, no-store" } });
+    }
+  }
 
 	try {
 		const { text, fileType, sections } = await extractTextFromBuffer(bytes, normalizedFile.mimeType, normalizedFile.name);
