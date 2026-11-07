@@ -25,7 +25,7 @@ export async function runDesignEditAction(input: RuntimeInput, source: string, e
       ". The previous version was not modified.", failed: true };
     const digest = createHash("sha256").update(bytes).digest("hex").slice(0, 16);
     input.onStep?.({ tool: "design_edit", detail: edits.length + " bounded edit(s) from saved concept" });
-    const generated = await runDesignAction(input, updated.spec);
+    const generated = await runDesignAction(input, updated.spec, { autoRepair: false });
     if (generated.failed) return generated;
     return {
       ...generated,
