@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseDesignSpec, type DesignSpec } from "../../lib/project-agent/runtime/design-model";
 import { applyDesignEdits, parseDesignEdits } from "../../lib/project-agent/runtime/design-edit";
 import { createDesignEditorPrompt, moveDesignFurniture, updateDesignFurniture } from "../../lib/project-agent/design-editor";
+import { reviewDesign } from "../../lib/project-agent/runtime/design-review";
 
 const seeds = [0x2f41, 0xbeef, 0xa11ce, 0xcad, 0x1234567, 0xdecaf, 0x500d, 0x9091];
 const sourceName = "design-abcdefabcdef.design.json";
@@ -101,6 +102,9 @@ describe("CAD/BIM deterministic stateful fuzz — replay with seed", () => {
           expect(JSON.stringify(draft)).toBe(before);
           if ("spec" in result) {
             geometry(result.spec);
+            const review = reviewDesign(result.spec);
+            expect(review.blockers + review.warnings).toBe(review.issues.length);
+            expect(review.status).toBe(review.blockers ? "needs_changes" : "human_review_required");
             expect(parseDesignSpec(result.spec)).toEqual(result);
             draft = result.spec;
           } else {
