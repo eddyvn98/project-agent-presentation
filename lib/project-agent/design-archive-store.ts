@@ -94,6 +94,11 @@ export async function archiveApprovedDesign(input: ArchiveInput): Promise<Archiv
   if (existing) {
     if (existing.manifestSha256 !== manifestSha256 || existing.projectId !== input.projectId)
       throw Error("Conflicting archive retry; source revision already has different artifact bytes");
+    for (const file of files) {
+      const original = input.files.find(item => item.name === file.name)!;
+      const restored = await readChunks(chunks, id, file);
+      if (!restored.equals(original.bytes)) throw Error("Idempotent retry found corrupt archived bytes");
+    }
     return publicRecord(existing);
   }
   for (const file of input.files) {
