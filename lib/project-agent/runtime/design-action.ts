@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { RuntimeInput } from "./run-agent-types";
 import type { DesignSpec } from "./design-model";
 import { reviewDesign } from "./design-review";
+import { proposeDesignRepair } from "./design-repair";
 import { DESIGN_SCRIPT } from "./design-script";
 import { IFC_DESIGN_SCRIPT } from "./design-ifc-script";
 import { execInSandbox, resolveWorkspacePath, workspaceDir } from "./sandbox";
@@ -14,9 +15,12 @@ import { execInSandbox, resolveWorkspacePath, workspaceDir } from "./sandbox";
 export const createDesignName = () => "design-" + randomUUID().replace(/-/g, "").slice(0, 12);
 
 /** Generates six artifacts in one bounded sandbox command. No model-provided shell text. */
-export async function runDesignAction(input: RuntimeInput, model: DesignSpec):
+export async function runDesignAction(input: RuntimeInput, model: DesignSpec,
+  options: { autoRepair?: boolean } = {}):
   Promise<{ text: string; failed?: boolean; image?: DifyChatFile }> {
   if (input.readOnly) return { text: "Reviewers cannot create designs.", failed: true };
+  const repair = options.autoRepair === false ? null : proposeDesignRepair(model);
+  const generatedModel = repair?.spec ?? model;
   const name = createDesignName();
   const root = workspaceDir(input.chatId);
   const tool = path.join(root, ".tools", name + ".py");
@@ -27,7 +31,7 @@ export async function runDesignAction(input: RuntimeInput, model: DesignSpec):
     await fs.mkdir(path.dirname(request), { recursive: true });
     await fs.mkdir(path.join(root, "outputs"), { recursive: true });
     await fs.writeFile(tool, DESIGN_SCRIPT, { mode: 0o600, flag: "wx" });
-    await fs.writeFile(request, JSON.stringify(model), { mode: 0o600, flag: "wx" });
+    await fs.writeFile(request, JSON.stringify(generatedModel), { mode: 0o600, flag: "wx" });
     await fs.writeFile(ifcTool, IFC_DESIGN_SCRIPT, { mode: 0o600, flag: "wx" });
     input.onStep?.({ tool: "design", detail: "Generating dimensioned concept plan and 3D model" });
     const command = "python3 /work/.tools/" + name + ".py /work/.tmp/" + name + ".json " + name;
@@ -72,7 +76,7 @@ export async function runDesignAction(input: RuntimeInput, model: DesignSpec):
     } else if (!ifcResult.output.includes("IFC_DEPENDENCY_MISSING")) {
       ifcStatus = "IFC export failed: " + ifcResult.output.slice(0, 300);
     }
-    const review = reviewDesign(model);
+    const review = reviewDesign(generatedModel);
     const reviewSamples = review.issues.filter(issue => issue.severity === "blocker")
       .slice(0, 6).map(issue => issue.message).join(" | ");
     const reviewText = review.blockers
@@ -80,11 +84,15 @@ export async function runDesignAction(input: RuntimeInput, model: DesignSpec):
         reviewSamples + "). Automatically propose a corrected revision before presenting as ready."
       : " AI geometry preflight found no 2D collision/door blockers; " +
         review.warnings + " conceptual spacing warning(s).";
+    const repairText = repair?.edits.length
+      ? " AI automatically proposed " + repair.edits.length + " furniture move(s) and reduced concept blockers from " +
+        repair.initialBlockers + " to " + repair.remainingBlockers +
+        ". These adjustments remain an unapproved draft." : "";
     const cautions = (receipt.warnings ?? []).slice(0, 10).join("; ");
     return { text: "Generated headless interior concept: " + expected.join(", ") +
       ". Return these paths in final.files and use render on the PDF before final. The .web.html viewer uses pinned Babylon.js scripts from an HTTPS CDN. " +
       "AI-generated draft; HUMAN REVIEW REQUIRED before release. Not verified for construction. " +
-      reviewText + " " + ifcStatus +
+      reviewText + repairText + " " + ifcStatus +
       (cautions ? " Geometry warnings: " + cautions : ""), image };
   } catch (error) {
     return { text: "Design export failed: " + (error instanceof Error ? error.message : "error"), failed: true };
