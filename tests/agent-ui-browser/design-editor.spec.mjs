@@ -26,6 +26,8 @@ test("mobile-first editor prepares typed furniture edits without posting or alte
   await editor.getByRole("button", { name: "width plus 100 mm" }).click();
   await expect(editor.getByText("Position: 3,100, 2,200 mm")).toBeVisible();
   await expect(editor.getByText("Width: 1,600 mm")).toBeVisible();
+  await expect(editor.getByRole("button", { name: "Prepare new revision in chat" })).toBeDisabled();
+  await editor.getByRole("checkbox", { name: "I reviewed the design draft" }).check();
   await editor.getByRole("button", { name: "Prepare new revision in chat" }).click();
   const draft = page.getByRole("textbox", { name: "Design change draft" });
   await expect(draft).toContainText('"type":"move_furniture"');
@@ -40,6 +42,8 @@ test("reset removes pending changes and never submits", async ({ page }) => {
   const save = editor.getByRole("button", { name: "Prepare new revision in chat" });
   await expect(save).toBeDisabled();
   await editor.getByRole("button", { name: "Move up" }).click();
+  await expect(save).toBeDisabled();
+  await editor.getByRole("checkbox", { name: "I reviewed the design draft" }).check();
   await expect(save).toBeEnabled();
   await editor.getByRole("button", { name: "Reset draft" }).click();
   await expect(save).toBeDisabled();
