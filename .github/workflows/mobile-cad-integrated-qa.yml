@@ -10,6 +10,8 @@ on:
       - "lib/project-agent/design-handoff.ts"
       - "tests/agent/headless-design*.test.ts"
       - "tests/agent/design-editor.test.ts"
+      - "tests/agent/design-fuzz.test.ts"
+      - "tests/agent/design-export-fuzz.test.ts"
       - "components/features/projects/ProjectAgentDesignEditor.tsx"
       - "lib/project-agent/design-editor.ts"
       - "tests/agent/mobile-design-handoff.test.ts"
@@ -43,7 +45,7 @@ jobs:
       - name: Validate TypeScript and source line limits
         run: npm run typecheck && npm run check:lines
       - name: Validate CAD IFC and mobile handoff regression suites
-        run: npx vitest run --config vitest.agent.config.ts tests/agent/headless-design.test.ts tests/agent/headless-design-edit.test.ts tests/agent/design-editor.test.ts tests/agent/mobile-design-handoff.test.ts tests/agent/mobile-capture-review.test.tsx
+        run: npx vitest run --config vitest.agent.config.ts tests/agent/headless-design.test.ts tests/agent/headless-design-edit.test.ts tests/agent/design-editor.test.ts tests/agent/design-fuzz.test.ts tests/agent/design-export-fuzz.test.ts tests/agent/mobile-design-handoff.test.ts tests/agent/mobile-capture-review.test.tsx
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Phone and desktop preview, edit and download
