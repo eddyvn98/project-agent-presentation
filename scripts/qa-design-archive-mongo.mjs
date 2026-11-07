@@ -140,6 +140,10 @@ export { getMongoAiDb, closeQaDb } from "@/services/mongodb/client";
           versionId, sourceId + ".glb");
       } catch { integrityFailed = true; }
       if (!integrityFailed) throw Error("Corrupt archived GLB passed integrity validation");
+      let retryRejected = false;
+      try { await fromDisk.archiveApprovedDesign(input); }
+      catch { retryRejected = true; }
+      if (!retryRejected) throw Error("Idempotent save accepted a corrupt preexisting archive");
       console.log("MONGO_ARCHIVE_CONCURRENT_RETRY_INTEGRITY_PASS", versionId, fingerprint(input.sourceBytes));
       await fromDisk.closeQaDb();
     } finally {
