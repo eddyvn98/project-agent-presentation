@@ -14,6 +14,7 @@ export function ProjectAgentDesignApproval({ projectId, taskId, sourceFileId }: 
   const [state, setState] = useState<Approval | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [savedId, setSavedId] = useState("");
   const [problem, setProblem] = useState("");
   const url = "/api/projects/" + encodeURIComponent(projectId) +
     "/agent/tasks/" + encodeURIComponent(taskId) +
@@ -21,6 +22,7 @@ export function ProjectAgentDesignApproval({ projectId, taskId, sourceFileId }: 
   useEffect(() => {
     const ctrl = new AbortController();
     setState(null);
+    setSavedId("");
     setConfirmed(false);
     setProblem("");
     fetch(url, { credentials: "same-origin", cache: "no-store", signal: ctrl.signal })
@@ -53,6 +55,21 @@ export function ProjectAgentDesignApproval({ projectId, taskId, sourceFileId }: 
       setBusy(false);
     }
   }
+  async function saveBundle() {
+    if (state?.status !== "approved" || busy) return;
+    setBusy(true); setProblem("");
+    try {
+      const route = "/api/projects/" + encodeURIComponent(projectId) +
+        "/agent/tasks/" + encodeURIComponent(taskId) + "/files/" +
+        encodeURIComponent(sourceFileId) + "/save";
+      const response = await fetch(route, { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" }, body: "{}" });
+      const payload = await response.json() as { error?: string; archiveId?: string };
+      if (!response.ok || !payload.archiveId) throw Error(payload.error || "Could not save complete design");
+      setSavedId(payload.archiveId);
+    } catch (error) { setProblem(error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(false); }
+  }
   return <section aria-label="Human CAD BIM release approval"
     className="border-t border-slate-200 p-3 text-sm dark:border-slate-700">
     <h4 className="font-semibold">Release control · human approval</h4>
@@ -70,6 +87,7 @@ export function ProjectAgentDesignApproval({ projectId, taskId, sourceFileId }: 
           "AI checked · awaiting human approval"}
         {" · "}{state.review.blockers} blocker(s), {state.review.warnings} warning(s)
       </p>
+      {savedId && <p role="status" className="mt-2 text-xs">Saved persistent design: {savedId}</p>}
       {state.latest && <p className="mt-1 text-xs text-slate-500">
         {state.latest.decision} by {state.latest.reviewer} at {state.latest.decidedAt}
       </p>}
@@ -82,6 +100,11 @@ export function ProjectAgentDesignApproval({ projectId, taskId, sourceFileId }: 
         I inspected this revision, measurements and warnings. I accept responsibility for
         the release decision. Editing the design requires a new approval.
       </label>
+      {state.status === "approved" && <button type="button" onClick={() => void saveBundle()}
+        disabled={busy || Boolean(savedId)}
+        className="mt-2 min-h-11 w-full rounded-lg border border-sky-600 px-3 font-semibold disabled:opacity-40">
+        {savedId ? "Saved in Project" : "Save approved CAD/BIM bundle to Project"}
+      </button>}
       <div className="mt-2 grid grid-cols-2 gap-2">
         <button type="button" disabled={!confirmed || busy} onClick={() => void decide(false)}
           className="min-h-11 rounded-lg border px-3 disabled:opacity-40">Reject revision</button>
