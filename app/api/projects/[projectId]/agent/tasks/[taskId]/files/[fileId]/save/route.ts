@@ -11,6 +11,7 @@ import { resolveProjectRequestAccess } from "@/lib/projects/api-access";
 import { listProjectConversationMembers } from "@/lib/capabilities/project-sharing";
 import { canAccessProjectAgentTask } from "@/lib/project-agent/access";
 import { inferProjectAgentFileMetadata } from "@/lib/project-agent/files";
+import { canReleaseDesign, designFileFamily } from "@/lib/project-agent/design-approval-store";
 
 export const runtime = "nodejs";
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -34,6 +35,25 @@ export async function POST(
 	const file = task.files?.find((item) => item.id === params.fileId);
 	if (!file) return NextResponse.json({ error: "File not found" }, { status: 404 });
 	if (task.status !== "done") return NextResponse.json({ error: "This draft has not passed the Project Agent review" }, { status: 409 });
+  const designMatch = designFileFamily(file.name);
+  if (designMatch) {
+    const source = task.files?.find(item => item.name === designMatch[1] + ".design.json");
+    if (!source) return NextResponse.json({ error: "CAD/BIM source not found" }, { status: 409 });
+    const sourceBytes = await readProjectAgentFile(task.id, source.id).catch(() => null);
+    if (!sourceBytes) return NextResponse.json({ error: "CAD/BIM source unavailable" }, { status: 410 });
+    let approved = false;
+    try {
+      approved = await canReleaseDesign({
+        projectId: params.projectId, taskId: task.id, sourceFileId: source.id,
+        bytes: Buffer.from(sourceBytes),
+      });
+    } catch {
+      return NextResponse.json({ error: "CAD/BIM approval service unavailable" }, { status: 503 });
+    }
+    if (!approved) return NextResponse.json({
+      error: "Human approval is required for this exact CAD/BIM design revision before saving to Project",
+    }, { status: 409 });
+  }
 	if (file.savedToProjectFileId) return NextResponse.json({ fileId: file.savedToProjectFileId });
 	if (task.filesExpireAt && Date.parse(task.filesExpireAt) <= Date.now()) {
 		return NextResponse.json({ error: "File link expired; only files saved to the Project remain available" }, { status: 410 });
