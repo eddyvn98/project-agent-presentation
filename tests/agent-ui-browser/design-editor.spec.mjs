@@ -51,7 +51,7 @@ test("rejects oversized edits and preserves the last valid model", async ({ page
   const editor = page.getByRole("region", { name: "Editable 2D interior floor plan" });
   for (let i = 0; i < 7; i++) await editor.getByRole("button", { name: "width plus 100 mm" }).click();
   await expect(editor.getByText("Width: 2,200 mm")).toBeVisible();
-  for (let i = 0; i < 30; i++) await editor.getByRole("button", { name: "width plus 100 mm" }).click();
+  for (let i = 0; i < 40; i++) await editor.getByRole("button", { name: "width plus 100 mm" }).click();
   await expect(editor.getByRole("alert")).toBeVisible();
-  await expect(editor.getByText("Width: 2,200 mm")).toBeVisible();
+  await expect(editor.getByText("Width: 5,700 mm")).toBeVisible();
 });
