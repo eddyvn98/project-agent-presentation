@@ -12,7 +12,7 @@ test("mobile handoff previews, edits and downloads semantic CAD BIM files", asyn
       ) : "Synthetic QA file: " + id,
     });
   });
-  await page.goto("/agent-ui-qa.html?view=design");
+  await page.goto("/design-handoff-qa.html");
   const handoff = page.getByRole("region", { name: /Design handoff design-abcdefabcdef/i });
   await expect(handoff).toBeVisible();
   if (isMobile) {
@@ -42,7 +42,7 @@ test("revision CTA does not submit automatically", async ({ page }) => {
   page.on("request", request => {
     if (request.method() === "POST") calls.push(request.url());
   });
-  await page.goto("/agent-ui-qa.html?view=design");
+  await page.goto("/design-handoff-qa.html");
   await page.getByRole("button", { name: "Request a change" }).click();
   await expect(page.getByRole("textbox", { name: "Design change draft" })).toHaveValue(/outputs\/design-abcdefabcdef\.design\.json/);
   expect(calls).toHaveLength(0);
