@@ -45,7 +45,8 @@ function DesignQA() {
     <h1 className="text-xl font-semibold">Design handoff mobile QA</h1>
     {handoffs.map((design) => <ProjectAgentDesignHandoff key={design.id}
       design={design}
-      fileHref={(file) => "/api/qa/design/" + file.id}
+      fileHref={(file) => file.name.endsWith(".design.json")
+        ? "/api/projects/qa/agent/tasks/qa/files/" + file.id : "/api/qa/design/" + file.id}
       onPreview={(file) => setOpened(file.name)}
       onEdit={setDraft} />)}
     {opened && <div role="status">Preview opened: {opened}</div>}
