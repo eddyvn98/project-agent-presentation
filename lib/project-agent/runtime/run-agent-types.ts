@@ -12,6 +12,8 @@ export interface RuntimeInput {
 	projectId?: string;
 	user: string;
 	ownerEmail?: string;
+  /** Project file owner (may differ from the current task caller for shared Projects). */
+  projectOwnerEmail?: string;
 	scheduledRun?: boolean;
 	workflowStep?: boolean;
 	engines?: string[];

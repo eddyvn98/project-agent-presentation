@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import { ProjectAgentDesignHandoff } from "../components/features/projects/ProjectAgentDesignHandoff";
 import { collectDesignHandoffs } from "../lib/project-agent/design-handoff";
+import { DesignRealQA } from "./design-real";
 import { AgentAccountNav, type AgentAccountPage } from "../components/features/projects/AgentAccountNav";
 import { PersonalAgentSkillRegistry } from "../components/features/projects/PersonalAgentSkillRegistry";
 import { AgentWorkflowBuilder } from "../components/features/projects/AgentWorkflowBuilder";
@@ -13,15 +14,16 @@ import { PersonalAgentMemoryManager } from "../components/features/projects/Pers
 import { PersonalSessionVaultManager } from "../components/features/projects/PersonalSessionVaultManager";
 import "./agent-ui.css";
 
-type View = "skills" | "workflows" | "schedules" | "settings" | "sessions" | "design";
+type View = "skills" | "workflows" | "schedules" | "settings" | "sessions" | "design" | "design-real";
 const selected = new URLSearchParams(location.search);
-const view = (["skills", "workflows", "schedules", "settings", "sessions", "design"].includes(selected.get("view") || "")
+const view = (["skills", "workflows", "schedules", "settings", "sessions", "design", "design-real"].includes(selected.get("view") || "")
   ? selected.get("view") : "skills") as View;
 if (selected.get("dark") === "1") document.documentElement.classList.add("dark");
 const destinations: Record<View, AgentAccountPage> = {
   skills: "/account/agent-skills", workflows: "/account/agent-workflows",
   schedules: "/account/scheduled-tasks", settings: "/account/agent-control",
   sessions: "/account/browser-sessions", design: "/account/agent-control",
+  "design-real": "/account/agent-control",
 };
 function Settings() {
   return <section className="space-y-6">
@@ -45,7 +47,8 @@ function DesignQA() {
     <h1 className="text-xl font-semibold">Design handoff mobile QA</h1>
     {handoffs.map((design) => <ProjectAgentDesignHandoff key={design.id}
       design={design}
-      fileHref={(file) => "/api/qa/design/" + file.id}
+      fileHref={(file) => file.name.endsWith(".design.json")
+        ? "/api/projects/qa/agent/tasks/qa/files/" + file.id : "/api/qa/design/" + file.id}
       onPreview={(file) => setOpened(file.name)}
       onEdit={setDraft} />)}
     {opened && <div role="status">Preview opened: {opened}</div>}
@@ -56,7 +59,8 @@ function DesignQA() {
 function App() {
   return <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6" data-agent-ui-qa={view}>
     <AgentAccountNav current={destinations[view]}/>
-    {view === "design" ? <DesignQA/> :
+    {view === "design-real" ? <DesignRealQA/> :
+      view === "design" ? <DesignQA/> :
       view === "skills" ? <PersonalAgentSkillRegistry/> :
       view === "workflows" ? <AgentWorkflowBuilder/> :
       view === "schedules" ? <ScheduledAgentManager/> :

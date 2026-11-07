@@ -5,6 +5,7 @@ import type { ProjectAgentTaskFile } from "@/lib/project-agent/types";
 import { useRef, useState } from "react";
 import { collectDesignHandoffs } from "@/lib/project-agent/design-handoff";
 import { ProjectAgentDesignHandoff } from "./ProjectAgentDesignHandoff";
+import { ProjectAgentDesignArchiveLibrary } from "./ProjectAgentDesignArchiveLibrary";
 import { ProjectAgentFilePreview, isPreviewableFile } from "./ProjectAgentFilePreview";
 import { ProjectAgentFileCard } from "./ProjectAgentFileCard";
 import { ProjectAgentWordEdit } from "./ProjectAgentWordEdit";
@@ -43,10 +44,13 @@ export function ProjectAgentTaskFiles({ projectId, task, viewId, busy, onRedo, o
 	if (!files.length && !task.workspaceBoardId && !latest) return null;
 	return <>
 		{latest && <ProjectAgentLivePreview projectId={projectId} taskId={task.id} running={live} />}
+    {latest && <ProjectAgentDesignArchiveLibrary projectId={projectId}
+      onEdit={task.canContinue && !busy ? onDesignEdit : undefined} />}
 		{task.workspaceBoardId && <ProjectAgentWorkspaceCard boardId={task.workspaceBoardId} refreshKey={`${task.status}:${task.updatedAt}`} />}
 		<ProjectAgentImageGallery files={files.filter((file) => !groupedIds.has(file.id) && !inlined?.has(file.name.toLowerCase()))} disabled={busy} onRedo={onRedo} fileUrl={(file) => fileHref(task, file)} />
 		{handoffs.map((design) => <ProjectAgentDesignHandoff key={design.id} design={design}
 			fileHref={(file) => fileHref(task, file)} onPreview={previewDesign}
+      projectId={projectId} taskId={task.id}
 			onEdit={task.canContinue && !busy ? onDesignEdit : undefined} />)}
 		{selectedDesign && <ProjectAgentFilePreview key={`${selectedDesign.file.id}-${selectedDesign.serial}`}
 			projectId={projectId} taskId={task.id} file={selectedDesign.file} conversationId={task.conversationId ?? viewId ?? undefined}

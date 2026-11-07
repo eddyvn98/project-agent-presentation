@@ -11,6 +11,8 @@ export default defineConfig({
     { name: "mobile", use: { ...devices["Pixel 7"] } },
   ],
   webServer: { command: "node node_modules/vite/bin/vite.js --config vite.agent-ui.config.ts",
-    url: "http://127.0.0.1:4184/agent-ui-qa.html",
+    url: process.env.CAD_QA_ONLY === "1"
+      ? "http://127.0.0.1:4184/design-handoff-qa.html"
+      : "http://127.0.0.1:4184/agent-ui-qa.html",
     reuseExistingServer: false, timeout: 60_000 },
 });

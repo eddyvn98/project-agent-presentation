@@ -82,20 +82,28 @@ def make_preview(glb):
     faces=[([4,5,6,7],1.0),([1,2,6,5],.82),([2,3,7,6],.68)]
     corners=[(-1,-1,-1),(1,-1,-1),(1,1,-1),(-1,1,-1),
              (-1,-1,1),(1,-1,1),(1,1,1),(-1,1,1)]
-    palette=[(210,216,211),(207,211,215),(157,113,75),(76,130,167)]
+    palette={"floor":(210,216,211),"wall":(207,211,215),
+             "wood":(157,113,75),"seat":(76,130,167),"plant":(64,137,84)}
+    meshes=gltf.get("meshes",[])
+    materials=gltf.get("materials",[])
     for node in sorted(nodes,key=lambda n:n["translation"][0]+n["translation"][2]):
         center=[v*1000 for v in node["translation"]]
         size=[v*1000 for v in node["scale"]]
         projected=[iso(center[0]+dx*size[0]/2,center[1]+dy*size[1]/2,
                        center[2]+dz*size[2]/2) for dx,dy,dz in corners]
-        kind=node["mesh"]
-        if kind==1:
+        mesh_id=node.get("mesh",-1)
+        mesh=meshes[mesh_id] if isinstance(mesh_id,int) and 0 <= mesh_id < len(meshes) else {}
+        primitive=(mesh.get("primitives") or [{}])[0]
+        material_id=primitive.get("material",-1)
+        material=materials[material_id] if isinstance(material_id,int) and 0 <= material_id < len(materials) else {}
+        kind=material.get("name","unknown")
+        if kind=="wall":
             for a,b in ((0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),
                         (0,4),(1,5),(2,6),(3,7)):
                 line(*projected[a],*projected[b],(164,174,185),1)
         else:
             for indices,shade in faces:
-                col=tuple(round(k*shade) for k in palette[kind])
+                col=tuple(round(k*shade) for k in palette.get(kind,(155,162,170)))
                 points=[projected[i] for i in indices]
                 fill(points,col)
                 for a,b in zip(points,points[1:]+points[:1]):

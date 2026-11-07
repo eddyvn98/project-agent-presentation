@@ -609,6 +609,8 @@ jobs:
           retention-days: 14
       - name: Install isolated accessibility audit
         run: npm install --no-save --package-lock=false @axe-core/playwright@4
+      - name: Reinstall Chromium matching the post-audit Playwright version
+        run: npx playwright install chromium
       - name: Real-component Agent UX QA (desktop/mobile, light/dark, accessibility)
         run: npm run test:agent-ui:e2e
       - name: Preserve Agent UI QA screenshots
