@@ -37,7 +37,11 @@ test("real model viewer loads GLB into WebGL, changes perspective and toggles wa
   await frame.getByRole("button", { name: "3D", exact: true }).click();
   await expect(frame.getByRole("button", { name: "3D", exact: true })).toHaveAttribute("aria-pressed", "true");
   await frame.getByRole("button", { name: "Walls" }).click();
-  await expect(frame.getByRole("button", { name: "Walls" })).toHaveAttribute("aria-pressed", "false");
+  const walls = frame.getByRole("button", { name: "Walls" });
+  await expect(walls).toHaveAttribute("aria-pressed", "false");
+  const toggled = Number(await walls.getAttribute("data-wall-mesh-count"));
+  expect(toggled).toBeGreaterThan(0);
+  await expect(frame.getByRole("status")).not.toHaveAttribute("data-error", "true");
   await frame.getByRole("button", { name: "Fit" }).click();
   await expect(frame.getByRole("button", { name: "Fit" })).toBeEnabled();
 });
@@ -53,19 +57,31 @@ test("actual touch-friendly edits create a NEW binary design revision with sourc
   await handoff.getByRole("button", { name: "Edit on floor plan" }).click();
   const editor = page.getByRole("region", { name: "Editable 2D interior floor plan" });
   await expect(editor.getByText("Position: 3,000, 2,200 mm")).toBeVisible();
+  const node = editor.getByRole("button", { name: "Meeting table furniture" });
+  await node.scrollIntoViewIfNeeded();
+  const box = await node.boundingBox();
+  expect(box).toBeTruthy();
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
   if (isMobile) {
-    await page.getByRole("button", { name: "Meeting table furniture" }).tap();
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart", touchPoints: [{ x, y, id: 1 }],
+    });
+    for (let i = 1; i <= 5; i++) {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove", touchPoints: [{ x: x + i * 7, y, id: 1 }],
+      });
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await cdp.detach();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2)).toBe(true);
   } else {
-    const node = page.getByRole("button", { name: "Meeting table furniture" });
-    const box = await node.boundingBox();
-    expect(box).toBeTruthy();
-    await page.mouse.move(box.x + box.width/2, box.y + box.height/2);
+    await page.mouse.move(x, y);
     await page.mouse.down();
-    await page.mouse.move(box.x + box.width/2 + 25, box.y + box.height/2, { steps: 6 });
+    await page.mouse.move(x + 35, y, { steps: 6 });
     await page.mouse.up();
-    await expect(editor.getByText("Position: 3,000, 2,200 mm")).not.toBeVisible();
   }
+  await expect(editor.getByText("Position: 3,000, 2,200 mm")).not.toBeVisible();
   await editor.getByRole("button", { name: "Move right" }).click();
   await editor.getByRole("button", { name: "width plus 100 mm" }).click();
   await editor.getByRole("button", { name: "Prepare new revision in chat" }).click();
