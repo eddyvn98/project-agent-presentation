@@ -17,6 +17,7 @@ on:
       - "tests/agent/mobile-design-handoff.test.ts"
       - "tests/agent-ui-browser/design-editor.spec.mjs"
       - "tests/agent-ui-browser/design-real-journey.spec.mjs"
+      - "tests/agent-ui-browser/design-ui-fuzz.spec.mjs"
       - "qa/design-real.tsx"
       - "qa/design-real-entry.tsx"
       - "design-real-qa.html"
@@ -51,7 +52,7 @@ jobs:
       - name: Phone and desktop preview, edit and download
         env:
           CAD_QA_ONLY: "1"
-        run: npx playwright test --config playwright.agent-ui.config.ts --workers=1 tests/agent-ui-browser/design-handoff.spec.mjs tests/agent-ui-browser/design-editor.spec.mjs tests/agent-ui-browser/design-real-journey.spec.mjs
+        run: npx playwright test --config playwright.agent-ui.config.ts --workers=1 tests/agent-ui-browser/design-handoff.spec.mjs tests/agent-ui-browser/design-editor.spec.mjs tests/agent-ui-browser/design-real-journey.spec.mjs tests/agent-ui-browser/design-ui-fuzz.spec.mjs
       - name: Preserve actual user workflow screenshots and traces
         if: always()
         uses: actions/upload-artifact@v4
