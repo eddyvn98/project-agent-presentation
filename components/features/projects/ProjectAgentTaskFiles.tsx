@@ -47,6 +47,7 @@ export function ProjectAgentTaskFiles({ projectId, task, viewId, busy, onRedo, o
 		<ProjectAgentImageGallery files={files.filter((file) => !groupedIds.has(file.id) && !inlined?.has(file.name.toLowerCase()))} disabled={busy} onRedo={onRedo} fileUrl={(file) => fileHref(task, file)} />
 		{handoffs.map((design) => <ProjectAgentDesignHandoff key={design.id} design={design}
 			fileHref={(file) => fileHref(task, file)} onPreview={previewDesign}
+      projectId={projectId} taskId={task.id}
 			onEdit={task.canContinue && !busy ? onDesignEdit : undefined} />)}
 		{selectedDesign && <ProjectAgentFilePreview key={`${selectedDesign.file.id}-${selectedDesign.serial}`}
 			projectId={projectId} taskId={task.id} file={selectedDesign.file} conversationId={task.conversationId ?? viewId ?? undefined}
