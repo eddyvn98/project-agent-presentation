@@ -13,6 +13,12 @@ on:
       - "tests/agent/design-review.test.ts"
       - "tests/agent/design-repair.test.ts"
       - "tests/agent/design-approval.test.ts"
+      - "tests/agent/design-archive.test.ts"
+      - "lib/project-agent/design-archive-store.ts"
+      - "components/features/projects/ProjectAgentDesignArchiveLibrary.tsx"
+      - "lib/project-agent/runtime/actions.ts"
+      - "lib/project-agent/runtime/design-edit-action.ts"
+      - "app/api/projects/**/design-archives/**"
       - "lib/project-agent/design-approval-store.ts"
       - "components/features/projects/ProjectAgentDesignApproval.tsx"
       - "components/features/projects/ProjectAgentTaskFiles.tsx"
@@ -54,7 +60,7 @@ jobs:
       - name: Validate TypeScript and source line limits
         run: npm run typecheck && npm run check:lines
       - name: Validate CAD IFC and mobile handoff regression suites
-        run: npx vitest run --config vitest.agent.config.ts tests/agent/headless-design.test.ts tests/agent/headless-design-edit.test.ts tests/agent/design-editor.test.ts tests/agent/design-review.test.ts tests/agent/design-repair.test.ts tests/agent/design-approval.test.ts tests/agent/design-fuzz.test.ts tests/agent/design-export-fuzz.test.ts tests/agent/mobile-design-handoff.test.ts tests/agent/mobile-capture-review.test.tsx
+        run: npx vitest run --config vitest.agent.config.ts tests/agent/headless-design.test.ts tests/agent/headless-design-edit.test.ts tests/agent/design-editor.test.ts tests/agent/design-review.test.ts tests/agent/design-repair.test.ts tests/agent/design-approval.test.ts tests/agent/design-archive.test.ts tests/agent/design-fuzz.test.ts tests/agent/design-export-fuzz.test.ts tests/agent/mobile-design-handoff.test.ts tests/agent/mobile-capture-review.test.tsx
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Phone and desktop preview, edit and download
