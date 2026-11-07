@@ -83,7 +83,7 @@ export { getMongoAiDb, closeQaDb } from "@/services/mongodb/client";
       plugins: [{ name: "host-alias", setup(b) {
         b.onResolve({ filter: /^@\// }, args => ({
           path: args.path === "@/services/mongodb/client" ? adapter :
-            path.join(root, args.path.slice(2)),
+            path.join(root, args.path.slice(2) + ".ts"),
         }));
       } }],
     });
