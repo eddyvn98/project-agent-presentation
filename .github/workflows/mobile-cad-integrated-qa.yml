@@ -43,6 +43,14 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Phone and desktop preview, edit and download
         run: npx playwright test --config playwright.agent-ui.config.ts tests/agent-ui-browser/design-handoff.spec.mjs tests/agent-ui-browser/design-editor.spec.mjs tests/agent-ui-browser/design-real-journey.spec.mjs
+      - name: Preserve actual user workflow screenshots and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-cad-bim-user-journey
+          path: test-results/agent-ui/
+          if-no-files-found: ignore
+          retention-days: 7
   bim_roundtrip:
     runs-on: ubuntu-latest
     timeout-minutes: 8
