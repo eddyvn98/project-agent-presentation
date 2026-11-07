@@ -30,8 +30,8 @@ export function ProjectAgentDesignHandoff({ design, fileHref, onPreview, onEdit 
     <header className="flex items-start gap-3 px-4 py-3">
       <FileBox className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" />
       <div className="min-w-0 flex-1">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Interior design · editable handoff</h3>
-        <p className="mt-1 text-xs text-slate-500">Concept drawing · CAD and Revit continuation files</p>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">AI-generated interior concept · human review required</h3>
+        <p className="mt-1 text-xs text-slate-500">AI creates and proposes changes. Review geometry and dimensions before authorizing a revision.</p>
       </div>
       <span className="rounded-full bg-amber-50 px-2 py-1 text-[11px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">Concept</span>
     </header>
