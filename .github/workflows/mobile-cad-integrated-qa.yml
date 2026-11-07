@@ -15,6 +15,7 @@ on:
       - "tests/agent/design-approval.test.ts"
       - "tests/agent/design-archive.test.ts"
       - "lib/project-agent/design-archive-store.ts"
+      - "scripts/qa-design-archive-mongo.mjs"
       - "components/features/projects/ProjectAgentDesignArchiveLibrary.tsx"
       - "lib/project-agent/runtime/actions.ts"
       - "lib/project-agent/runtime/design-edit-action.ts"
@@ -75,6 +76,30 @@ jobs:
           path: test-results/agent-ui/
           if-no-files-found: ignore
           retention-days: 7
+  archive_mongo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Install isolated MongoDB client
+        run: npm install --no-save --package-lock=false mongodb@6
+      - name: Real Mongo archive, simultaneous saves, integrity and process restart
+        env:
+          CAD_QA_MONGO_URI: mongodb://127.0.0.1:27017
+        run: node scripts/qa-design-archive-mongo.mjs
   bim_roundtrip:
     runs-on: ubuntu-latest
     timeout-minutes: 8
