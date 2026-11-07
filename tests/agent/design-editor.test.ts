@@ -20,7 +20,7 @@ describe("2D editor semantic draft", () => {
   it("snaps movement to 25mm and clamps within inner wall faces", () => {
     const moved = moveDesignFurniture(original, 0, 3464, 2537);
     expect("spec" in moved).toBe(true);
-    if ("spec" in moved) expect(moved.spec.furniture[0]).toMatchObject({ x: 3475, y: 2550 });
+    if ("spec" in moved) expect(moved.spec.furniture[0]).toMatchObject({ x: 3475, y: 2525 });
     const limited = moveDesignFurniture(original, 0, -200, 9000);
     expect("spec" in limited).toBe(true);
     if ("spec" in limited) expect(limited.spec.furniture[0]).toMatchObject({ x: 900, y: 3950 });
