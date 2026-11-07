@@ -95,3 +95,29 @@ test("human review acknowledgement is invalidated by a subsequent geometry chang
   await expect(approved).not.toBeChecked();
   await expect(editor.getByRole("button", { name: "Prepare new revision in chat" })).toBeDisabled();
 });
+
+
+test("AI auto-repair previews real nonoverlapping geometry, then requires human approval", async ({ page }) => {
+  const conflicted = { ...concept, furniture: [
+    concept.furniture[0],
+    { ...concept.furniture[0], kind: "chair", label: "Colliding chair",
+      x: 3050, y: 2250, width: 550, depth: 550, height: 750 },
+  ] };
+  await page.route("**/api/projects/qa/agent/tasks/qa/files/design.json", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(conflicted) }));
+  await page.goto("/design-handoff-qa.html");
+  await page.getByRole("button", { name: "Edit on floor plan" }).click();
+  const editor = page.getByRole("region", { name: "Editable 2D interior floor plan" });
+  await expect(editor.getByRole("region", { name: "AI geometry preflight" })).toContainText("1 blockers");
+  const save = editor.getByRole("button", { name: "Prepare new revision in chat" });
+  await expect(save).toBeDisabled();
+  await editor.getByRole("button", { name: "Auto-fix layout · preview only" }).click();
+  await expect(editor.getByRole("region", { name: "AI geometry preflight" })).toContainText("0 blockers");
+  await expect(save).toBeDisabled();
+  await editor.getByRole("checkbox", { name: "I reviewed the design draft" }).check();
+  await expect(save).toBeEnabled();
+  await save.click();
+  const prompt = page.getByRole("textbox", { name: "Design change draft" });
+  await expect(prompt).toContainText('"type":"move_furniture"');
+  await expect(prompt).toContainText("outputs/design-abcdefabcdef.design.json");
+});
