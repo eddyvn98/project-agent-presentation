@@ -141,6 +141,7 @@ export { getMongoAiDb, closeQaDb } from "@/services/mongodb/client";
       } catch { integrityFailed = true; }
       if (!integrityFailed) throw Error("Corrupt archived GLB passed integrity validation");
       console.log("MONGO_ARCHIVE_CONCURRENT_RETRY_INTEGRITY_PASS", versionId, fingerprint(input.sourceBytes));
+      await fromDisk.closeQaDb();
     } finally {
       const cleanup = new MongoClient(process.env.CAD_QA_MONGO_URI);
       try {
