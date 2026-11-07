@@ -5,6 +5,7 @@ import type { DesignSpec, DesignFurniture } from "@/lib/project-agent/runtime/de
 import { parseDesignSpec } from "@/lib/project-agent/runtime/design-model";
 import { createDesignEditorPrompt, moveDesignFurniture, updateDesignFurniture } from "@/lib/project-agent/design-editor";
 import { reviewDesign } from "@/lib/project-agent/runtime/design-review";
+import { proposeDesignRepair } from "@/lib/project-agent/runtime/design-repair";
 import { makeDesignEditPrompt } from "@/lib/project-agent/design-handoff";
 
 type Props = {
@@ -137,6 +138,31 @@ export function ProjectAgentDesignEditor({ sourceUrl, sourceName, onEdit, onClos
     const item = draft.furniture[index], [x, y] = offsets[event.key];
     useResult(moveDesignFurniture(draft, index, item.x + x, item.y + y));
   }
+  function previewAutoRepair() {
+    if (!draft || !original) return;
+    try {
+      const proposed = proposeDesignRepair(draft);
+      if (!proposed.edits.length) {
+        setProblem(proposed.message);
+        return;
+      }
+      const merged = createDesignEditorPrompt(sourceName, original, proposed.spec);
+      if ("error" in merged) {
+        setProblem("AI proposal cannot be applied as one bounded revision: " + merged.error);
+        return;
+      }
+      setDraft(proposed.spec);
+      setReviewed(false);
+      setProblem(proposed.remainingBlockers
+        ? "Partial AI repair only: " + proposed.remainingBlockers +
+          " unresolved blockers. Do not approve; ask Agent to redesign."
+        : "AI proposed " + proposed.edits.length +
+          " movement(s). Inspect positions, clearances and dimensions, then approve.");
+    } catch {
+      setReviewed(false);
+      setProblem("Automatic layout repair failed validation; original design is unchanged.");
+    }
+  }
   function askAgentToRepair() {
     const start = makeDesignEditPrompt(sourceName);
     if (!start || !review?.issues.length) return;
@@ -236,10 +262,16 @@ export function ProjectAgentDesignEditor({ sourceUrl, sourceName, onEdit, onClos
         {issue.severity === "blocker" ? "Blocker" : "Check"}: {issue.message}
       </p>)}
       {review.issues.length > 6 && <p className="text-xs">+{review.issues.length - 6} more findings</p>}
-      {needsRepair && <button type="button" onClick={askAgentToRepair}
-        className="mt-2 min-h-11 rounded-lg border px-3 font-medium">
-        Ask AI to propose a repair from saved design
-      </button>}
+      {needsRepair && <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" onClick={previewAutoRepair}
+          className="min-h-11 rounded-lg border border-sky-600 px-3 font-medium">
+          Auto-fix layout · preview only
+        </button>
+        <button type="button" onClick={askAgentToRepair}
+          className="min-h-11 rounded-lg border px-3 font-medium">
+          Ask AI to propose a repair from saved design
+        </button>
+      </div>}
     </section>}
     {problem && draft && <p role="alert" className="mt-2 text-xs text-amber-700">{problem}</p>}
     {draft && <div className="mt-3 flex flex-wrap gap-2">
