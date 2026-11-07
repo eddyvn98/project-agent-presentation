@@ -39,6 +39,7 @@ test("mobile-first editor prepares typed furniture edits without posting or alte
 test("reset removes pending changes and never submits", async ({ page }) => {
   await page.getByRole("button", { name: "Edit on floor plan" }).click();
   const editor = page.getByRole("region", { name: "Editable 2D interior floor plan" });
+  await expect(editor.getByRole("button", { name: "Move up" })).toBeVisible();
   const save = editor.getByRole("button", { name: "Prepare new revision in chat" });
   await expect(save).toBeDisabled();
   await editor.getByRole("button", { name: "Move up" }).click();
