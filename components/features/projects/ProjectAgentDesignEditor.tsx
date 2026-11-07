@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import type { DesignSpec, DesignFurniture } from "@/lib/project-agent/runtime/design-model";
 import { parseDesignSpec } from "@/lib/project-agent/runtime/design-model";
 import { createDesignEditorPrompt, moveDesignFurniture, updateDesignFurniture } from "@/lib/project-agent/design-editor";
+import { reviewDesign } from "@/lib/project-agent/runtime/design-review";
+import { makeDesignEditPrompt } from "@/lib/project-agent/design-handoff";
 
 type Props = {
   sourceUrl: string;
@@ -34,6 +36,7 @@ export function ProjectAgentDesignEditor({ sourceUrl, sourceName, onEdit, onClos
   const [selected, setSelected] = useState<number | null>(null);
   const [problem, setProblem] = useState("");
   const [loading, setLoading] = useState(true);
+  const [reviewed, setReviewed] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<{ id: number; index: number; deltaX: number; deltaY: number } | null>(null);
 
@@ -58,6 +61,7 @@ export function ProjectAgentDesignEditor({ sourceUrl, sourceName, onEdit, onClos
         setDraft(parsed.spec);
         setSelected(parsed.spec.furniture.length ? 0 : null);
         setProblem("");
+        setReviewed(false);
       } catch (error) {
         if (!ctrl.signal.aborted) setProblem(error instanceof Error ? error.message : "Cannot load design.");
       } finally {
@@ -73,10 +77,13 @@ export function ProjectAgentDesignEditor({ sourceUrl, sourceName, onEdit, onClos
   const result = useMemo(() => original && draft ?
     createDesignEditorPrompt(sourceName, original, draft) : null, [sourceName, original, draft]);
   const hasChanges = result !== null && "edits" in result;
+  const review = useMemo(() => draft ? reviewDesign(draft) : null, [draft]);
+  const needsRepair = (review?.blockers ?? 0) > 0;
 
   function useResult(next: { spec: DesignSpec } | { error: string }) {
-    if ("error" in next) { setProblem(next.error); return; }
+    if ("error" in next) { setProblem(next.error); setReviewed(false); return; }
     setDraft(next.spec);
+    setReviewed(false);
     setProblem("");
   }
   function shift(dx: number, dy: number) {
@@ -130,7 +137,22 @@ export function ProjectAgentDesignEditor({ sourceUrl, sourceName, onEdit, onClos
     const item = draft.furniture[index], [x, y] = offsets[event.key];
     useResult(moveDesignFurniture(draft, index, item.x + x, item.y + y));
   }
+  function askAgentToRepair() {
+    const start = makeDesignEditPrompt(sourceName);
+    if (!start || !review?.issues.length) return;
+    const findings = review.issues.filter(issue => issue.severity === "blocker")
+      .slice(0, 6).map(issue => issue.message).join(" | ");
+    onEdit(start + "AI preflight flagged possible geometry conflicts in the saved design: " +
+      findings + ". Propose a safe corrected revision using typed design_edit operations. " +
+      "Recheck door approaches and furniture overlaps, preserve source, and ask the human " +
+      "to review measurements before approval. Unsubmitted local draft moves are not included.");
+    onClose();
+  }
   function apply() {
+    if (!reviewed || needsRepair) {
+      setProblem("Review the draft and resolve all blocking geometry issues before preparing a revision.");
+      return;
+    }
     if (result && "prompt" in result) {
       onEdit(result.prompt);
       onClose();
@@ -202,11 +224,34 @@ export function ProjectAgentDesignEditor({ sourceUrl, sourceName, onEdit, onClos
         <p className="text-xs text-slate-500">Walls and openings are locked. Each edit must fit within the room.</p>
       </div>
     </div>}
+    {draft && review && <section aria-label="AI geometry preflight" className="mt-3 rounded-lg border p-3 text-sm dark:border-slate-700">
+      <strong>AI geometry check · {review.blockers} blockers, {review.warnings} warnings</strong>
+      <p className="mt-1 text-xs text-slate-500">
+        Advisory 2D checks only. Human confirmation and measurement verification are required.
+      </p>
+      {needsRepair && <p role="alert" className="mt-2 text-xs text-red-700">
+        Possible collisions or blocked doors. Resolve these before preparing the revision.
+      </p>}
+      {review.issues.slice(0, 6).map((issue, index) => <p className="mt-1 text-xs" key={index}>
+        {issue.severity === "blocker" ? "Blocker" : "Check"}: {issue.message}
+      </p>)}
+      {review.issues.length > 6 && <p className="text-xs">+{review.issues.length - 6} more findings</p>}
+      {needsRepair && <button type="button" onClick={askAgentToRepair}
+        className="mt-2 min-h-11 rounded-lg border px-3 font-medium">
+        Ask AI to propose a repair from saved design
+      </button>}
+    </section>}
     {problem && draft && <p role="alert" className="mt-2 text-xs text-amber-700">{problem}</p>}
     {draft && <div className="mt-3 flex flex-wrap gap-2">
-      <button type="button" onClick={() => { setDraft(original); setProblem(""); }}
+      <label className="flex w-full items-center gap-2 rounded-lg border p-3 text-xs dark:border-slate-700">
+        <input type="checkbox" aria-label="I reviewed the design draft"
+          checked={reviewed} onChange={event => setReviewed(event.target.checked)}
+          className="h-5 w-5 accent-sky-700" />
+        I checked the draft and its geometry warnings. AI output is not approved for construction.
+      </label>
+      <button type="button" onClick={() => { setDraft(original); setProblem(""); setReviewed(false); }}
         disabled={!hasChanges} className="min-h-11 rounded-lg border px-4 text-sm disabled:opacity-40">Reset draft</button>
-      <button type="button" onClick={apply} disabled={!hasChanges}
+      <button type="button" onClick={apply} disabled={!hasChanges || !reviewed || needsRepair}
         className="min-h-11 flex-1 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-40 dark:bg-slate-100 dark:text-slate-900">
         Prepare new revision in chat
       </button>
