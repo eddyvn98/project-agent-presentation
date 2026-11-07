@@ -9,6 +9,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), realDesignQaPlugin()],
   resolve: { alias: { "@": fileURLToPath(new URL("./", import.meta.url)) } },
   optimizeDeps: process.env.CAD_QA_ONLY === "1" ?
-    { entries: ["design-real-qa.html", "design-handoff-qa.html"] } : undefined,
-  server: { host: "127.0.0.1", port: 4184, strictPort: true },
+    { entries: ["design-real-qa.html", "design-handoff-qa.html"], noDiscovery: true } : undefined,
+  server: { host: "127.0.0.1", port: 4184, strictPort: true,
+    hmr: process.env.CAD_QA_ONLY === "1" ? false : undefined },
 });
