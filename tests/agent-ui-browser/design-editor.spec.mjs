@@ -11,7 +11,7 @@ const concept = {
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/projects/qa/agent/tasks/qa/files/design.json", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(concept) }));
-  await page.goto("/agent-ui-qa.html?view=design");
+  await page.goto("/design-handoff-qa.html");
 });
 
 test("mobile-first editor prepares typed furniture edits without posting or altering original", async ({ page, isMobile }) => {
