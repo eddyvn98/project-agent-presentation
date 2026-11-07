@@ -99,10 +99,16 @@ button[aria-pressed=true]{background:#0369a1;border-color:#7dd3fc}button:focus-v
   document.getElementById("fit").addEventListener("click", fit);
   wallsButton.addEventListener("click", () => {
     wallsVisible = !wallsVisible;
+    let matched = 0;
     for (const mesh of scene.meshes) {
-      if (mesh.name.toLowerCase().startsWith("wall:")) mesh.setEnabled(wallsVisible);
+      if (mesh.name.toLowerCase().startsWith("wall:")) {
+        mesh.setEnabled(wallsVisible);
+        matched++;
+      }
     }
+    wallsButton.setAttribute("data-wall-mesh-count", String(matched));
     wallsButton.setAttribute("aria-pressed", String(wallsVisible));
+    if (!matched) message("Wall visibility unavailable: no wall meshes were found.", true);
   });
   scene.onPointerObservable.add(event => {
     const mesh = event.pickInfo && event.pickInfo.pickedMesh;
