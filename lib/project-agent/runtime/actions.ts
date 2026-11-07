@@ -132,8 +132,8 @@ function toAction(raw: Record<string, unknown>): RuntimeAction | { error: string
 			return "error" in parsed ? parsed : { action: "design", model: parsed.spec, note };
 		}
 		case "design_edit": {
-			if (typeof raw.source !== "string" || !/^outputs\/design-[a-f0-9]{12}\.design\.json$/.test(raw.source))
-				return { error: "design_edit.source must be a saved outputs/design-<id>.design.json file" };
+			if (typeof raw.source !== "string" || !/^(?:outputs\/design-[a-f0-9]{12}\.design\.json|archive:cad_[a-f0-9]{24})$/.test(raw.source))
+				return { error: "design_edit.source must be a saved outputs/design-<id>.design.json or an approved archive:cad_<id>" };
 			const parsed = parseDesignEdits(raw.edits);
 			return "error" in parsed ? parsed : { action: "design_edit", source: raw.source, edits: parsed.edits, note };
 		}
