@@ -1,4 +1,5 @@
 import { DESIGN_PREVIEW_SCRIPT } from "./design-preview-script";
+import { DESIGN_BABYLON_VIEWER_SCRIPT } from "./design-babylon-viewer-script";
 /** Python standard-library-only headless exporter; intentionally no Blender, AutoCAD or LibreOffice dependency. */
 export const DESIGN_SCRIPT = String.raw`import base64, html, json, math, os, struct, sys, unicodedata
 
@@ -116,30 +117,32 @@ def make_pdf():
 
 # One instanced cuboid per object, per-class materials. glTF 2.0 uses Y-up and metres.
 def cubes():
-    yield ("floor", W/2, D/2, -40, W, D, 80)
+    yield ("floor", "Floor", W/2, D/2, -40, W, D, 80)
     for wall, a, b, z0, z1 in wall_segments():
+        label = "Wall: " + wall.title()
         if wall in ("north", "south"):
-            yield ("wall", (a+b)/2, D - T/2 if wall == "north" else T/2,
+            yield ("wall", label, (a+b)/2, D - T/2 if wall == "north" else T/2,
                    (z0+z1)/2, b-a, T, z1-z0)
         else:
-            yield ("wall", W-T/2 if wall == "east" else T/2,
+            yield ("wall", label, W-T/2 if wall == "east" else T/2,
                    (a+b)/2, (z0+z1)/2, T, b-a, z1-z0)
-    for item in spec["furniture"]:
+    for index, item in enumerate(spec["furniture"], 1):
         fw, fd = (item["depth"], item["width"]) if item["rotation"] in (90,270) else (item["width"], item["depth"])
+        label = item["kind"].title() + " #" + str(index) + ": " + item["label"]
         if item["kind"] in ("table", "desk"):
-            yield ("wood", item["x"], item["y"], item["height"]-40, fw, fd, 80)
+            yield ("wood", label, item["x"], item["y"], item["height"]-40, fw, fd, 80)
             for sx in (-1,1):
                 for sy in (-1,1):
-                    yield ("wood", item["x"] + sx*(fw/2-65), item["y"] + sy*(fd/2-65),
+                    yield ("wood", label, item["x"] + sx*(fw/2-65), item["y"] + sy*(fd/2-65),
                            (item["height"]-80)/2, 70, 70, item["height"]-80)
         elif item["kind"] == "chair":
             seat = min(450, item["height"]*.57)
-            yield ("seat", item["x"], item["y"], seat, fw, fd, 80)
-            yield ("seat", item["x"], item["y"]+fd/2-55, (seat+item["height"])/2,
+            yield ("seat", label, item["x"], item["y"], seat, fw, fd, 80)
+            yield ("seat", label, item["x"], item["y"]+fd/2-55, (seat+item["height"])/2,
                    fw, 110, item["height"]-seat)
         else:
             yield ("seat" if item["kind"] in ("sofa", "bed") else "wood",
-                   item["x"], item["y"], item["height"]/2, fw, fd, item["height"])
+                   label, item["x"], item["y"], item["height"]/2, fw, fd, item["height"])
 
 def make_glb():
     faces = [((0,0,-1), [(-1,-1,-1),(1,-1,-1),(1,1,-1),(-1,1,-1)]),
@@ -172,9 +175,9 @@ def make_glb():
     meshes = [{"primitives":[{"attributes":{"POSITION":0,"NORMAL":1},"indices":2,"material":i}]} for i in range(len(materials))]
     kinds = {name:i for i,(name,_) in enumerate(palette)}
     nodes = []
-    for kind,cx,cy,cz,sx,sy,sz in cubes():
+    for kind,label,cx,cy,cz,sx,sy,sz in cubes():
         if min(sx,sy,sz) <= 0: continue
-        nodes.append({"mesh":kinds[kind],"translation":[cx/1000,cz/1000,cy/1000],
+        nodes.append({"name":label,"mesh":kinds[kind],"translation":[cx/1000,cz/1000,cy/1000],
                       "scale":[sx/1000,sz/1000,sy/1000]})
     gltf = {"asset":{"version":"2.0","generator":"Project Agent Headless Design MVP"},
             "scene":0,"scenes":[{"nodes":list(range(len(nodes)))}],"nodes":nodes,
@@ -184,45 +187,7 @@ def make_glb():
     while len(encoded) % 4: encoded += b" "
     return struct.pack("<4sII",b"glTF",2,12+8+len(encoded)+8+len(binary)) + struct.pack("<I4s",len(encoded),b"JSON") + encoded + struct.pack("<I4s",len(binary),b"BIN\x00") + binary
 
-def make_viewer(glb):
-    data = base64.b64encode(glb).decode()
-    title = html.escape(spec["title"], quote=True)
-    return """<!doctype html><html lang="en"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>""" + title + """ - 3D concept</title>
-<style>body{margin:0;background:#101827;color:#f1f5f9;font:15px system-ui}
-header{padding:14px 20px;background:#1e293b}h1{margin:0;font-size:18px}
-small{color:#cbd5e1}#scene{width:100%;height:calc(100vh - 75px);display:block}
-#status{position:absolute;bottom:18px;left:20px;background:#1e293bcc;padding:10px;border-radius:7px}</style>
-<header><h1>""" + title + """</h1><small>Orbit: drag | Zoom: scroll | Concept only (not verified for construction)</small></header>
-<canvas id="scene"></canvas><div id="status">Loading lightweight 3D viewer...</div>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
-<script type="module">
-import * as THREE from "three";
-import {OrbitControls} from "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/controls/OrbitControls.js";
-import {GLTFLoader} from "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js";
-const canvas=document.getElementById("scene"), msg=document.getElementById("status");
-const scene=new THREE.Scene();scene.background=new THREE.Color(0xf1f5f9);
-const camera=new THREE.PerspectiveCamera(50,1,.02,1000);
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-const controls=new OrbitControls(camera,canvas);controls.enableDamping=true;
-scene.add(new THREE.HemisphereLight(0xffffff,0x738292,2));
-const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(9,16,10);scene.add(sun);
-const raw=atob('""" + data + """');
-const bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));
-new GLTFLoader().parse(bytes.buffer,"",gltf=>{
- scene.add(gltf.scene);const bounds=new THREE.Box3().setFromObject(gltf.scene);
- const center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3());
- const distance=Math.max(size.x,size.z,size.y)*1.4;
- camera.position.set(center.x+distance,center.y+distance*.9,center.z+distance);
- controls.target.copy(center);controls.update();
- msg.textContent="3D concept loaded | drag to rotate | PDF / DXF / GLB are separate deliverables";
-},err=>{msg.textContent="Preview unavailable. Download the GLB file.";console.error(err)});
-function draw(){const w=canvas.clientWidth,h=canvas.clientHeight;renderer.setSize(w,h,false);
- camera.aspect=w/Math.max(h,1);camera.updateProjectionMatrix();controls.update();renderer.render(scene,camera)}
-function frame(){draw();requestAnimationFrame(frame)}frame();
-</script></html>"""
+${DESIGN_BABYLON_VIEWER_SCRIPT}
 
 warnings = []
 items = spec["furniture"]

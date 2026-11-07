@@ -3,8 +3,10 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { Script } from "node:vm";
 import { parseDesignSpec } from "../../lib/project-agent/runtime/design-model";
 import { DESIGN_SCRIPT } from "../../lib/project-agent/runtime/design-script";
+import { createDesignName } from "../../lib/project-agent/runtime/design-action";
 import { parseRuntimeActions } from "../../lib/project-agent/runtime/actions";
 import { denyReason } from "../../lib/project-agent/runtime/policy";
 
@@ -19,6 +21,11 @@ const folders: string[] = [];
 afterEach(() => { while (folders.length) rmSync(folders.pop()!, { recursive: true, force: true }); });
 
 describe("Headless design concept", () => {
+  it("creates unique 12-hex model IDs compatible with the edit and handoff paths", () => {
+    const names = Array.from({ length: 64 }, createDesignName);
+    expect(new Set(names).size).toBe(names.length);
+    for (const name of names) expect(name).toMatch(/^design-[a-f0-9]{12}$/);
+  });
   it("accepts a bounded room and a typed agent action", () => {
     const model = parseDesignSpec(example);
     expect("spec" in model).toBe(true);
@@ -64,7 +71,19 @@ describe("Headless design concept", () => {
     expect(png.subarray(0, 8)).toEqual(Buffer.from([137,80,78,71,13,10,26,10]));
     expect(png.readUInt32BE(16)).toBe(1280);
     const viewer = readFileSync(path.join(dir, "sample.web.html"), "utf8");
-    expect(viewer).toContain("OrbitControls");
-    expect(viewer).toContain("GLTFLoader");
+    expect(viewer).toContain("babylonjs@9.28.0");
+    expect(viewer).toContain("babylonjs-loaders@9.28.0");
+    expect(viewer).toContain("SceneLoader.Append");
+    expect(viewer).toContain('id="view-2d"');
+    expect(viewer).toContain('id="view-3d"');
+    expect(viewer).toContain('id="walls"');
+    expect(viewer).toContain("touch-action:none");
+    expect(viewer).toContain("data:model/gltf-binary;base64,");
+    expect(viewer).not.toContain("OrbitControls");
+    const inline = viewer.match(/<script>([\s\S]*?)<\/script>/);
+    expect(inline).not.toBeNull();
+    expect(() => new Script(inline![1])).not.toThrow();
+    expect(gltf.nodes[0].name).toBe("Floor");
+    expect(gltf.nodes.some((node: { name: string }) => node.name.includes("Meeting table"))).toBe(true);
   });
 });

@@ -9,11 +9,14 @@ import { DESIGN_SCRIPT } from "./design-script";
 import { IFC_DESIGN_SCRIPT } from "./design-ifc-script";
 import { execInSandbox, resolveWorkspacePath, workspaceDir } from "./sandbox";
 
+/** Generated names must match design-handoff and design-edit source validators. */
+export const createDesignName = () => "design-" + randomUUID().replace(/-/g, "").slice(0, 12);
+
 /** Generates six artifacts in one bounded sandbox command. No model-provided shell text. */
 export async function runDesignAction(input: RuntimeInput, model: DesignSpec):
   Promise<{ text: string; failed?: boolean; image?: DifyChatFile }> {
   if (input.readOnly) return { text: "Reviewers cannot create designs.", failed: true };
-  const name = "design-" + randomUUID().slice(0, 12);
+  const name = createDesignName();
   const root = workspaceDir(input.chatId);
   const tool = path.join(root, ".tools", name + ".py");
   const request = path.join(root, ".tmp", name + ".json");
@@ -70,7 +73,7 @@ export async function runDesignAction(input: RuntimeInput, model: DesignSpec):
     }
     const cautions = (receipt.warnings ?? []).slice(0, 10).join("; ");
     return { text: "Generated headless interior concept: " + expected.join(", ") +
-      ". Return these paths in final.files and use render on the PDF before final. The .web.html viewer uses an HTTPS CDN for Three.js. " +
+      ". Return these paths in final.files and use render on the PDF before final. The .web.html viewer uses pinned Babylon.js scripts from an HTTPS CDN. " +
       "Concept only, not a construction-ready or native RVT deliverable. " + ifcStatus +
       (cautions ? " Geometry warnings: " + cautions : ""), image };
   } catch (error) {
