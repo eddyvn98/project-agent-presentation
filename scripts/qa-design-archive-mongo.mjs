@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomBytes, createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { build } from "esbuild";
+import { MongoClient } from "mongodb";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const fingerprint = bytes => createHash("sha256").update(bytes).digest("hex");
@@ -128,7 +129,7 @@ export { getMongoAiDb, closeQaDb } from "@/services/mongodb/client";
       if (child.status !== 0) throw Error("Fresh-process reopen failed: " + child.stderr);
       console.log(child.stdout.trim());
 
-      const fromDisk = await import(pathToFileURL(bundle).href);
+      const fromDisk = await import(pathToFileURL(bundle).href + "?reopened=1");
       const restoredDb = await fromDisk.getMongoAiDb();
       const key = versionId + ":" + sourceId + ".glb:0";
       await restoredDb.collection("projectAgentCadChunks").updateOne({ _id: key },
@@ -141,9 +142,14 @@ export { getMongoAiDb, closeQaDb } from "@/services/mongodb/client";
       if (!integrityFailed) throw Error("Corrupt archived GLB passed integrity validation");
       console.log("MONGO_ARCHIVE_CONCURRENT_RETRY_INTEGRITY_PASS", versionId, fingerprint(input.sourceBytes));
     } finally {
-      const db = await archive.getMongoAiDb();
-      await db.dropDatabase();
-      await archive.closeQaDb();
+      const cleanup = new MongoClient(process.env.CAD_QA_MONGO_URI);
+      try {
+        await cleanup.connect();
+        await cleanup.db(name).dropDatabase();
+      } finally {
+        await cleanup.close();
+        await archive.closeQaDb().catch(() => undefined);
+      }
     }
   } finally { await rm(temp, { recursive: true, force: true }); }
 }
