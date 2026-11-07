@@ -5,6 +5,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { RuntimeInput } from "./run-agent-types";
 import type { DesignSpec } from "./design-model";
+import { reviewDesign } from "./design-review";
 import { DESIGN_SCRIPT } from "./design-script";
 import { IFC_DESIGN_SCRIPT } from "./design-ifc-script";
 import { execInSandbox, resolveWorkspacePath, workspaceDir } from "./sandbox";
@@ -71,10 +72,19 @@ export async function runDesignAction(input: RuntimeInput, model: DesignSpec):
     } else if (!ifcResult.output.includes("IFC_DEPENDENCY_MISSING")) {
       ifcStatus = "IFC export failed: " + ifcResult.output.slice(0, 300);
     }
+    const review = reviewDesign(model);
+    const reviewSamples = review.issues.filter(issue => issue.severity === "blocker")
+      .slice(0, 6).map(issue => issue.message).join(" | ");
+    const reviewText = review.blockers
+      ? " AI geometry preflight found " + review.blockers + " possible collision/door blockers (" +
+        reviewSamples + "). Automatically propose a corrected revision before presenting as ready."
+      : " AI geometry preflight found no 2D collision/door blockers; " +
+        review.warnings + " conceptual spacing warning(s).";
     const cautions = (receipt.warnings ?? []).slice(0, 10).join("; ");
     return { text: "Generated headless interior concept: " + expected.join(", ") +
       ". Return these paths in final.files and use render on the PDF before final. The .web.html viewer uses pinned Babylon.js scripts from an HTTPS CDN. " +
-      "Concept only, not a construction-ready or native RVT deliverable. " + ifcStatus +
+      "AI-generated draft; HUMAN REVIEW REQUIRED before release. Not verified for construction. " +
+      reviewText + " " + ifcStatus +
       (cautions ? " Geometry warnings: " + cautions : ""), image };
   } catch (error) {
     return { text: "Design export failed: " + (error instanceof Error ? error.message : "error"), failed: true };
