@@ -1,13 +1,22 @@
 import { test, expect } from "@playwright/test";
 
-const root = "/agent-ui-qa.html?view=design-real";
+const root = "/design-real-qa.html";
 const modelId = "design-abcdefabcdef";
 const getFiles = async page => page.request.get("/api/qa/design-real/models").then(r => r.json());
 
 test.beforeEach(async ({ page }) => {
+  page.__qaErrors = [];
+  page.on("pageerror", error => page.__qaErrors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error") page.__qaErrors.push(message.text());
+  });
   await page.goto(root);
   await expect(page.getByRole("region", { name: "Real CAD BIM user journey QA" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Design handoff " + modelId })).toBeVisible();
+});
+
+test.afterEach(async ({ page }) => {
+  expect(page.__qaErrors ?? [], "User-facing QA must not raise browser JS/console errors").toEqual([]);
 });
 
 test("real exporter files are non-empty and GLB has valid binary header", async ({ page }) => {
