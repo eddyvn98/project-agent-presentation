@@ -26,7 +26,7 @@ export function ProjectAgentDesignHandoff({ design, fileHref, onPreview, onEdit 
     { file: design.source, label: "Source · JSON" },
   ];
   return <section aria-label={`Design handoff ${design.id}`}
-    className="my-3 w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+    className="my-3 w-full min-w-0 overflow-clip rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
     <header className="flex items-start gap-3 px-4 py-3">
       <FileBox className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" />
       <div className="min-w-0 flex-1">
