@@ -16,6 +16,8 @@ on:
       - "tests/agent-ui-browser/design-editor.spec.mjs"
       - "tests/agent-ui-browser/design-real-journey.spec.mjs"
       - "qa/design-real.tsx"
+      - "qa/design-real-entry.tsx"
+      - "design-real-qa.html"
       - "qa/design-real-server.ts"
       - "qa/agent-ui.tsx"
       - "vite.agent-ui.config.ts"
