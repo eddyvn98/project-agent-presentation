@@ -1,6 +1,8 @@
 "use client";
 
 import { Download, FileBox, FileText, Pencil, ScanEye } from "lucide-react";
+import { useState } from "react";
+import { ProjectAgentDesignEditor } from "./ProjectAgentDesignEditor";
 import type { ProjectAgentTaskFile } from "@/lib/project-agent/types";
 import type { DesignHandoff } from "@/lib/project-agent/design-handoff";
 import { makeDesignEditPrompt } from "@/lib/project-agent/design-handoff";
@@ -14,6 +16,7 @@ type Props = {
 
 /** A single phone-sized handoff replaces the scattered CAD/BIM file chips for one revision. */
 export function ProjectAgentDesignHandoff({ design, fileHref, onPreview, onEdit }: Props) {
+  const [editing, setEditing] = useState(false);
   const prompt = makeDesignEditPrompt(design.source.name);
   const downloads = [
     { file: design.dxf, label: "CAD · DXF" },
@@ -50,11 +53,20 @@ export function ProjectAgentDesignHandoff({ design, fileHref, onPreview, onEdit 
         className="flex min-h-11 items-center justify-center rounded-xl border border-slate-200 px-3 text-sm font-medium dark:border-slate-700">
         Download GLB
       </a>}
-      {prompt && onEdit ? <button type="button" onClick={() => onEdit(prompt)}
-        className="col-span-2 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-900">
-        <Pencil className="h-4 w-4" /> Request a change
-      </button> : null}
+      {prompt && onEdit ? <>
+        <button type="button" onClick={() => setEditing((v) => !v)} aria-expanded={editing}
+          className="col-span-2 flex min-h-11 items-center justify-center gap-2 rounded-xl border border-sky-300 bg-sky-50 px-3 text-sm font-semibold text-sky-900 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-200">
+          <Pencil className="h-4 w-4" /> {editing ? "Close floor plan editor" : "Edit on floor plan"}
+        </button>
+        <button type="button" onClick={() => onEdit(prompt)}
+          className="col-span-2 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-900">
+          <Pencil className="h-4 w-4" /> Request a change
+        </button>
+      </> : null}
     </div>
+    {editing && prompt && onEdit && <ProjectAgentDesignEditor
+      sourceUrl={fileHref(design.source)} sourceName={design.source.name}
+      onEdit={onEdit} onClose={() => setEditing(false)} />}
     <div className="border-t border-slate-100 px-3 pb-3 pt-2 dark:border-slate-800">
       <p className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Download for desktop</p>
       <div className="flex flex-wrap gap-2">
