@@ -101,6 +101,8 @@ test("actual touch-friendly edits create a NEW binary design revision with sourc
   await expect(editor.getByText("Position: 3,000, 2,200 mm")).not.toBeVisible();
   await editor.getByRole("button", { name: "Move right" }).click();
   await editor.getByRole("button", { name: "width plus 100 mm" }).click();
+  await expect(editor.getByRole("button", { name: "Prepare new revision in chat" })).toBeDisabled();
+  await editor.getByRole("checkbox", { name: "I reviewed the design draft" }).check();
   await editor.getByRole("button", { name: "Prepare new revision in chat" }).click();
   const draft = page.getByRole("textbox", { name: "Design change draft" });
   await expect(draft).toContainText('"action":"design_edit"');
