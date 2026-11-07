@@ -95,7 +95,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Install isolated MongoDB client
-        run: npm install --no-save --package-lock=false mongodb@6
+        run: npm install --no-save --package-lock=false mongodb@6 esbuild@0.25.12
       - name: Real Mongo archive, simultaneous saves, integrity and process restart
         env:
           CAD_QA_MONGO_URI: mongodb://127.0.0.1:27017
