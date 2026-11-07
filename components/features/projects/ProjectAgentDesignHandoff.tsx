@@ -3,6 +3,7 @@
 import { Download, FileBox, FileText, Pencil, ScanEye } from "lucide-react";
 import { useState } from "react";
 import { ProjectAgentDesignEditor } from "./ProjectAgentDesignEditor";
+import { ProjectAgentDesignApproval } from "./ProjectAgentDesignApproval";
 import type { ProjectAgentTaskFile } from "@/lib/project-agent/types";
 import type { DesignHandoff } from "@/lib/project-agent/design-handoff";
 import { makeDesignEditPrompt } from "@/lib/project-agent/design-handoff";
@@ -12,10 +13,12 @@ type Props = {
   fileHref: (file: ProjectAgentTaskFile) => string;
   onPreview: (file: ProjectAgentTaskFile) => void;
   onEdit?: (prompt: string) => void;
+  projectId?: string;
+  taskId?: string;
 };
 
 /** A single phone-sized handoff replaces the scattered CAD/BIM file chips for one revision. */
-export function ProjectAgentDesignHandoff({ design, fileHref, onPreview, onEdit }: Props) {
+export function ProjectAgentDesignHandoff({ design, fileHref, onPreview, onEdit, projectId, taskId }: Props) {
   const [editing, setEditing] = useState(false);
   const prompt = makeDesignEditPrompt(design.source.name);
   const downloads = [
@@ -67,6 +70,8 @@ export function ProjectAgentDesignHandoff({ design, fileHref, onPreview, onEdit 
     {editing && prompt && onEdit && <ProjectAgentDesignEditor
       sourceUrl={fileHref(design.source)} sourceName={design.source.name}
       onEdit={onEdit} onClose={() => setEditing(false)} />}
+    {projectId && taskId && <ProjectAgentDesignApproval projectId={projectId} taskId={taskId}
+      sourceFileId={design.source.id} />}
     <div className="border-t border-slate-100 px-3 pb-3 pt-2 dark:border-slate-800">
       <p className="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-300">Download for desktop</p>
       <div className="flex flex-wrap gap-2">
