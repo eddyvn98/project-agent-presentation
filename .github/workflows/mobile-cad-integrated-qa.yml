@@ -13,6 +13,7 @@ on:
       - "components/features/projects/ProjectAgentDesignEditor.tsx"
       - "lib/project-agent/design-editor.ts"
       - "tests/agent/mobile-design-handoff.test.ts"
+      - "tests/agent-ui-browser/design-editor.spec.mjs"
 permissions:
   contents: read
 jobs:
@@ -36,7 +37,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Phone and desktop preview, edit and download
-        run: npx playwright test --config playwright.agent-ui.config.ts tests/agent-ui-browser/design-handoff.spec.mjs
+        run: npx playwright test --config playwright.agent-ui.config.ts tests/agent-ui-browser/design-handoff.spec.mjs tests/agent-ui-browser/design-editor.spec.mjs
   bim_roundtrip:
     runs-on: ubuntu-latest
     timeout-minutes: 8
