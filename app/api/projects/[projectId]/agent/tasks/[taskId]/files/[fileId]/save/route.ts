@@ -56,7 +56,8 @@ export async function POST(
       error: "Human approval is required for this exact CAD/BIM design revision before saving to Project",
     }, { status: 409 });
   }
-	if (file.savedToProjectFileId) return NextResponse.json({ fileId: file.savedToProjectFileId });
+	if (file.savedToProjectFileId) return NextResponse.json({ fileId: file.savedToProjectFileId,
+    ...(designMatch ? { archiveId: file.savedToProjectFileId } : {}) });
 	if (task.filesExpireAt && Date.parse(task.filesExpireAt) <= Date.now()) {
 		return NextResponse.json({ error: "File link expired; only files saved to the Project remain available" }, { status: 410 });
 	}
