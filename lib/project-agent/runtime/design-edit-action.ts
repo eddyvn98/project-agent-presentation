@@ -21,12 +21,12 @@ export async function runDesignEditAction(input: RuntimeInput, source: string, e
     let bytes: Buffer;
     const archive = ARCHIVE_SOURCE.exec(source);
     if (archive) {
-      if (!input.projectId || !input.ownerEmail) return {
+      if (!input.projectId || !input.projectOwnerEmail) return {
         text: "Archived design edits require an authenticated Project task context.", failed: true,
       };
-      const stored = await getDesignArchive(input.projectId, input.ownerEmail, archive[1]);
+      const stored = await getDesignArchive(input.projectId, input.projectOwnerEmail, archive[1]);
       if (!stored) return { text: "Saved design is unavailable in this Project.", failed: true };
-      const file = await readArchivedDesignFile(input.projectId, input.ownerEmail,
+      const file = await readArchivedDesignFile(input.projectId, input.projectOwnerEmail,
         archive[1], stored.sourceName);
       if (!file || !file.archive.sourceSha256 || file.archive.sourceSha256 !== createHash("sha256")
         .update(file.bytes).digest("hex"))
